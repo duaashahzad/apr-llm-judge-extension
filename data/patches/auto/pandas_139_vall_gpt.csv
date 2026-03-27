@@ -1,0 +1,1015 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-139-vall_gpt-0,UNKNOWN,UNKNOWN,"```python
+def __init__(
+    self,
+    index,
+    grouper=None,
+    obj=None,
+    name=None,
+    level=None,
+    sort=True,
+    observed=False,
+    in_axis=False,
+):
+
+    self.name = name
+    self.level = level
+    self.grouper = _convert_grouper(index, grouper)
+    self.all_grouper = None
+    self.index = index
+    self.sort = sort
+    self.obj = obj
+    self.observed = observed
+    self.in_axis = in_axis
+
+    if isinstance(grouper, (Series, Index)) and name is None:
+        self.name = grouper.name
+
+    if isinstance(grouper, MultiIndex):
+        self.grouper = grouper.values
+
+    if level is not None:
+        if not isinstance(level, int):
+            if level not in index.names:
+                raise KeyError(f""Level '{level}' not in index names"")
+            level = index.names.index(level)
+
+        if self.name is None:
+            self.name = index.names[level]
+
+        self.grouper, self._labels, self._group_index = index._get_grouper_for_level(  # noqa: E501
+            self.grouper, level
+        )
+
+    elif isinstance(self.grouper, Grouper):
+        _, grouper, _ = self.grouper._get_grouper(self.obj, validate=False)
+        if self.name is None:
+            self.name = grouper.result_index.name
+        self.obj = self.grouper.obj
+        self.grouper = grouper._get_grouper()
+
+    else:
+        if self.grouper is None and self.name is not None:
+            self.grouper = self.obj[self.name]
+
+        elif isinstance(self.grouper, (list, tuple)):
+            self.grouper = com.asarray_tuplesafe(self.grouper)
+
+        elif is_categorical_dtype(self.grouper):
+            self.grouper, self.all_grouper = recode_for_groupby(
+                self.grouper, self.sort, observed
+            )
+            categories = self.grouper.categories
+
+            self._labels = self.grouper.codes
+            if observed:
+                codes = algorithms.unique1d(self.grouper.codes)
+                codes = codes[codes != -1]
+                if sort or self.grouper.ordered:
+                    codes = np.sort(codes)
+            else:
+                codes = np.arange(len(categories))
+
+            self._group_index = CategoricalIndex(
+                Categorical.from_codes(
+                    codes=codes, categories=categories, ordered=self.grouper.ordered
+                )
+            )
+
+        if isinstance(self.grouper, Grouping):
+            self.grouper = self.grouper.grouper
+
+        elif not isinstance(
+            self.grouper, (Series, Index, ExtensionArray, np.ndarray)
+        ):
+            if getattr(self.grouper, ""ndim"", 1) != 1:
+                raise ValueError(f""Grouper for '{self.name}' must be 1-dimensional"")
+            self.grouper = self.index.map(self.grouper)
+            if not (
+                hasattr(self.grouper, ""__len__"")
+                and len(self.grouper) == len(self.index)
+            ):
+                errmsg = (
+                    ""Grouper result violates len(labels) == ""
+                    ""len(data)\nresult: %s"" % pprint_thing(self.grouper)
+                )
+                self.grouper = None  # Try for sanity
+                raise AssertionError(errmsg)
+
+    if getattr(self.grouper, ""dtype"", None) is not None:
+        if is_datetime64_dtype(self.grouper):
+            self.grouper = self.grouper.astype(""datetime64[ns]"")
+        elif is_timedelta64_dtype(self.grouper):
+            self.grouper = self.grouper.astype(""timedelta64[ns]"")
+```",
+pandas-139-vall_gpt-1,UNKNOWN,UNKNOWN,"```python
+def __init__(
+    self,
+    index,
+    grouper=None,
+    obj=None,
+    name=None,
+    level=None,
+    sort=True,
+    observed=False,
+    in_axis=False,
+):
+
+    self.name = name
+    self.level = level
+    self.grouper = _convert_grouper(index, grouper)
+    self.all_grouper = None
+    self.index = index
+    self.sort = sort
+    self.obj = obj
+    self.observed = observed
+    self.in_axis = in_axis
+
+    if isinstance(grouper, (Series, Index)) and name is None:
+        self.name = grouper.name
+
+    if isinstance(grouper, MultiIndex):
+        self.grouper = grouper.values
+
+    if level is not None:
+        if not isinstance(level, int):
+            if level not in index.names:
+                raise KeyError(f""Level {level} not found in index names"")
+            level = index.names.index(level)
+
+        if self.name is None:
+            self.name = index.names[level]
+
+        self.grouper, self._labels, self._group_index = index._get_grouper_for_level(
+            self.grouper, level
+        )
+
+    elif isinstance(self.grouper, Grouper):
+        _, grouper, _ = self.grouper._get_grouper(self.obj, validate=False)
+        if self.name is None:
+            self.name = grouper.result_index.name
+        self.obj = self.grouper.obj
+        self.grouper = grouper._get_grouper()
+
+    else:
+        if self.grouper is None and self.name is not None:
+            self.grouper = self.obj[self.name]
+
+        elif isinstance(self.grouper, (list, tuple)):
+            self.grouper = com.asarray_tuplesafe(self.grouper)
+
+        elif is_categorical_dtype(self.grouper):
+            self.grouper, self.all_grouper = recode_for_groupby(
+                self.grouper, self.sort, observed
+            )
+            categories = self.grouper.categories
+        
+            self._labels = self.grouper.codes
+            if observed:
+                codes = algorithms.unique1d(self.grouper.codes)
+                codes = codes[codes != -1]
+                if sort or self.grouper.ordered:
+                    codes = np.sort(codes)
+            else:
+                codes = np.arange(len(categories))
+
+            self._group_index = CategoricalIndex(
+                Categorical.from_codes(
+                    codes=codes, categories=categories, ordered=self.grouper.ordered
+                )
+            )
+
+        if isinstance(self.grouper, Grouping):
+            self.grouper = self.grouper.grouper
+
+        elif not isinstance(self.grouper, (Series, Index, ExtensionArray, np.ndarray)):
+            if getattr(self.grouper, ""ndim"", 1) != 1:
+                raise ValueError(""Grouper must be 1-dimensional"")
+            self.grouper = self.index.map(self.grouper)
+            if not (
+                hasattr(self.grouper, ""__len__"")
+                and len(self.grouper) == len(self.index)
+            ):
+                errmsg = (
+                    ""Grouper result violates len(labels) == len(data)\nresult: %s"" 
+                    % pprint_thing(self.grouper)
+                )
+                self.grouper = None  
+                raise AssertionError(errmsg)
+
+    if getattr(self.grouper, ""dtype"", None) is not None:
+        if is_datetime64_dtype(self.grouper):
+            self.grouper = self.grouper.astype(""datetime64[ns]"")
+        elif is_timedelta64_dtype(self.grouper):
+            self.grouper = self.grouper.astype(""timedelta64[ns]"")
+```",
+pandas-139-vall_gpt-2,UNKNOWN,UNKNOWN,"```python
+def __init__(
+    self,
+    index,
+    grouper=None,
+    obj=None,
+    name=None,
+    level=None,
+    sort=True,
+    observed=False,
+    in_axis=False,
+):
+    self.name = name
+    self.level = level
+    self.grouper = _convert_grouper(index, grouper)
+    self.all_grouper = None
+    self.index = index
+    self.sort = sort
+    self.obj = obj
+    self.observed = observed
+    self.in_axis = in_axis
+
+    # Set the name if not explicitly provided
+    if isinstance(grouper, (Series, Index)) and name is None:
+        self.name = grouper.name
+
+    if isinstance(grouper, MultiIndex):
+        self.grouper = grouper.values
+
+    # Validate `level` if provided
+    if level is not None:
+        if isinstance(level, str):
+            if level not in index.names:
+                raise KeyError(f""Level '{level}' not found in index names."")
+            level = index.names.index(level)
+        elif not isinstance(level, int):
+            raise TypeError(""Level must be an integer or a string corresponding to index names."")
+
+        if self.name is None:
+            self.name = index.names[level]
+
+        self.grouper, self._labels, self._group_index = index._get_grouper_for_level(
+            self.grouper, level
+        )
+
+    elif isinstance(self.grouper, Grouper):
+        _, grouper, _ = self.grouper._get_grouper(self.obj, validate=False)
+        if self.name is None:
+            self.name = grouper.result_index.name
+        self.obj = self.grouper.obj
+        self.grouper = grouper._get_grouper()
+
+    else:
+        if self.grouper is None and self.name is not None:
+            self.grouper = self.obj[self.name]
+
+        elif isinstance(self.grouper, (list, tuple)):
+            self.grouper = com.asarray_tuplesafe(self.grouper)
+
+        elif is_categorical_dtype(self.grouper):
+            self.grouper, self.all_grouper = recode_for_groupby(
+                self.grouper, self.sort, observed
+            )
+            categories = self.grouper.categories
+
+            self._labels = self.grouper.codes
+            if observed:
+                codes = algorithms.unique1d(self.grouper.codes)
+                codes = codes[codes != -1]
+                if sort or self.grouper.ordered:
+                    codes = np.sort(codes)
+            else:
+                codes = np.arange(len(categories))
+
+            self._group_index = CategoricalIndex(
+                Categorical.from_codes(
+                    codes=codes, categories=categories, ordered=self.grouper.ordered
+                )
+            )
+
+        if isinstance(self.grouper, Grouping):
+            self.grouper = self.grouper.grouper
+
+        elif not isinstance(
+            self.grouper, (Series, Index, ExtensionArray, np.ndarray)
+        ):
+            if getattr(self.grouper, ""ndim"", 1) != 1:
+                raise ValueError(
+                    f""Grouper for '{self.name}' must be 1-dimensional.""
+                )
+            self.grouper = self.index.map(self.grouper)
+            if not (
+                hasattr(self.grouper, ""__len__"")
+                and len(self.grouper) == len(self.index)
+            ):
+                raise AssertionError(
+                    f""Grouper result violates len(labels) == len(data)""
+                )
+
+    if is_datetime64_dtype(self.grouper):
+        self.grouper = self.grouper.astype(""datetime64[ns]"")
+    elif is_timedelta64_dtype(self.grouper):
+        self.grouper = self.grouper.astype(""timedelta64[ns]"")
+```",
+pandas-139-vall_gpt-3,UNKNOWN,UNKNOWN,"```python
+def __init__(
+    self,
+    index,
+    grouper=None,
+    obj=None,
+    name=None,
+    level=None,
+    sort=True,
+    observed=False,
+    in_axis=False,
+):
+
+    self.name = name
+    self.level = level
+    self.grouper = _convert_grouper(index, grouper)
+    self.all_grouper = None
+    self.index = index
+    self.sort = sort
+    self.obj = obj
+    self.observed = observed
+    self.in_axis = in_axis
+
+    # right place for this?
+    if isinstance(grouper, (Series, Index)) and name is None:
+        self.name = grouper.name
+
+    if isinstance(grouper, MultiIndex):
+        self.grouper = grouper.values
+
+    # Validate level if provided
+    if level is not None:
+        if not isinstance(level, int):
+            if level not in index.names:
+                raise KeyError(f""Level '{level}' not in index names."")
+            level = index.names.index(level)
+
+        if self.name is None:
+            self.name = index.names[level]
+
+        self.grouper, self._labels, self._group_index = index._get_grouper_for_level(  # noqa: E501
+            self.grouper, level
+        )
+
+    elif isinstance(self.grouper, Grouper):
+        _, grouper, _ = self.grouper._get_grouper(self.obj, validate=False)
+        if self.name is None:
+            self.name = grouper.result_index.name
+        self.obj = self.grouper.obj
+        self.grouper = grouper._get_grouper()
+
+    else:
+        if self.grouper is None and self.name is not None:
+            self.grouper = self.obj[self.name]
+
+        elif isinstance(self.grouper, (list, tuple)):
+            self.grouper = com.asarray_tuplesafe(self.grouper)
+
+        # Handling categorical grouper
+        elif is_categorical_dtype(self.grouper):
+            self.grouper, self.all_grouper = recode_for_groupby(
+                self.grouper, self.sort, observed
+            )
+            categories = self.grouper.categories
+
+            # Create CategoricalIndex preserving the categories / ordered attributes
+            self._labels = self.grouper.codes
+            if observed:
+                codes = algorithms.unique1d(self.grouper.codes)
+                codes = codes[codes != -1]
+                if sort or self.grouper.ordered:
+                    codes = np.sort(codes)
+            else:
+                codes = np.arange(len(categories))
+
+            self._group_index = CategoricalIndex(
+                Categorical.from_codes(
+                    codes=codes, categories=categories, ordered=self.grouper.ordered
+                )
+            )
+
+        # Ensure grouper is 1-dimensional
+        if not isinstance(self.grouper, (Series, Index, ExtensionArray, np.ndarray)):
+            if getattr(self.grouper, ""ndim"", 1) != 1:
+                t = self.name or str(type(self.grouper))
+                raise ValueError(f""Grouper for '{t}' must be 1-dimensional."")
+            self.grouper = self.index.map(self.grouper)
+            if not (
+                hasattr(self.grouper, ""__len__"")
+                and len(self.grouper) == len(self.index)
+            ):
+                errmsg = (
+                    ""Grouper result violates len(labels) == len(data)\n""
+                    f""result: {pprint_thing(self.grouper)}""
+                )
+                self.grouper = None  # Try for sanity
+                raise AssertionError(errmsg)
+
+    # Handle date/time-like grouper conversion
+    if getattr(self.grouper, ""dtype"", None) is not None:
+        if is_datetime64_dtype(self.grouper):
+            self.grouper = self.grouper.astype(""datetime64[ns]"")
+        elif is_timedelta64_dtype(self.grouper):
+            self.grouper = self.grouper.astype(""timedelta64[ns]"")
+```",
+pandas-139-vall_gpt-4,UNKNOWN,UNKNOWN,"```python
+def __init__(
+    self,
+    index,
+    grouper=None,
+    obj=None,
+    name=None,
+    level=None,
+    sort=True,
+    observed=False,
+    in_axis=False,
+):
+    self.name = name
+    self.level = level
+    self.grouper = _convert_grouper(index, grouper)
+    self.all_grouper = None
+    self.index = index
+    self.sort = sort
+    self.obj = obj
+    self.observed = observed
+    self.in_axis = in_axis
+
+    # Validate types
+    if not isinstance(self.index, (Index, CategoricalIndex)):
+        raise TypeError(""The index must be a pandas Index or CategoricalIndex"")
+
+    if isinstance(grouper, (Series, Index)) and name is None:
+        self.name = grouper.name
+
+    if isinstance(grouper, MultiIndex):
+        self.grouper = grouper.values
+
+    # Level validation
+    if level is not None:
+        if not isinstance(level, int):
+            if level not in index.names:
+                raise KeyError(f""Level '{level}' not found in index names"")
+            level = index.names.index(level)
+
+        if self.name is None:
+            self.name = index.names[level]
+        
+        self.grouper, self._labels, self._group_index = index._get_grouper_for_level(self.grouper, level)
+
+    # Handle single or multiple groupers
+    elif isinstance(self.grouper, Grouper):
+        _, grouper, _ = self.grouper._get_grouper(self.obj, validate=False)
+        if self.name is None:
+            self.name = grouper.result_index.name
+        self.obj = self.grouper.obj
+        self.grouper = grouper._get_grouper()
+
+    else:
+        if self.grouper is None and self.name is not None:
+            self.grouper = self.obj[self.name]
+
+        elif isinstance(self.grouper, (list, tuple)):
+            self.grouper = com.asarray_tuplesafe(self.grouper)
+
+        elif is_categorical_dtype(self.grouper):
+            self.grouper, self.all_grouper = recode_for_groupby(self.grouper, self.sort, observed)
+            categories = self.grouper.categories
+
+            self._labels = self.grouper.codes
+            if observed:
+                codes = algorithms.unique1d(self.grouper.codes)
+                codes = codes[codes != -1]
+                if sort or self.grouper.ordered:
+                    codes = np.sort(codes)
+            else:
+                codes = np.arange(len(categories))
+
+            self._group_index = CategoricalIndex(
+                Categorical.from_codes(
+                    codes=codes, categories=categories, ordered=self.grouper.ordered
+                )
+            )
+
+        if isinstance(self.grouper, Grouping):
+            self.grouper = self.grouper.grouper
+
+        elif not isinstance(self.grouper, (Series, Index, ExtensionArray, np.ndarray)):
+            if getattr(self.grouper, ""ndim"", 1) != 1:
+                t = self.name or str(type(self.grouper))
+                raise ValueError(f""Grouper for '{t}' must be 1-dimensional"")
+            self.grouper = self.index.map(self.grouper)
+            if not (hasattr(self.grouper, ""__len__"") and len(self.grouper) == len(self.index)):
+                errmsg = (
+                    ""Grouper result violates len(labels) == len(data)\nresult: %s"" % pprint_thing(self.grouper)
+                )
+                self.grouper = None  # Try for sanity
+                raise AssertionError(errmsg)
+
+    # Handle datetime-like grouper
+    if getattr(self.grouper, ""dtype"", None) is not None:
+        if is_datetime64_dtype(self.grouper):
+            self.grouper = self.grouper.astype(""datetime64[ns]"")
+        elif is_timedelta64_dtype(self.grouper):
+            self.grouper = self.grouper.astype(""timedelta64[ns]"")
+```",
+pandas-139-vall_gpt-5,UNKNOWN,UNKNOWN,"```python
+def __init__(
+    self,
+    index,
+    grouper=None,
+    obj=None,
+    name=None,
+    level=None,
+    sort=True,
+    observed=False,
+    in_axis=False,
+):
+
+    self.name = name
+    self.level = level
+    self.grouper = _convert_grouper(index, grouper)
+    self.all_grouper = None
+    self.index = index
+    self.sort = sort
+    self.obj = obj
+    self.observed = observed
+    self.in_axis = in_axis
+
+    # Ensure grouper is correctly set
+    if isinstance(grouper, (Series, Index)) and name is None:
+        self.name = grouper.name
+
+    if isinstance(grouper, MultiIndex):
+        self.grouper = grouper.values
+
+    # Validate level if provided
+    if level is not None:
+        if not isinstance(level, int):
+            if level not in index.names:
+                raise KeyError(""Level {} not in index names"".format(level))
+            level = index.names.index(level)
+
+        if self.name is None:
+            self.name = index.names[level]
+
+        self.grouper, self._labels, self._group_index = index._get_grouper_for_level(self.grouper, level)
+
+    elif isinstance(self.grouper, Grouper):
+        _, grouper, _ = self.grouper._get_grouper(self.obj, validate=False)
+        if self.name is None:
+            self.name = grouper.result_index.name
+        self.obj = self.grouper.obj
+        self.grouper = grouper._get_grouper()
+
+    else:
+        if self.grouper is None and self.name is not None:
+            self.grouper = self.obj[self.name]
+
+        elif isinstance(self.grouper, (list, tuple)):
+            self.grouper = com.asarray_tuplesafe(self.grouper)
+
+        # Handle Categorical types
+        elif is_categorical_dtype(self.grouper):
+            self.grouper, self.all_grouper = recode_for_groupby(self.grouper, self.sort, observed)
+            categories = self.grouper.categories
+
+            self._labels = self.grouper.codes
+            if observed:
+                codes = algorithms.unique1d(self.grouper.codes)
+                codes = codes[codes != -1]
+                if sort or self.grouper.ordered:
+                    codes = np.sort(codes)
+            else:
+                codes = np.arange(len(categories))
+
+            self._group_index = CategoricalIndex(
+                Categorical.from_codes(codes=codes, categories=categories, ordered=self.grouper.ordered)
+            )
+
+        # Final validation for grouper
+        if isinstance(self.grouper, Grouping):
+            self.grouper = self.grouper.grouper
+
+        elif not isinstance(self.grouper, (Series, Index, ExtensionArray, np.ndarray)):
+            if getattr(self.grouper, ""ndim"", 1) != 1:
+                raise ValueError(""Grouper for '{}' must be 1-dimensional"".format(self.name))
+            self.grouper = self.index.map(self.grouper)
+            if not (hasattr(self.grouper, ""__len__"") and len(self.grouper) == len(self.index)):
+                errmsg = (
+                    ""Grouper result violates len(labels) == len(data)\nresult: %s"" % pprint_thing(self.grouper)
+                )
+                raise AssertionError(errmsg)
+
+    if getattr(self.grouper, ""dtype"", None) is not None:
+        if is_datetime64_dtype(self.grouper):
+            self.grouper = self.grouper.astype(""datetime64[ns]"")
+        elif is_timedelta64_dtype(self.grouper):
+            self.grouper = self.grouper.astype(""timedelta64[ns]"")
+```",
+pandas-139-vall_gpt-6,UNKNOWN,UNKNOWN,"```python
+def __init__(
+    self,
+    index,
+    grouper=None,
+    obj=None,
+    name=None,
+    level=None,
+    sort=True,
+    observed=False,
+    in_axis=False,
+):
+
+    self.name = name
+    self.level = level
+    self.grouper = _convert_grouper(index, grouper)
+    self.all_grouper = None
+    self.index = index
+    self.sort = sort
+    self.obj = obj
+    self.observed = observed
+    self.in_axis = in_axis
+
+    # Ensure grouper has a valid type
+    if not isinstance(self.grouper, (Series, Index, ExtensionArray, np.ndarray)):
+        raise TypeError(""Grouper must be a Series, Index, or array-like"")
+
+    if isinstance(grouper, (Series, Index)) and name is None:
+        self.name = grouper.name
+
+    if isinstance(grouper, MultiIndex):
+        self.grouper = grouper.values
+
+    # Handling the level
+    if level is not None:
+        if not isinstance(level, int):
+            if level not in index.names:
+                raise KeyError(f""Level {level} not found in index names"")
+            level = index.names.index(level)
+
+        if self.name is None:
+            self.name = index.names[level]
+
+        self.grouper, self._labels, self._group_index = index._get_grouper_for_level(
+            self.grouper, level
+        )
+
+    elif isinstance(self.grouper, Grouper):
+        _, grouper, _ = self.grouper._get_grouper(self.obj, validate=False)
+        if self.name is None:
+            self.name = grouper.result_index.name
+        self.obj = self.grouper.obj
+        self.grouper = grouper._get_grouper()
+
+    else:
+        if self.grouper is None and self.name is not None:
+            self.grouper = self.obj[self.name]
+
+        elif isinstance(self.grouper, (list, tuple)):
+            self.grouper = com.asarray_tuplesafe(self.grouper)
+
+        elif is_categorical_dtype(self.grouper):
+            self.grouper, self.all_grouper = recode_for_groupby(
+                self.grouper, self.sort, observed
+            )
+            categories = self.grouper.categories
+
+            # Create the CategoricalIndex
+            self._labels = self.grouper.codes
+            if observed:
+                codes = algorithms.unique1d(self.grouper.codes)
+                codes = codes[codes != -1]
+                if sort or self.grouper.ordered:
+                    codes = np.sort(codes)
+            else:
+                codes = np.arange(len(categories))
+
+            self._group_index = CategoricalIndex(
+                Categorical.from_codes(
+                    codes=codes, categories=categories, ordered=self.grouper.ordered
+                )
+            )
+
+        if isinstance(self.grouper, Grouping):
+            self.grouper = self.grouper.grouper
+
+        elif not isinstance(self.grouper, (Series, Index, ExtensionArray, np.ndarray)):
+            if getattr(self.grouper, ""ndim"", 1) != 1:
+                t = self.name or str(type(self.grouper))
+                raise ValueError(""Grouper for '{}' not 1-dimensional"".format(t))
+
+            self.grouper = self.index.map(self.grouper)
+            if not (
+                hasattr(self.grouper, ""__len__"")
+                and len(self.grouper) == len(self.index)
+            ):
+                errmsg = (
+                    ""Grouper result violates len(labels) == len(data)\nresult: %s"" % pprint_thing(self.grouper)
+                )
+                self.grouper = None
+                raise AssertionError(errmsg)
+
+    if getattr(self.grouper, ""dtype"", None) is not None:
+        if is_datetime64_dtype(self.grouper):
+            self.grouper = self.grouper.astype(""datetime64[ns]"")
+        elif is_timedelta64_dtype(self.grouper):
+            self.grouper = self.grouper.astype(""timedelta64[ns]"")
+```",
+pandas-139-vall_gpt-7,UNKNOWN,UNKNOWN,"```python
+def __init__(
+    self,
+    index,
+    grouper=None,
+    obj=None,
+    name=None,
+    level=None,
+    sort=True,
+    observed=False,
+    in_axis=False,
+):
+    self.name = name
+    self.level = level
+    self.grouper = _convert_grouper(index, grouper)
+    self.all_grouper = None
+    self.index = index
+    self.sort = sort
+    self.obj = obj
+    self.observed = observed
+    self.in_axis = in_axis
+
+    # Validate grouper type
+    if not isinstance(self.grouper, (Series, Index, ExtensionArray, np.ndarray, Categorical)):
+        raise TypeError(""Grouper must be a Series, Index, array-like, or Categorical"")
+
+    # Assign name if not provided
+    if isinstance(grouper, (Series, Index)) and name is None:
+        self.name = grouper.name
+
+    if isinstance(grouper, MultiIndex):
+        self.grouper = grouper.values
+
+    # Single grouper handling with level
+    if level is not None:
+        if not isinstance(level, int):
+            if level not in index.names:
+                raise KeyError(f""Level '{level}' not found in index names"")
+            level = index.names.index(level)
+
+        # Set name from index level if not provided
+        if self.name is None:
+            self.name = index.names[level]
+
+        self.grouper, self._labels, self._group_index = index._get_grouper_for_level(self.grouper, level)
+
+    elif isinstance(self.grouper, Grouper):
+        _, grouper, _ = self.grouper._get_grouper(self.obj, validate=False)
+        if self.name is None:
+            self.name = grouper.result_index.name
+        self.obj = self.grouper.obj
+        self.grouper = grouper._get_grouper()
+
+    else:
+        if self.grouper is None and self.name is not None:
+            self.grouper = self.obj[self.name]
+
+        elif isinstance(self.grouper, (list, tuple)):
+            self.grouper = com.asarray_tuplesafe(self.grouper)
+
+        elif is_categorical_dtype(self.grouper):
+            self.grouper, self.all_grouper = recode_for_groupby(self.grouper, self.sort, observed)
+            categories = self.grouper.categories
+
+            self._labels = self.grouper.codes
+            if observed:
+                codes = algorithms.unique1d(self.grouper.codes)
+                codes = codes[codes != -1]
+                if sort or self.grouper.ordered:
+                    codes = np.sort(codes)
+            else:
+                codes = np.arange(len(categories))
+
+            self._group_index = CategoricalIndex(
+                Categorical.from_codes(codes=codes, categories=categories, ordered=self.grouper.ordered)
+            )
+
+        if isinstance(self.grouper, Grouping):
+            self.grouper = self.grouper.grouper
+
+        elif not isinstance(self.grouper, (Series, Index, ExtensionArray, np.ndarray)):
+            if getattr(self.grouper, ""ndim"", 1) != 1:
+                t = self.name or str(type(self.grouper))
+                raise ValueError(f""Grouper for '{t}' not 1-dimensional"")
+
+            self.grouper = self.index.map(self.grouper)
+            if not (hasattr(self.grouper, ""__len__"") and len(self.grouper) == len(self.index)):
+                errmsg = (
+                    ""Grouper result violates len(labels) == ""
+                    f""len(data)\nresult: {pprint_thing(self.grouper)}""
+                )
+                raise AssertionError(errmsg)
+
+    # Ensure date/time-like grouper is in correct type
+    if getattr(self.grouper, ""dtype"", None) is not None:
+        if is_datetime64_dtype(self.grouper):
+            self.grouper = self.grouper.astype(""datetime64[ns]"")
+        elif is_timedelta64_dtype(self.grouper):
+            self.grouper = self.grouper.astype(""timedelta64[ns]"")
+```",
+pandas-139-vall_gpt-8,UNKNOWN,UNKNOWN,"```python
+def __init__(
+    self,
+    index,
+    grouper=None,
+    obj=None,
+    name=None,
+    level=None,
+    sort=True,
+    observed=False,
+    in_axis=False,
+):
+
+    self.name = name
+    self.level = level
+    self.grouper = _convert_grouper(index, grouper)
+    self.all_grouper = None
+    self.index = index
+    self.sort = sort
+    self.obj = obj
+    self.observed = observed
+    self.in_axis = in_axis
+
+    if isinstance(grouper, (Series, Index)) and name is None:
+        self.name = grouper.name
+
+    if isinstance(grouper, MultiIndex):
+        self.grouper = grouper.values
+
+    if level is not None:
+        if not isinstance(level, int):
+            if level not in index.names:
+                raise KeyError(f""Level {level} not found in index names."")
+            level = index.names.index(level)
+
+        if self.name is None:
+            self.name = index.names[level]
+
+        self.grouper, self._labels, self._group_index = index._get_grouper_for_level(  
+            self.grouper, level
+        )
+
+    elif isinstance(self.grouper, Grouper):
+        _, grouper, _ = self.grouper._get_grouper(self.obj, validate=False)
+        if self.name is None:
+            self.name = grouper.result_index.name
+        self.obj = self.grouper.obj
+        self.grouper = grouper._get_grouper()
+
+    else:
+        if self.grouper is None and self.name is not None:
+            self.grouper = self.obj[self.name]
+
+        elif isinstance(self.grouper, (list, tuple)):
+            self.grouper = com.asarray_tuplesafe(self.grouper)
+
+        elif is_categorical_dtype(self.grouper):
+            self.grouper, self.all_grouper = recode_for_groupby(
+                self.grouper, self.sort, observed
+            )
+            categories = self.grouper.categories
+
+            self._labels = self.grouper.codes
+            if observed:
+                codes = algorithms.unique1d(self.grouper.codes)
+                codes = codes[codes != -1]
+                if sort or self.grouper.ordered:
+                    codes = np.sort(codes)
+            else:
+                codes = np.arange(len(categories))
+
+            self._group_index = CategoricalIndex(
+                Categorical.from_codes(
+                    codes=codes, categories=categories, ordered=self.grouper.ordered
+                )
+            )
+
+        if isinstance(self.grouper, Grouping):
+            self.grouper = self.grouper.grouper
+
+        elif not isinstance(self.grouper, (Series, Index, ExtensionArray, np.ndarray)):
+            if getattr(self.grouper, ""ndim"", 1) != 1:
+                t = self.name or str(type(self.grouper))
+                raise ValueError(f""Grouper for '{t}' not 1-dimensional."")
+
+            self.grouper = self.index.map(self.grouper)
+            if not hasattr(self.grouper, ""__len__"") or len(self.grouper) != len(self.index):
+                errmsg = (
+                    ""Grouper result violates len(labels) == len(data)\nresult: %s"" % pprint_thing(self.grouper)
+                )
+                self.grouper = None  # Try for sanity
+                raise AssertionError(errmsg)
+
+    if getattr(self.grouper, ""dtype"", None) is not None:
+        if is_datetime64_dtype(self.grouper):
+            self.grouper = self.grouper.astype(""datetime64[ns]"")
+        elif is_timedelta64_dtype(self.grouper):
+            self.grouper = self.grouper.astype(""timedelta64[ns]"")
+```",
+pandas-139-vall_gpt-9,UNKNOWN,UNKNOWN,"```python
+def __init__(
+    self,
+    index,
+    grouper=None,
+    obj=None,
+    name=None,
+    level=None,
+    sort=True,
+    observed=False,
+    in_axis=False,
+):
+
+    self.name = name
+    self.level = level
+    self.grouper = _convert_grouper(index, grouper)
+    self.all_grouper = None
+    self.index = index
+    self.sort = sort
+    self.obj = obj
+    self.observed = observed
+    self.in_axis = in_axis
+
+    # Validate that the grouper is of a valid type
+    if self.grouper is not None and not isinstance(self.grouper, (Series, Index, ExtensionArray, np.ndarray)):
+        raise TypeError(""Grouper must be a Series, Index, or array-like"")
+
+    # Assign name from grouper if not specified
+    if isinstance(grouper, (Series, Index)) and name is None:
+        self.name = grouper.name
+
+    # Handle MultiIndex
+    if isinstance(grouper, MultiIndex):
+        self.grouper = grouper.values
+
+    # Handle levels
+    if level is not None:
+        if not isinstance(level, int):
+            if level not in index.names:
+                raise KeyError(f""Level '{level}' not in index names."")
+            level = index.names.index(level)
+
+        if self.name is None:
+            self.name = index.names[level]
+
+        self.grouper, self._labels, self._group_index = index._get_grouper_for_level(self.grouper, level)
+
+    # Handle passed Grouper objects
+    elif isinstance(self.grouper, Grouper):
+        _, grouper, _ = self.grouper._get_grouper(self.obj, validate=False)
+        if self.name is None:
+            self.name = grouper.result_index.name
+        self.obj = self.grouper.obj
+        self.grouper = grouper._get_grouper()
+
+    else:
+        # Handle case when grouper is none and name is known
+        if self.grouper is None and self.name is not None:
+            self.grouper = self.obj[self.name]
+
+        elif isinstance(self.grouper, (list, tuple)):
+            self.grouper = com.asarray_tuplesafe(self.grouper)
+
+        # Handle categorical grouper
+        elif is_categorical_dtype(self.grouper):
+            self.grouper, self.all_grouper = recode_for_groupby(self.grouper, self.sort, observed)
+            categories = self.grouper.categories
+            self._labels = self.grouper.codes
+            
+            if observed:
+                codes = algorithms.unique1d(self.grouper.codes)
+                codes = codes[codes != -1]
+                if sort or self.grouper.ordered:
+                    codes = np.sort(codes)
+            else:
+                codes = np.arange(len(categories))
+
+            self._group_index = CategoricalIndex(
+                Categorical.from_codes(codes=codes, categories=categories, ordered=self.grouper.ordered)
+            )
+
+        # Ensure grouper is 1-dimensional
+        if isinstance(self.grouper, Grouping):
+            self.grouper = self.grouper.grouper
+
+        elif not isinstance(self.grouper, (Series, Index, ExtensionArray, np.ndarray)):
+            if getattr(self.grouper, ""ndim"", 1) != 1:
+                t = self.name or str(type(self.grouper))
+                raise ValueError(""Grouper for '{}' not 1-dimensional"".format(t))
+            self.grouper = self.index.map(self.grouper)
+            if not (hasattr(self.grouper, ""__len__"") and len(self.grouper) == len(self.index)):
+                raise AssertionError(""Grouper result violates len(labels) == len(data)"")
+
+    # Datetime-like groupers should be converted to correct types
+    if getattr(self.grouper, ""dtype"", None) is not None:
+        if is_datetime64_dtype(self.grouper):
+            self.grouper = self.grouper.astype(""datetime64[ns]"")
+        elif is_timedelta64_dtype(self.grouper):
+            self.grouper = self.grouper.astype(""timedelta64[ns]"")
+```",

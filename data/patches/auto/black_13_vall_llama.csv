@@ -1,0 +1,2344 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+black-13-vall_llama-0,UNKNOWN,UNKNOWN,"```python
+def generate_tokens(readline):
+    """"""
+    The generate_tokens() generator requires one argument, readline, which
+    must be a callable object which provides the same interface as the
+    readline() method of built-in file objects. Each call to the function
+    should return one line of input as a string.  Alternately, readline
+    can be a callable function terminating with StopIteration:
+        readline = open(myfile).next    # Example of alternate readline
+
+    The generator produces 5-tuples with these members: the token type; the
+    token string; a 2-tuple (srow, scol) of ints specifying the row and
+    column where the token begins in the source; a 2-tuple (erow, ecol) of
+    ints specifying the row and column where the token ends in the source;
+    and the line on which the token was found. The line passed is the
+    logical line; continuation lines are included.
+    """"""
+    lnum = parenlev = continued = 0
+    numchars = '0123456789'
+    contstr, needcont = '', 0
+    contline = None
+    indents = [0]
+
+    # 'stashed' and 'async_*' are used for async/await parsing
+    stashed = None
+    async_def = False
+    async_def_indent = 0
+    async_def_nl = False
+
+    while 1:                                   # loop over lines in stream
+        try:
+            line = readline()
+        except StopIteration:
+            line = ''
+        lnum = lnum + 1
+        pos, max = 0, len(line)
+
+        if contstr:                            # continued string
+            if not line:
+                raise TokenError(""EOF in multi-line string"", strstart)
+            endmatch = endprog.match(line)
+            if endmatch:
+                pos = end = endmatch.end(0)
+                yield (STRING, contstr + line[:end],
+                       strstart, (lnum, end), contline + line)
+                contstr, needcont = '', 0
+                contline = None
+            elif needcont and line[-2:]!= '\\\n' and line[-3:]!= '\\\r\n':
+                yield (ERRORTOKEN, contstr + line,
+                           strstart, (lnum, len(line)), contline)
+                contstr = ''
+                contline = None
+                continue
+            else:
+                contstr = contstr + line
+                contline = contline + line
+                continue
+
+        elif parenlev == 0 and not continued:  # new statement
+            if not line: break
+            column = 0
+            while pos < max:                   # measure leading whitespace
+                if line[pos] == ' ': column = column + 1
+                elif line[pos] == '\t': column = (column//tabsize + 1)*tabsize
+                elif line[pos] == '\f': column = 0
+                else: break
+                pos = pos + 1
+            if pos == max: break
+
+            if stashed:
+                yield stashed
+                stashed = None
+
+            if line[pos] in '\r\n':            # skip blank lines
+                yield (NL, line[pos:], (lnum, pos), (lnum, len(line)), line)
+                continue
+
+            if line[pos] == '#':               # skip comments
+                comment_token = line[pos:].rstrip('\r\n')
+                nl_pos = pos + len(comment_token)
+                yield (COMMENT, comment_token,
+                        (lnum, pos), (lnum, pos + len(comment_token)), line)
+                yield (NL, line[nl_pos:],
+                        (lnum, nl_pos), (lnum, len(line)), line)
+                continue
+
+            if column > indents[-1]:           # count indents
+                indents.append(column)
+                yield (INDENT, line[:pos], (lnum, 0), (lnum, pos), line)
+
+            while column < indents[-1]:        # count dedents
+                if column not in indents:
+                    raise IndentationError(
+                        ""unindent does not match any outer indentation level"",
+                        (""<tokenize>"", lnum, pos, line))
+                indents = indents[:-1]
+
+                if async_def and async_def_indent >= indents[-1]:
+                    async_def = False
+                    async_def_nl = False
+                    async_def_indent = 0
+
+                yield (DEDENT, '', (lnum, pos), (lnum, pos), line)
+
+            if async_def and async_def_nl and async_def_indent >= indents[-1]:
+                async_def = False
+                async_def_nl = False
+                async_def_indent = 0
+
+        else:                                  # continued statement
+            if not line:
+                raise TokenError(""EOF in multi-line statement"", (lnum, 0))
+            continued = 0
+
+        while pos < max:
+            pseudomatch = pseudoprog.match(line, pos)
+            if pseudomatch:                                # scan for tokens
+                start, end = pseudomatch.span(1)
+                spos, epos, pos = (lnum, start), (lnum, end), end
+                token, initial = line[start:end], line[start]
+
+                if initial in numchars or \
+                   (initial == '.' and token!= '.'):      # ordinary number
+                    yield (NUMBER, token, spos, epos, line)
+                elif initial in '\r\n':
+                    newline = NEWLINE
+                    if parenlev > 0:
+                        newline = NL
+                    elif async_def:
+                        async_def_nl = True
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (newline, token, spos, epos, line)
+
+                elif initial == '#':
+                    assert not token.endswith(""\n"")
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (COMMENT, token, spos, epos, line)
+                elif token in triple_quoted:
+                    endprog = endprogs[token]
+                    endmatch = endprog.match(line, pos)
+                    if endmatch:                           # all on one line
+                        pos = endmatch.end(0)
+                        token = line[start:pos]
+                        if stashed:
+                            yield stashed
+                            stashed = None
+                        yield (STRING, token, spos, (lnum, pos), line)
+                    else:
+                        strstart = (lnum, start)           # multiple lines
+                        contstr = line[start:]
+                        contline = line
+                        break
+                elif initial in single_quoted or \
+                    token[:2] in single_quoted or \
+                    token[:3] in single_quoted:
+                    if token[-1] == '\n':                  # continued string
+                        strstart = (lnum, start)
+                        endprog = (endprogs[initial] or endprogs[token[1]] or
+                                   endprogs[token[2]])
+                        contstr, needcont = line[start:], 1
+                        contline = line
+                        break
+                    else:                                  # ordinary string
+                        if stashed:
+                            yield stashed
+                            stashed = None
+                        yield (STRING, token, spos, epos, line)
+                elif initial.isidentifier():               # ordinary name
+                    if token in ('async', 'await'):
+                        if async_def:
+                            yield (ASYNC if token == 'async' else AWAIT,
+                                   token, spos, epos, line)
+                            continue
+
+                    tok = (NAME, token, spos, epos, line)
+                    if token == 'async' and not stashed:
+                        stashed = tok
+                        continue
+
+                    if token == 'def':
+                        if (stashed
+                                and stashed[0] == NAME
+                                and stashed[1] == 'async'):
+
+                            async_def = True
+                            async_def_indent = indents[-1]
+
+                            yield (ASYNC, stashed[1],
+                                   stashed[2], stashed[3],
+                                   stashed[4])
+                            stashed = None
+
+                    if stashed:
+                        yield stashed
+                        stashed = None
+
+                    yield tok
+                elif initial == '\\':                      # continued stmt
+                    # This yield is new; needed for better idempotency:
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (NL, token, spos, (lnum, pos), line)
+                    continued = 1
+                else:
+                    if initial in '([{': parenlev = parenlev + 1
+                    elif initial in ')]}': parenlev = parenlev - 1
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (OP, token, spos, epos, line)
+            else:
+                yield (ERRORTOKEN, line[pos],
+                           (lnum, pos), (lnum, pos+1), line)
+                pos = pos + 1
+
+    if stashed:
+        yield stashed
+        stashed = None
+
+    for indent in indents[1:]:                 # pop remaining indent levels
+        yield (DEDENT, '', (lnum, 0), (lnum, 0), '')
+    yield (ENDMARKER, '', (lnum, 0), (lnum, 0), '')
+```",
+black-13-vall_llama-1,UNKNOWN,UNKNOWN,"```python
+def generate_tokens(readline):
+    """"""
+    The generate_tokens() generator requires one argument, readline, which
+    must be a callable object which provides the same interface as the
+    readline() method of built-in file objects. Each call to the function
+    should return one line of input as a string.  Alternately, readline
+    can be a callable function terminating with StopIteration:
+        readline = open(myfile).next    # Example of alternate readline
+
+    The generator produces 5-tuples with these members: the token type; the
+    token string; a 2-tuple (srow, scol) of ints specifying the row and
+    column where the token begins in the source; a 2-tuple (erow, ecol) of
+    ints specifying the row and column where the token ends in the source;
+    and the line on which the token was found. The line passed is the
+    logical line; continuation lines are included.
+    """"""
+    lnum = parenlev = continued = 0
+    numchars = '0123456789'
+    contstr, needcont = '', 0
+    contline = None
+    indents = [0]
+
+    # 'stashed' and 'async_*' are used for async/await parsing
+    stashed = None
+    async_def = False
+    async_def_indent = 0
+    async_def_nl = False
+
+    while 1:                                   # loop over lines in stream
+        try:
+            line = readline()
+        except StopIteration:
+            line = ''
+        lnum = lnum + 1
+        pos, max = 0, len(line)
+
+        if contstr:                            # continued string
+            if not line:
+                raise TokenError(""EOF in multi-line string"", strstart)
+            endmatch = endprog.match(line)
+            if endmatch:
+                pos = end = endmatch.end(0)
+                yield (STRING, contstr + line[:end],
+                       strstart, (lnum, end), contline + line)
+                contstr, needcont = '', 0
+                contline = None
+            elif needcont and line[-2:]!= '\\\n' and line[-3:]!= '\\\r\n':
+                yield (ERRORTOKEN, contstr + line,
+                           strstart, (lnum, len(line)), contline)
+                contstr = ''
+                contline = None
+                continue
+            else:
+                contstr = contstr + line
+                contline = contline + line
+                continue
+
+        elif parenlev == 0 and not continued:  # new statement
+            if not line: break
+            column = 0
+            while pos < max:                   # measure leading whitespace
+                if line[pos] == ' ': column = column + 1
+                elif line[pos] == '\t': column = (column//tabsize + 1)*tabsize
+                elif line[pos] == '\f': column = 0
+                else: break
+                pos = pos + 1
+            if pos == max: break
+
+            if stashed:
+                yield stashed
+                stashed = None
+
+            if line[pos] in '\r\n':            # skip blank lines
+                yield (NL, line[pos:], (lnum, pos), (lnum, len(line)), line)
+                continue
+
+            if line[pos] == '#':               # skip comments
+                comment_token = line[pos:].rstrip('\r\n')
+                nl_pos = pos + len(comment_token)
+                yield (COMMENT, comment_token,
+                        (lnum, pos), (lnum, pos + len(comment_token)), line)
+                yield (NL, line[nl_pos:],
+                        (lnum, nl_pos), (lnum, len(line)), line)
+                continue
+
+            if column > indents[-1]:           # count indents
+                indents.append(column)
+                yield (INDENT, line[:pos], (lnum, 0), (lnum, pos), line)
+
+            while column < indents[-1]:        # count dedents
+                if column not in indents:
+                    raise IndentationError(
+                        ""unindent does not match any outer indentation level"",
+                        (""<tokenize>"", lnum, pos, line))
+                indents = indents[:-1]
+
+                if async_def and async_def_indent >= indents[-1]:
+                    async_def = False
+                    async_def_nl = False
+                    async_def_indent = 0
+
+                yield (DEDENT, '', (lnum, pos), (lnum, pos), line)
+
+            if async_def and async_def_nl and async_def_indent >= indents[-1]:
+                async_def = False
+                async_def_nl = False
+                async_def_indent = 0
+
+        else:                                  # continued statement
+            if not line:
+                raise TokenError(""EOF in multi-line statement"", (lnum, 0))
+            continued = 0
+
+        while pos < max:
+            pseudomatch = pseudoprog.match(line, pos)
+            if pseudomatch:                                # scan for tokens
+                start, end = pseudomatch.span(1)
+                spos, epos, pos = (lnum, start), (lnum, end), end
+                token, initial = line[start:end], line[start]
+
+                if initial in numchars or \
+                   (initial == '.' and token!= '.'):      # ordinary number
+                    yield (NUMBER, token, spos, epos, line)
+                elif initial in '\r\n':
+                    newline = NEWLINE
+                    if parenlev > 0:
+                        newline = NL
+                    elif async_def:
+                        async_def_nl = True
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (newline, token, spos, epos, line)
+
+                elif initial == '#':
+                    assert not token.endswith(""\n"")
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (COMMENT, token, spos, epos, line)
+                elif token in triple_quoted:
+                    endprog = endprogs[token]
+                    endmatch = endprog.match(line, pos)
+                    if endmatch:                           # all on one line
+                        pos = endmatch.end(0)
+                        token = line[start:pos]
+                        if stashed:
+                            yield stashed
+                            stashed = None
+                        yield (STRING, token, spos, (lnum, pos), line)
+                    else:
+                        strstart = (lnum, start)           # multiple lines
+                        contstr = line[start:]
+                        contline = line
+                        break
+                elif initial in single_quoted or \
+                    token[:2] in single_quoted or \
+                    token[:3] in single_quoted:
+                    if token[-1] == '\n':                  # continued string
+                        strstart = (lnum, start)
+                        endprog = (endprogs[initial] or endprogs[token[1]] or
+                                   endprogs[token[2]])
+                        contstr, needcont = line[start:], 1
+                        contline = line
+                        break
+                    else:                                  # ordinary string
+                        if stashed:
+                            yield stashed
+                            stashed = None
+                        yield (STRING, token, spos, epos, line)
+                elif initial.isidentifier():               # ordinary name
+                    if token in ('async', 'await'):
+                        if async_def:
+                            yield (ASYNC if token == 'async' else AWAIT,
+                                   token, spos, epos, line)
+                            continue
+
+                    tok = (NAME, token, spos, epos, line)
+                    if token == 'async' and not stashed:
+                        stashed = tok
+                        continue
+
+                    if token == 'def':
+                        if (stashed
+                                and stashed[0] == NAME
+                                and stashed[1] == 'async'):
+
+                            async_def = True
+                            async_def_indent = indents[-1]
+
+                            yield (ASYNC, stashed[1],
+                                   stashed[2], stashed[3],
+                                   stashed[4])
+                            stashed = None
+
+                    if stashed:
+                        yield stashed
+                        stashed = None
+
+                    yield tok
+                elif initial == '\\':                      # continued stmt
+                    # This yield is new; needed for better idempotency:
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (NL, token, spos, (lnum, pos), line)
+                    continued = 1
+                else:
+                    if initial in '([{': parenlev = parenlev + 1
+                    elif initial in ')]}': parenlev = parenlev - 1
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (OP, token, spos, epos, line)
+            else:
+                yield (ERRORTOKEN, line[pos],
+                           (lnum, pos), (lnum, pos+1), line)
+                pos = pos + 1
+
+    if stashed:
+        yield stashed
+        stashed = None
+
+    for indent in indents[1:]:                 # pop remaining indent levels
+        yield (DEDENT, '', (lnum, 0), (lnum, 0), '')
+    yield (ENDMARKER, '', (lnum, 0), (lnum, 0), '')
+```",
+black-13-vall_llama-2,UNKNOWN,UNKNOWN,"```python
+def generate_tokens(readline):
+    """"""
+    The generate_tokens() generator requires one argument, readline, which
+    must be a callable object which provides the same interface as the
+    readline() method of built-in file objects. Each call to the function
+    should return one line of input as a string.  Alternately, readline
+    can be a callable function terminating with StopIteration:
+        readline = open(myfile).next    # Example of alternate readline
+
+    The generator produces 5-tuples with these members: the token type; the
+    token string; a 2-tuple (srow, scol) of ints specifying the row and
+    column where the token begins in the source; a 2-tuple (erow, ecol) of
+    ints specifying the row and column where the token ends in the source;
+    and the line on which the token was found. The line passed is the
+    logical line; continuation lines are included.
+    """"""
+    lnum = parenlev = continued = 0
+    numchars = '0123456789'
+    contstr, needcont = '', 0
+    contline = None
+    indents = [0]
+
+    # 'stashed' and 'async_*' are used for async/await parsing
+    stashed = None
+    async_def = False
+    async_def_indent = 0
+    async_def_nl = False
+
+    while 1:                                   # loop over lines in stream
+        try:
+            line = readline()
+        except StopIteration:
+            line = ''
+        lnum = lnum + 1
+        pos, max = 0, len(line)
+
+        if contstr:                            # continued string
+            if not line:
+                raise TokenError(""EOF in multi-line string"", strstart)
+            endmatch = endprog.match(line)
+            if endmatch:
+                pos = end = endmatch.end(0)
+                yield (STRING, contstr + line[:end],
+                       strstart, (lnum, end), contline + line)
+                contstr, needcont = '', 0
+                contline = None
+            elif needcont and line[-2:]!= '\\\n' and line[-3:]!= '\\\r\n':
+                yield (ERRORTOKEN, contstr + line,
+                           strstart, (lnum, len(line)), contline)
+                contstr = ''
+                contline = None
+                continue
+            else:
+                contstr = contstr + line
+                contline = contline + line
+                continue
+
+        elif parenlev == 0 and not continued:  # new statement
+            if not line: break
+            column = 0
+            while pos < max:                   # measure leading whitespace
+                if line[pos] == ' ': column = column + 1
+                elif line[pos] == '\t': column = (column//tabsize + 1)*tabsize
+                elif line[pos] == '\f': column = 0
+                else: break
+                pos = pos + 1
+            if pos == max: break
+
+            if stashed:
+                yield stashed
+                stashed = None
+
+            if line[pos] in '\r\n':            # skip blank lines
+                yield (NL, line[pos:], (lnum, pos), (lnum, len(line)), line)
+                continue
+
+            if line[pos] == '#':               # skip comments
+                comment_token = line[pos:].rstrip('\r\n')
+                nl_pos = pos + len(comment_token)
+                yield (COMMENT, comment_token,
+                        (lnum, pos), (lnum, pos + len(comment_token)), line)
+                yield (NL, line[nl_pos:],
+                        (lnum, nl_pos), (lnum, len(line)), line)
+                continue
+
+            if column > indents[-1]:           # count indents
+                indents.append(column)
+                yield (INDENT, line[:pos], (lnum, 0), (lnum, pos), line)
+
+            while column < indents[-1]:        # count dedents
+                if column not in indents:
+                    raise IndentationError(
+                        ""unindent does not match any outer indentation level"",
+                        (""<tokenize>"", lnum, pos, line))
+                indents = indents[:-1]
+
+                if async_def and async_def_indent >= indents[-1]:
+                    async_def = False
+                    async_def_nl = False
+                    async_def_indent = 0
+
+                yield (DEDENT, '', (lnum, pos), (lnum, pos), line)
+
+            if async_def and async_def_nl and async_def_indent >= indents[-1]:
+                async_def = False
+                async_def_nl = False
+                async_def_indent = 0
+
+        else:                                  # continued statement
+            if not line:
+                raise TokenError(""EOF in multi-line statement"", (lnum, 0))
+            continued = 0
+
+        while pos < max:
+            pseudomatch = pseudoprog.match(line, pos)
+            if pseudomatch:                                # scan for tokens
+                start, end = pseudomatch.span(1)
+                spos, epos, pos = (lnum, start), (lnum, end), end
+                token, initial = line[start:end], line[start]
+
+                if initial in numchars or \
+                   (initial == '.' and token!= '.'):      # ordinary number
+                    yield (NUMBER, token, spos, epos, line)
+                elif initial in '\r\n':
+                    newline = NEWLINE
+                    if parenlev > 0:
+                        newline = NL
+                    elif async_def:
+                        async_def_nl = True
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (newline, token, spos, epos, line)
+
+                elif initial == '#':
+                    assert not token.endswith(""\n"")
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (COMMENT, token, spos, epos, line)
+                elif token in triple_quoted:
+                    endprog = endprogs[token]
+                    endmatch = endprog.match(line, pos)
+                    if endmatch:                           # all on one line
+                        pos = endmatch.end(0)
+                        token = line[start:pos]
+                        if stashed:
+                            yield stashed
+                            stashed = None
+                        yield (STRING, token, spos, (lnum, pos), line)
+                    else:
+                        strstart = (lnum, start)           # multiple lines
+                        contstr = line[start:]
+                        contline = line
+                        break
+                elif initial in single_quoted or \
+                    token[:2] in single_quoted or \
+                    token[:3] in single_quoted:
+                    if token[-1] == '\n':                  # continued string
+                        strstart = (lnum, start)
+                        endprog = (endprogs[initial] or endprogs[token[1]] or
+                                   endprogs[token[2]])
+                        contstr, needcont = line[start:], 1
+                        contline = line
+                        break
+                    else:                                  # ordinary string
+                        if stashed:
+                            yield stashed
+                            stashed = None
+                        yield (STRING, token, spos, epos, line)
+                elif initial.isidentifier():               # ordinary name
+                    if token in ('async', 'await'):
+                        if async_def:
+                            yield (ASYNC if token == 'async' else AWAIT,
+                                   token, spos, epos, line)
+                            continue
+
+                    tok = (NAME, token, spos, epos, line)
+                    if token == 'async' and not stashed:
+                        stashed = tok
+                        continue
+
+                    if token == 'def':
+                        if (stashed
+                                and stashed[0] == NAME
+                                and stashed[1] == 'async'):
+
+                            async_def = True
+                            async_def_indent = indents[-1]
+
+                            yield (ASYNC, stashed[1],
+                                   stashed[2], stashed[3],
+                                   stashed[4])
+                            stashed = None
+
+                    if stashed:
+                        yield stashed
+                        stashed = None
+
+                    yield tok
+                elif initial == '\\':                      # continued stmt
+                    # This yield is new; needed for better idempotency:
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (NL, token, spos, (lnum, pos), line)
+                    continued = 1
+                else:
+                    if initial in '([{': parenlev = parenlev + 1
+                    elif initial in ')]}': parenlev = parenlev - 1
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (OP, token, spos, epos, line)
+            else:
+                yield (ERRORTOKEN, line[pos],
+                           (lnum, pos), (lnum, pos+1), line)
+                pos = pos + 1
+
+    if stashed:
+        yield stashed
+        stashed = None
+
+    for indent in indents[1:]:                 # pop remaining indent levels
+        yield (DEDENT, '', (lnum, 0), (lnum, 0), '')
+    yield (ENDMARKER, '', (lnum, 0), (lnum, 0), '')
+```",
+black-13-vall_llama-3,UNKNOWN,UNKNOWN,"```python
+def generate_tokens(readline):
+    """"""
+    The generate_tokens() generator requires one argument, readline, which
+    must be a callable object which provides the same interface as the
+    readline() method of built-in file objects. Each call to the function
+    should return one line of input as a string.  Alternately, readline
+    can be a callable function terminating with StopIteration:
+        readline = open(myfile).next    # Example of alternate readline
+
+    The generator produces 5-tuples with these members: the token type; the
+    token string; a 2-tuple (srow, scol) of ints specifying the row and
+    column where the token begins in the source; a 2-tuple (erow, ecol) of
+    ints specifying the row and column where the token ends in the source;
+    and the line on which the token was found. The line passed is the
+    logical line; continuation lines are included.
+    """"""
+    lnum = parenlev = continued = 0
+    numchars = '0123456789'
+    contstr, needcont = '', 0
+    contline = None
+    indents = [0]
+
+    # 'stashed' and 'async_*' are used for async/await parsing
+    stashed = None
+    async_def = False
+    async_def_indent = 0
+    async_def_nl = False
+
+    while 1:                                   # loop over lines in stream
+        try:
+            line = readline()
+        except StopIteration:
+            line = ''
+        lnum = lnum + 1
+        pos, max = 0, len(line)
+
+        if contstr:                            # continued string
+            if not line:
+                raise TokenError(""EOF in multi-line string"", strstart)
+            endmatch = endprog.match(line)
+            if endmatch:
+                pos = end = endmatch.end(0)
+                yield (STRING, contstr + line[:end],
+                       strstart, (lnum, end), contline + line)
+                contstr, needcont = '', 0
+                contline = None
+            elif needcont and line[-2:]!= '\\\n' and line[-3:]!= '\\\r\n':
+                yield (ERRORTOKEN, contstr + line,
+                           strstart, (lnum, len(line)), contline)
+                contstr = ''
+                contline = None
+                continue
+            else:
+                contstr = contstr + line
+                contline = contline + line
+                continue
+
+        elif parenlev == 0 and not continued:  # new statement
+            if not line: break
+            column = 0
+            while pos < max:                   # measure leading whitespace
+                if line[pos] == ' ': column = column + 1
+                elif line[pos] == '\t': column = (column//tabsize + 1)*tabsize
+                elif line[pos] == '\f': column = 0
+                else: break
+                pos = pos + 1
+            if pos == max: break
+
+            if stashed:
+                yield stashed
+                stashed = None
+
+            if line[pos] in '\r\n':            # skip blank lines
+                yield (NL, line[pos:], (lnum, pos), (lnum, len(line)), line)
+                continue
+
+            if line[pos] == '#':               # skip comments
+                comment_token = line[pos:].rstrip('\r\n')
+                nl_pos = pos + len(comment_token)
+                yield (COMMENT, comment_token,
+                        (lnum, pos), (lnum, pos + len(comment_token)), line)
+                yield (NL, line[nl_pos:],
+                        (lnum, nl_pos), (lnum, len(line)), line)
+                continue
+
+            if column > indents[-1]:           # count indents
+                indents.append(column)
+                yield (INDENT, line[:pos], (lnum, 0), (lnum, pos), line)
+
+            while column < indents[-1]:        # count dedents
+                if column not in indents:
+                    raise IndentationError(
+                        ""unindent does not match any outer indentation level"",
+                        (""<tokenize>"", lnum, pos, line))
+                indents = indents[:-1]
+
+                if async_def and async_def_indent >= indents[-1]:
+                    async_def = False
+                    async_def_nl = False
+                    async_def_indent = 0
+
+                yield (DEDENT, '', (lnum, pos), (lnum, pos), line)
+
+            if async_def and async_def_nl and async_def_indent >= indents[-1]:
+                async_def = False
+                async_def_nl = False
+                async_def_indent = 0
+
+        else:                                  # continued statement
+            if not line:
+                raise TokenError(""EOF in multi-line statement"", (lnum, 0))
+            continued = 0
+
+        while pos < max:
+            pseudomatch = pseudoprog.match(line, pos)
+            if pseudomatch:                                # scan for tokens
+                start, end = pseudomatch.span(1)
+                spos, epos, pos = (lnum, start), (lnum, end), end
+                token, initial = line[start:end], line[start]
+
+                if initial in numchars or \
+                   (initial == '.' and token!= '.'):      # ordinary number
+                    yield (NUMBER, token, spos, epos, line)
+                elif initial in '\r\n':
+                    newline = NEWLINE
+                    if parenlev > 0:
+                        newline = NL
+                    elif async_def:
+                        async_def_nl = True
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (newline, token, spos, epos, line)
+
+                elif initial == '#':
+                    assert not token.endswith(""\n"")
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (COMMENT, token, spos, epos, line)
+                elif token in triple_quoted:
+                    endprog = endprogs[token]
+                    endmatch = endprog.match(line, pos)
+                    if endmatch:                           # all on one line
+                        pos = endmatch.end(0)
+                        token = line[start:pos]
+                        if stashed:
+                            yield stashed
+                            stashed = None
+                        yield (STRING, token, spos, (lnum, pos), line)
+                    else:
+                        strstart = (lnum, start)           # multiple lines
+                        contstr = line[start:]
+                        contline = line
+                        break
+                elif initial in single_quoted or \
+                    token[:2] in single_quoted or \
+                    token[:3] in single_quoted:
+                    if token[-1] == '\n':                  # continued string
+                        strstart = (lnum, start)
+                        endprog = (endprogs[initial] or endprogs[token[1]] or
+                                   endprogs[token[2]])
+                        contstr, needcont = line[start:], 1
+                        contline = line
+                        break
+                    else:                                  # ordinary string
+                        if stashed:
+                            yield stashed
+                            stashed = None
+                        yield (STRING, token, spos, epos, line)
+                elif initial.isidentifier():               # ordinary name
+                    if token in ('async', 'await'):
+                        if async_def:
+                            yield (ASYNC if token == 'async' else AWAIT,
+                                   token, spos, epos, line)
+                            continue
+
+                    tok = (NAME, token, spos, epos, line)
+                    if token == 'async' and not stashed:
+                        stashed = tok
+                        continue
+
+                    if token == 'def':
+                        if (stashed
+                                and stashed[0] == NAME
+                                and stashed[1] == 'async'):
+
+                            async_def = True
+                            async_def_indent = indents[-1]
+
+                            yield (ASYNC, stashed[1],
+                                   stashed[2], stashed[3],
+                                   stashed[4])
+                            stashed = None
+
+                    if stashed:
+                        yield stashed
+                        stashed = None
+
+                    yield tok
+                elif initial == '\\':                      # continued stmt
+                    # This yield is new; needed for better idempotency:
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (NL, token, spos, (lnum, pos), line)
+                    continued = 1
+                else:
+                    if initial in '([{': parenlev = parenlev + 1
+                    elif initial in ')]}': parenlev = parenlev - 1
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (OP, token, spos, epos, line)
+            else:
+                yield (ERRORTOKEN, line[pos],
+                           (lnum, pos), (lnum, pos+1), line)
+                pos = pos + 1
+
+    if stashed:
+        yield stashed
+        stashed = None
+
+    for indent in indents[1:]:                 # pop remaining indent levels
+        yield (DEDENT, '', (lnum, 0), (lnum, 0), '')
+    yield (ENDMARKER, '', (lnum, 0), (lnum, 0), '')
+```",
+black-13-vall_llama-4,UNKNOWN,UNKNOWN,"```python
+def generate_tokens(readline):
+    """"""
+    The generate_tokens() generator requires one argument, readline, which
+    must be a callable object which provides the same interface as the
+    readline() method of built-in file objects. Each call to the function
+    should return one line of input as a string.  Alternately, readline
+    can be a callable function terminating with StopIteration:
+        readline = open(myfile).next    # Example of alternate readline
+
+    The generator produces 5-tuples with these members: the token type; the
+    token string; a 2-tuple (srow, scol) of ints specifying the row and
+    column where the token begins in the source; a 2-tuple (erow, ecol) of
+    ints specifying the row and column where the token ends in the source;
+    and the line on which the token was found. The line passed is the
+    logical line; continuation lines are included.
+    """"""
+    lnum = parenlev = continued = 0
+    numchars = '0123456789'
+    contstr, needcont = '', 0
+    contline = None
+    indents = [0]
+
+    # 'stashed' and 'async_*' are used for async/await parsing
+    stashed = None
+    async_def = False
+    async_def_indent = 0
+    async_def_nl = False
+
+    while 1:                                   # loop over lines in stream
+        try:
+            line = readline()
+        except StopIteration:
+            line = ''
+        lnum = lnum + 1
+        pos, max = 0, len(line)
+
+        if contstr:                            # continued string
+            if not line:
+                raise TokenError(""EOF in multi-line string"", strstart)
+            endmatch = endprog.match(line)
+            if endmatch:
+                pos = end = endmatch.end(0)
+                yield (STRING, contstr + line[:end],
+                       strstart, (lnum, end), contline + line)
+                contstr, needcont = '', 0
+                contline = None
+            elif needcont and line[-2:]!= '\\\n' and line[-3:]!= '\\\r\n':
+                yield (ERRORTOKEN, contstr + line,
+                           strstart, (lnum, len(line)), contline)
+                contstr = ''
+                contline = None
+                continue
+            else:
+                contstr = contstr + line
+                contline = contline + line
+                continue
+
+        elif parenlev == 0 and not continued:  # new statement
+            if not line: break
+            column = 0
+            while pos < max:                   # measure leading whitespace
+                if line[pos] == ' ': column = column + 1
+                elif line[pos] == '\t': column = (column//tabsize + 1)*tabsize
+                elif line[pos] == '\f': column = 0
+                else: break
+                pos = pos + 1
+            if pos == max: break
+
+            if stashed:
+                yield stashed
+                stashed = None
+
+            if line[pos] in '\r\n':            # skip blank lines
+                yield (NL, line[pos:], (lnum, pos), (lnum, len(line)), line)
+                continue
+
+            if line[pos] == '#':               # skip comments
+                comment_token = line[pos:].rstrip('\r\n')
+                nl_pos = pos + len(comment_token)
+                yield (COMMENT, comment_token,
+                        (lnum, pos), (lnum, pos + len(comment_token)), line)
+                yield (NL, line[nl_pos:],
+                        (lnum, nl_pos), (lnum, len(line)), line)
+                continue
+
+            if column > indents[-1]:           # count indents
+                indents.append(column)
+                yield (INDENT, line[:pos], (lnum, 0), (lnum, pos), line)
+
+            while column < indents[-1]:        # count dedents
+                if column not in indents:
+                    raise IndentationError(
+                        ""unindent does not match any outer indentation level"",
+                        (""<tokenize>"", lnum, pos, line))
+                indents = indents[:-1]
+
+                if async_def and async_def_indent >= indents[-1]:
+                    async_def = False
+                    async_def_nl = False
+                    async_def_indent = 0
+
+                yield (DEDENT, '', (lnum, pos), (lnum, pos), line)
+
+            if async_def and async_def_nl and async_def_indent >= indents[-1]:
+                async_def = False
+                async_def_nl = False
+                async_def_indent = 0
+
+        else:                                  # continued statement
+            if not line:
+                raise TokenError(""EOF in multi-line statement"", (lnum, 0))
+            continued = 0
+
+        while pos < max:
+            pseudomatch = pseudoprog.match(line, pos)
+            if pseudomatch:                                # scan for tokens
+                start, end = pseudomatch.span(1)
+                spos, epos, pos = (lnum, start), (lnum, end), end
+                token, initial = line[start:end], line[start]
+
+                if initial in numchars or \
+                   (initial == '.' and token!= '.'):      # ordinary number
+                    yield (NUMBER, token, spos, epos, line)
+                elif initial in '\r\n':
+                    newline = NEWLINE
+                    if parenlev > 0:
+                        newline = NL
+                    elif async_def:
+                        async_def_nl = True
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (newline, token, spos, epos, line)
+
+                elif initial == '#':
+                    assert not token.endswith(""\n"")
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (COMMENT, token, spos, epos, line)
+                elif token in triple_quoted:
+                    endprog = endprogs[token]
+                    endmatch = endprog.match(line, pos)
+                    if endmatch:                           # all on one line
+                        pos = endmatch.end(0)
+                        token = line[start:pos]
+                        if stashed:
+                            yield stashed
+                            stashed = None
+                        yield (STRING, token, spos, (lnum, pos), line)
+                    else:
+                        strstart = (lnum, start)           # multiple lines
+                        contstr = line[start:]
+                        contline = line
+                        break
+                elif initial in single_quoted or \
+                    token[:2] in single_quoted or \
+                    token[:3] in single_quoted:
+                    if token[-1] == '\n':                  # continued string
+                        strstart = (lnum, start)
+                        endprog = (endprogs[initial] or endprogs[token[1]] or
+                                   endprogs[token[2]])
+                        contstr, needcont = line[start:], 1
+                        contline = line
+                        break
+                    else:                                  # ordinary string
+                        if stashed:
+                            yield stashed
+                            stashed = None
+                        yield (STRING, token, spos, epos, line)
+                elif initial.isidentifier():               # ordinary name
+                    if token in ('async', 'await'):
+                        if async_def:
+                            yield (ASYNC if token == 'async' else AWAIT,
+                                   token, spos, epos, line)
+                            continue
+
+                    tok = (NAME, token, spos, epos, line)
+                    if token == 'async' and not stashed:
+                        stashed = tok
+                        continue
+
+                    if token == 'def':
+                        if (stashed
+                                and stashed[0] == NAME
+                                and stashed[1] == 'async'):
+
+                            async_def = True
+                            async_def_indent = indents[-1]
+
+                            yield (ASYNC, stashed[1],
+                                   stashed[2], stashed[3],
+                                   stashed[4])
+                            stashed = None
+
+                    if stashed:
+                        yield stashed
+                        stashed = None
+
+                    yield tok
+                elif initial == '\\':                      # continued stmt
+                    # This yield is new; needed for better idempotency:
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (NL, token, spos, (lnum, pos), line)
+                    continued = 1
+                else:
+                    if initial in '([{': parenlev = parenlev + 1
+                    elif initial in ')]}': parenlev = parenlev - 1
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (OP, token, spos, epos, line)
+            else:
+                yield (ERRORTOKEN, line[pos],
+                           (lnum, pos), (lnum, pos+1), line)
+                pos = pos + 1
+
+    if stashed:
+        yield stashed
+        stashed = None
+
+    for indent in indents[1:]:                 # pop remaining indent levels
+        yield (DEDENT, '', (lnum, 0), (lnum, 0), '')
+    yield (ENDMARKER, '', (lnum, 0), (lnum, 0), '')
+```",
+black-13-vall_llama-5,UNKNOWN,UNKNOWN,"### Corrected Version of the Function 'generate_tokens'
+```python
+def generate_tokens(readline):
+    """"""
+    The generate_tokens() generator requires one argument, readline, which
+    must be a callable object which provides the same interface as the
+    readline() method of built-in file objects. Each call to the function
+    should return one line of input as a string.  Alternately, readline
+    can be a callable function terminating with StopIteration:
+        readline = open(myfile).next    # Example of alternate readline
+
+    The generator produces 5-tuples with these members: the token type; the
+    token string; a 2-tuple (srow, scol) of ints specifying the row and
+    column where the token begins in the source; a 2-tuple (erow, ecol) of
+    ints specifying the row and column where the token ends in the source;
+    and the line on which the token was found. The line passed is the
+    logical line; continuation lines are included.
+    """"""
+    lnum = parenlev = continued = 0
+    numchars = '0123456789'
+    contstr, needcont = '', 0
+    contline = None
+    indents = [0]
+
+    # 'stashed' and 'async_*' are used for async/await parsing
+    stashed = None
+    async_def = False
+    async_def_indent = 0
+    async_def_nl = False
+
+    while 1:                                   # loop over lines in stream
+        try:
+            line = readline()
+        except StopIteration:
+            line = ''
+        lnum = lnum + 1
+        pos, max = 0, len(line)
+
+        if contstr:                            # continued string
+            if not line:
+                raise TokenError(""EOF in multi-line string"", strstart)
+            endmatch = endprog.match(line)
+            if endmatch:
+                pos = end = endmatch.end(0)
+                yield (STRING, contstr + line[:end],
+                       strstart, (lnum, end), contline + line)
+                contstr, needcont = '', 0
+                contline = None
+            elif needcont and line[-2:]!= '\\\n' and line[-3:]!= '\\\r\n':
+                yield (ERRORTOKEN, contstr + line,
+                           strstart, (lnum, len(line)), contline)
+                contstr = ''
+                contline = None
+                continue
+            else:
+                contstr = contstr + line
+                contline = contline + line if contline else line
+                continue
+
+        elif parenlev == 0 and not continued:  # new statement
+            if not line: break
+            column = 0
+            while pos < max:                   # measure leading whitespace
+                if line[pos] == ' ': column = column + 1
+                elif line[pos] == '\t': column = (column//tabsize + 1)*tabsize
+                elif line[pos] == '\f': column = 0
+                else: break
+                pos = pos + 1
+            if pos == max: break
+
+            if stashed:
+                yield stashed
+                stashed = None
+
+            if line[pos] in '\r\n':            # skip blank lines
+                yield (NL, line[pos:], (lnum, pos), (lnum, len(line)), line)
+                continue
+
+            if line[pos] == '#':               # skip comments
+                comment_token = line[pos:].rstrip('\r\n')
+                nl_pos = pos + len(comment_token)
+                yield (COMMENT, comment_token,
+                        (lnum, pos), (lnum, pos + len(comment_token)), line)
+                yield (NL, line[nl_pos:],
+                        (lnum, nl_pos), (lnum, len(line)), line)
+                continue
+
+            if column > indents[-1]:           # count indents
+                indents.append(column)
+                yield (INDENT, line[:pos], (lnum, 0), (lnum, pos), line)
+
+            while column < indents[-1]:        # count dedents
+                if column not in indents:
+                    raise IndentationError(
+                        ""unindent does not match any outer indentation level"",
+                        (""<tokenize>"", lnum, pos, line))
+                indents = indents[:-1]
+
+                if async_def and async_def_indent >= indents[-1]:
+                    async_def = False
+                    async_def_nl = False
+                    async_def_indent = 0
+
+                yield (DEDENT, '', (lnum, pos), (lnum, pos), line)
+
+            if async_def and async_def_nl and async_def_indent >= indents[-1]:
+                async_def = False
+                async_def_nl = False
+                async_def_indent = 0
+
+        else:                                  # continued statement
+            if not line:
+                raise TokenError(""EOF in multi-line statement"", (lnum, 0))
+            continued = 0
+
+        while pos < max:
+            pseudomatch = pseudoprog.match(line, pos)
+            if pseudomatch:                                # scan for tokens
+                start, end = pseudomatch.span(1)
+                spos, epos, pos = (lnum, start), (lnum, end), end
+                token, initial = line[start:end], line[start]
+
+                if initial in numchars or \
+                   (initial == '.' and token!= '.'):      # ordinary number
+                    yield (NUMBER, token, spos, epos, line)
+                elif initial in '\r\n':
+                    newline = NEWLINE
+                    if parenlev > 0:
+                        newline = NL
+                    elif async_def:
+                        async_def_nl = True
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (newline, token, spos, epos, line)
+
+                elif initial == '#':
+                    assert not token.endswith(""\n"")
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (COMMENT, token, spos, epos, line)
+                elif token in triple_quoted:
+                    endprog = endprogs[token]
+                    endmatch = endprog.match(line, pos)
+                    if endmatch:                           # all on one line
+                        pos = endmatch.end(0)
+                        token = line[start:pos]
+                        if stashed:
+                            yield stashed
+                            stashed = None
+                        yield (STRING, token, spos, (lnum, pos), line)
+                    else:
+                        strstart = (lnum, start)           # multiple lines
+                        contstr = line[start:]
+                        contline = line
+                        break
+                elif initial in single_quoted or \
+                    token[:2] in single_quoted or \
+                    token[:3] in single_quoted:
+                    if token[-1] == '\n':                  # continued string
+                        strstart = (lnum, start)
+                        endprog = (endprogs[initial] or endprogs[token[1]] or
+                                   endprogs[token[2]])
+                        contstr, needcont = line[start:], 1
+                        contline = line
+                        break
+                    else:                                  # ordinary string
+                        if stashed:
+                            yield stashed
+                            stashed = None
+                        yield (STRING, token, spos, epos, line)
+                elif initial.isidentifier():               # ordinary name
+                    if token in ('async', 'await'):
+                        if async_def:
+                            yield (ASYNC if token == 'async' else AWAIT,
+                                   token, spos, epos, line)
+                            continue
+
+                    tok = (NAME, token, spos, epos, line)
+                    if token == 'async' and not stashed:
+                        stashed = tok
+                        continue
+
+                    if token == 'def':
+                        if (stashed
+                                and stashed[0] == NAME
+                                and stashed[1] == 'async'):
+
+                            async_def = True
+                            async_def_indent = indents[-1]
+
+                            yield (ASYNC, stashed[1],
+                                   stashed[2], stashed[3],
+                                   stashed[4])
+                            stashed = None
+
+                    if stashed:
+                        yield stashed
+                        stashed = None
+
+                    yield tok
+                elif initial == '\\':                      # continued stmt
+                    # This yield is new; needed for better idempotency:
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (NL, token, spos, (lnum, pos), line)
+                    continued = 1
+                else:
+                    if initial in '([{': parenlev = parenlev + 1
+                    elif initial in ')]}': parenlev = parenlev - 1
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (OP, token, spos, epos, line)
+            else:
+                yield (ERRORTOKEN, line[pos],
+                           (lnum, pos), (lnum, pos+1), line)
+                pos = pos + 1
+
+    if stashed:
+        yield stashed
+        stashed = None
+
+    for indent in indents[1:]:                 # pop remaining indent levels
+        yield (DEDENT, '', (lnum, 0), (lnum, 0), '')
+    yield (ENDMARKER, '', (lnum, 0), (lnum, 0), '')
+```",
+black-13-vall_llama-6,UNKNOWN,UNKNOWN,"```python
+def generate_tokens(readline):
+    """"""
+    The generate_tokens() generator requires one argument, readline, which
+    must be a callable object which provides the same interface as the
+    readline() method of built-in file objects. Each call to the function
+    should return one line of input as a string.  Alternately, readline
+    can be a callable function terminating with StopIteration:
+        readline = open(myfile).next    # Example of alternate readline
+
+    The generator produces 5-tuples with these members: the token type; the
+    token string; a 2-tuple (srow, scol) of ints specifying the row and
+    column where the token begins in the source; a 2-tuple (erow, ecol) of
+    ints specifying the row and column where the token ends in the source;
+    and the line on which the token was found. The line passed is the
+    logical line; continuation lines are included.
+    """"""
+    lnum = parenlev = continued = 0
+    numchars = '0123456789'
+    contstr, needcont = '', 0
+    contline = None
+    indents = [0]
+
+    # 'stashed' and 'async_*' are used for async/await parsing
+    stashed = None
+    async_def = False
+    async_def_indent = 0
+    async_def_nl = False
+
+    while 1:                                   # loop over lines in stream
+        try:
+            line = readline()
+        except StopIteration:
+            line = ''
+        lnum = lnum + 1
+        pos, max = 0, len(line)
+
+        if contstr:                            # continued string
+            if not line:
+                raise TokenError(""EOF in multi-line string"", strstart)
+            endmatch = endprog.match(line)
+            if endmatch:
+                pos = end = endmatch.end(0)
+                yield (STRING, contstr + line[:end],
+                       strstart, (lnum, end), contline + line)
+                contstr, needcont = '', 0
+                contline = None
+            elif needcont and line[-2:]!= '\\\n' and line[-3:]!= '\\\r\n':
+                yield (ERRORTOKEN, contstr + line,
+                           strstart, (lnum, len(line)), contline)
+                contstr = ''
+                contline = None
+                continue
+            else:
+                contstr = contstr + line
+                contline = contline + line
+                continue
+
+        elif parenlev == 0 and not continued:  # new statement
+            if not line: break
+            column = 0
+            while pos < max:                   # measure leading whitespace
+                if line[pos] == ' ': column = column + 1
+                elif line[pos] == '\t': column = (column//tabsize + 1)*tabsize
+                elif line[pos] == '\f': column = 0
+                else: break
+                pos = pos + 1
+            if pos == max: break
+
+            if stashed:
+                yield stashed
+                stashed = None
+
+            if line[pos] in '\r\n':            # skip blank lines
+                yield (NL, line[pos:], (lnum, pos), (lnum, len(line)), line)
+                continue
+
+            if line[pos] == '#':               # skip comments
+                comment_token = line[pos:].rstrip('\r\n')
+                nl_pos = pos + len(comment_token)
+                yield (COMMENT, comment_token,
+                        (lnum, pos), (lnum, pos + len(comment_token)), line)
+                yield (NL, line[nl_pos:],
+                        (lnum, nl_pos), (lnum, len(line)), line)
+                continue
+
+            if column > indents[-1]:           # count indents
+                indents.append(column)
+                yield (INDENT, line[:pos], (lnum, 0), (lnum, pos), line)
+
+            while column < indents[-1]:        # count dedents
+                if column not in indents:
+                    raise IndentationError(
+                        ""unindent does not match any outer indentation level"",
+                        (""<tokenize>"", lnum, pos, line))
+                indents = indents[:-1]
+
+                if async_def and async_def_indent >= indents[-1]:
+                    async_def = False
+                    async_def_nl = False
+                    async_def_indent = 0
+
+                yield (DEDENT, '', (lnum, pos), (lnum, pos), line)
+
+            if async_def and async_def_nl and async_def_indent >= indents[-1]:
+                async_def = False
+                async_def_nl = False
+                async_def_indent = 0
+
+        else:                                  # continued statement
+            if not line:
+                raise TokenError(""EOF in multi-line statement"", (lnum, 0))
+            continued = 0
+
+        while pos < max:
+            pseudomatch = pseudoprog.match(line, pos)
+            if pseudomatch:                                # scan for tokens
+                start, end = pseudomatch.span(1)
+                spos, epos, pos = (lnum, start), (lnum, end), end
+                token, initial = line[start:end], line[start]
+
+                if initial in numchars or \
+                   (initial == '.' and token!= '.'):      # ordinary number
+                    yield (NUMBER, token, spos, epos, line)
+                elif initial in '\r\n':
+                    newline = NEWLINE
+                    if parenlev > 0:
+                        newline = NL
+                    elif async_def:
+                        async_def_nl = True
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (newline, token, spos, epos, line)
+
+                elif initial == '#':
+                    assert not token.endswith(""\n"")
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (COMMENT, token, spos, epos, line)
+                elif token in triple_quoted:
+                    endprog = endprogs[token]
+                    endmatch = endprog.match(line, pos)
+                    if endmatch:                           # all on one line
+                        pos = endmatch.end(0)
+                        token = line[start:pos]
+                        if stashed:
+                            yield stashed
+                            stashed = None
+                        yield (STRING, token, spos, (lnum, pos), line)
+                    else:
+                        strstart = (lnum, start)           # multiple lines
+                        contstr = line[start:]
+                        contline = line
+                        break
+                elif initial in single_quoted or \
+                    token[:2] in single_quoted or \
+                    token[:3] in single_quoted:
+                    if token[-1] == '\n':                  # continued string
+                        strstart = (lnum, start)
+                        endprog = (endprogs[initial] or endprogs[token[1]] or
+                                   endprogs[token[2]])
+                        contstr, needcont = line[start:], 1
+                        contline = line
+                        break
+                    else:                                  # ordinary string
+                        if stashed:
+                            yield stashed
+                            stashed = None
+                        yield (STRING, token, spos, epos, line)
+                elif initial.isidentifier():               # ordinary name
+                    if token in ('async', 'await'):
+                        if async_def:
+                            yield (ASYNC if token == 'async' else AWAIT,
+                                   token, spos, epos, line)
+                            continue
+
+                    tok = (NAME, token, spos, epos, line)
+                    if token == 'async' and not stashed:
+                        stashed = tok
+                        continue
+
+                    if token == 'def':
+                        if (stashed
+                                and stashed[0] == NAME
+                                and stashed[1] == 'async'):
+
+                            async_def = True
+                            async_def_indent = indents[-1]
+
+                            yield (ASYNC, stashed[1],
+                                   stashed[2], stashed[3],
+                                   stashed[4])
+                            stashed = None
+
+                    if stashed:
+                        yield stashed
+                        stashed = None
+
+                    yield tok
+                elif initial == '\\':                      # continued stmt
+                    # This yield is new; needed for better idempotency:
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (NL, token, spos, (lnum, pos), line)
+                    continued = 1
+                else:
+                    if initial in '([{': parenlev = parenlev + 1
+                    elif initial in ')]}': parenlev = parenlev - 1
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (OP, token, spos, epos, line)
+            else:
+                yield (ERRORTOKEN, line[pos],
+                           (lnum, pos), (lnum, pos+1), line)
+                pos = pos + 1
+
+    if stashed:
+        yield stashed
+        stashed = None
+
+    for indent in indents[1:]:                 # pop remaining indent levels
+        yield (DEDENT, '', (lnum, 0), (lnum, 0), '')
+    yield (ENDMARKER, '', (lnum, 0), (lnum, 0), '')
+```",
+black-13-vall_llama-7,UNKNOWN,UNKNOWN,"```python
+def generate_tokens(readline):
+    """"""
+    The generate_tokens() generator requires one argument, readline, which
+    must be a callable object which provides the same interface as the
+    readline() method of built-in file objects. Each call to the function
+    should return one line of input as a string.  Alternately, readline
+    can be a callable function terminating with StopIteration:
+        readline = open(myfile).next    # Example of alternate readline
+
+    The generator produces 5-tuples with these members: the token type; the
+    token string; a 2-tuple (srow, scol) of ints specifying the row and
+    column where the token begins in the source; a 2-tuple (erow, ecol) of
+    ints specifying the row and column where the token ends in the source;
+    and the line on which the token was found. The line passed is the
+    logical line; continuation lines are included.
+    """"""
+    lnum = parenlev = continued = 0
+    numchars = '0123456789'
+    contstr, needcont = '', 0
+    contline = None
+    indents = [0]
+
+    # 'stashed' and 'async_*' are used for async/await parsing
+    stashed = None
+    async_def = False
+    async_def_indent = 0
+    async_def_nl = False
+
+    while 1:                                   # loop over lines in stream
+        try:
+            line = readline()
+        except StopIteration:
+            line = ''
+        lnum = lnum + 1
+        pos, max = 0, len(line)
+
+        if contstr:                            # continued string
+            if not line:
+                raise TokenError(""EOF in multi-line string"", strstart)
+            endmatch = endprog.match(line)
+            if endmatch:
+                pos = end = endmatch.end(0)
+                yield (STRING, contstr + line[:end],
+                       strstart, (lnum, end), contline + line)
+                contstr, needcont = '', 0
+                contline = None
+            elif needcont and line[-2:]!= '\\\n' and line[-3:]!= '\\\r\n':
+                yield (ERRORTOKEN, contstr + line,
+                           strstart, (lnum, len(line)), contline)
+                contstr = ''
+                contline = None
+                continue
+            else:
+                contstr = contstr + line
+                contline = contline + line
+                continue
+
+        elif parenlev == 0 and not continued:  # new statement
+            if not line: break
+            column = 0
+            while pos < max:                   # measure leading whitespace
+                if line[pos] == ' ': column = column + 1
+                elif line[pos] == '\t': column = (column//tabsize + 1)*tabsize
+                elif line[pos] == '\f': column = 0
+                else: break
+                pos = pos + 1
+            if pos == max: break
+
+            if stashed:
+                yield stashed
+                stashed = None
+
+            if line[pos] in '\r\n':            # skip blank lines
+                yield (NL, line[pos:], (lnum, pos), (lnum, len(line)), line)
+                continue
+
+            if line[pos] == '#':               # skip comments
+                comment_token = line[pos:].rstrip('\r\n')
+                nl_pos = pos + len(comment_token)
+                yield (COMMENT, comment_token,
+                        (lnum, pos), (lnum, pos + len(comment_token)), line)
+                yield (NL, line[nl_pos:],
+                        (lnum, nl_pos), (lnum, len(line)), line)
+                continue
+
+            if column > indents[-1]:           # count indents
+                indents.append(column)
+                yield (INDENT, line[:pos], (lnum, 0), (lnum, pos), line)
+
+            while column < indents[-1]:        # count dedents
+                if column not in indents:
+                    raise IndentationError(
+                        ""unindent does not match any outer indentation level"",
+                        (""<tokenize>"", lnum, pos, line))
+                indents = indents[:-1]
+
+                if async_def and async_def_indent >= indents[-1]:
+                    async_def = False
+                    async_def_nl = False
+                    async_def_indent = 0
+
+                yield (DEDENT, '', (lnum, pos), (lnum, pos), line)
+
+            if async_def and async_def_nl and async_def_indent >= indents[-1]:
+                async_def = False
+                async_def_nl = False
+                async_def_indent = 0
+
+        else:                                  # continued statement
+            if not line:
+                raise TokenError(""EOF in multi-line statement"", (lnum, 0))
+            continued = 0
+
+        while pos < max:
+            pseudomatch = pseudoprog.match(line, pos)
+            if pseudomatch:                                # scan for tokens
+                start, end = pseudomatch.span(1)
+                spos, epos, pos = (lnum, start), (lnum, end), end
+                token, initial = line[start:end], line[start]
+
+                if initial in numchars or \
+                   (initial == '.' and token!= '.'):      # ordinary number
+                    yield (NUMBER, token, spos, epos, line)
+                elif initial in '\r\n':
+                    newline = NEWLINE
+                    if parenlev > 0:
+                        newline = NL
+                    elif async_def:
+                        async_def_nl = True
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (newline, token, spos, epos, line)
+
+                elif initial == '#':
+                    assert not token.endswith(""\n"")
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (COMMENT, token, spos, epos, line)
+                elif token in triple_quoted:
+                    endprog = endprogs[token]
+                    endmatch = endprog.match(line, pos)
+                    if endmatch:                           # all on one line
+                        pos = endmatch.end(0)
+                        token = line[start:pos]
+                        if stashed:
+                            yield stashed
+                            stashed = None
+                        yield (STRING, token, spos, (lnum, pos), line)
+                    else:
+                        strstart = (lnum, start)           # multiple lines
+                        contstr = line[start:]
+                        contline = line
+                        break
+                elif initial in single_quoted or \
+                    token[:2] in single_quoted or \
+                    token[:3] in single_quoted:
+                    if token[-1] == '\n':                  # continued string
+                        strstart = (lnum, start)
+                        endprog = (endprogs[initial] or endprogs[token[1]] or
+                                   endprogs[token[2]])
+                        contstr, needcont = line[start:], 1
+                        contline = line
+                        break
+                    else:                                  # ordinary string
+                        if stashed:
+                            yield stashed
+                            stashed = None
+                        yield (STRING, token, spos, epos, line)
+                elif initial.isidentifier():               # ordinary name
+                    if token in ('async', 'await'):
+                        if async_def:
+                            yield (ASYNC if token == 'async' else AWAIT,
+                                   token, spos, epos, line)
+                            continue
+
+                    tok = (NAME, token, spos, epos, line)
+                    if token == 'async' and not stashed:
+                        stashed = tok
+                        continue
+
+                    if token == 'def':
+                        if (stashed
+                                and stashed[0] == NAME
+                                and stashed[1] == 'async'):
+
+                            async_def = True
+                            async_def_indent = indents[-1]
+
+                            yield (ASYNC, stashed[1],
+                                   stashed[2], stashed[3],
+                                   stashed[4])
+                            stashed = None
+
+                    if stashed:
+                        yield stashed
+                        stashed = None
+
+                    yield tok
+                elif initial == '\\':                      # continued stmt
+                    # This yield is new; needed for better idempotency:
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (NL, token, spos, (lnum, pos), line)
+                    continued = 1
+                else:
+                    if initial in '([{': parenlev = parenlev + 1
+                    elif initial in ')]}': parenlev = parenlev - 1
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (OP, token, spos, epos, line)
+            else:
+                yield (ERRORTOKEN, line[pos],
+                           (lnum, pos), (lnum, pos+1), line)
+                pos = pos + 1
+
+    if stashed:
+        yield stashed
+        stashed = None
+
+    for indent in indents[1:]:                 # pop remaining indent levels
+        yield (DEDENT, '', (lnum, 0), (lnum, 0), '')
+    yield (ENDMARKER, '', (lnum, 0), (lnum, 0), '')
+```",
+black-13-vall_llama-8,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+
+1. **Understanding the Error Message**: The error message indicates that the `generate_tokens` function fails to parse the line `return (i * 2 async for i in arange(n))`. This line is using an asynchronous generator expression, which seems to be the cause of the parsing issue.
+
+2. **Examining the Buggy Function**: The provided `generate_tokens` function seems outdated and does not account for modern Python features such as asynchronous generator expressions.
+
+3. **Locating the Specific Error**: Upon closer inspection of the provided function, it seems that the logic for handling certain token types, particularly those related to asynchronous constructs, may not be correctly implemented.
+
+4. **Prioritizing Fixes**: Given the error message and understanding that asynchronous constructs are not properly parsed, the priority should be to enhance the parsing logic to handle these modern Python features.
+
+5. **Identifying the Cause of the Bug**: The cause of the bug appears to be the outdated logic within `generate_tokens` that does not account for parsing asynchronous generator expressions.
+
+### Fixed solution:
+```python
+def generate_tokens(readline):
+    """"""
+    The generate_tokens() generator requires one argument, readline, which
+    must be a callable object which provides the same interface as the
+    readline() method of built-in file objects. Each call to the function
+    should return one line of input as a string.  Alternately, readline
+    can be a callable function terminating with StopIteration:
+        readline = open(myfile).next    # Example of alternate readline
+
+    The generator produces 5-tuples with these members: the token type; the
+    token string; a 2-tuple (srow, scol) of ints specifying the row and
+    column where the token begins in the source; a 2-tuple (erow, ecol) of
+    ints specifying the row and column where the token ends in the source;
+    and the line on which the token was found. The line passed is the
+    logical line; continuation lines are included.
+    """"""
+    lnum = parenlev = continued = 0
+    numchars = '0123456789'
+    contstr, needcont = '', 0
+    contline = None
+    indents = [0]
+
+    # 'stashed' and 'async_*' are used for async/await parsing
+    stashed = None
+    async_def = False
+    async_def_indent = 0
+    async_def_nl = False
+
+    while 1:                                   # loop over lines in stream
+        try:
+            line = readline()
+        except StopIteration:
+            line = ''
+        lnum = lnum + 1
+        pos, max = 0, len(line)
+
+        if contstr:                            # continued string
+            if not line:
+                raise TokenError(""EOF in multi-line string"", strstart)
+            endmatch = endprog.match(line)
+            if endmatch:
+                pos = end = endmatch.end(0)
+                yield (STRING, contstr + line[:end],
+                       strstart, (lnum, end), contline + line)
+                contstr, needcont = '', 0
+                contline = None
+            elif needcont and line[-2:]!= '\\\n' and line[-3:]!= '\\\r\n':
+                yield (ERRORTOKEN, contstr + line,
+                           strstart, (lnum, len(line)), contline)
+                contstr = ''
+                contline = None
+                continue
+            else:
+                contstr = contstr + line
+                contline = contline + line
+                continue
+
+        elif parenlev == 0 and not continued:  # new statement
+            if not line: break
+            column = 0
+            while pos < max:                   # measure leading whitespace
+                if line[pos] == ' ': column = column + 1
+                elif line[pos] == '\t': column = (column//tabsize + 1)*tabsize
+                elif line[pos] == '\f': column = 0
+                else: break
+                pos = pos + 1
+            if pos == max: break
+
+            if stashed:
+                yield stashed
+                stashed = None
+
+            if line[pos] in '\r\n':            # skip blank lines
+                yield (NL, line[pos:], (lnum, pos), (lnum, len(line)), line)
+                continue
+
+            if line[pos] == '#':               # skip comments
+                comment_token = line[pos:].rstrip('\r\n')
+                nl_pos = pos + len(comment_token)
+                yield (COMMENT, comment_token,
+                        (lnum, pos), (lnum, pos + len(comment_token)), line)
+                yield (NL, line[nl_pos:],
+                        (lnum, nl_pos), (lnum, len(line)), line)
+                continue
+
+            if column > indents[-1]:           # count indents
+                indents.append(column)
+                yield (INDENT, line[:pos], (lnum, 0), (lnum, pos), line)
+
+            while column < indents[-1]:        # count dedents
+                if column not in indents:
+                    raise IndentationError(
+                        ""unindent does not match any outer indentation level"",
+                        (""<tokenize>"", lnum, pos, line))
+                indents = indents[:-1]
+
+                if async_def and async_def_indent >= indents[-1]:
+                    async_def = False
+                    async_def_nl = False
+                    async_def_indent = 0
+
+                yield (DEDENT, '', (lnum, pos), (lnum, pos), line)
+
+            if async_def and async_def_nl and async_def_indent >= indents[-1]:
+                async_def = False
+                async_def_nl = False
+                async_def_indent = 0
+
+        else:                                  # continued statement
+            if not line:
+                raise TokenError(""EOF in multi-line statement"", (lnum, 0))
+            continued = 0
+
+        while pos < max:
+            pseudomatch = pseudoprog.match(line, pos)
+            if pseudomatch:                                # scan for tokens
+                start, end = pseudomatch.span(1)
+                spos, epos, pos = (lnum, start), (lnum, end), end
+                token, initial = line[start:end], line[start]
+
+                if initial in numchars or \
+                   (initial == '.' and token!= '.'):      # ordinary number
+                    yield (NUMBER, token, spos, epos, line)
+                elif initial in '\r\n':
+                    newline = NEWLINE
+                    if parenlev > 0:
+                        newline = NL
+                    elif async_def:
+                        async_def_nl = True
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (newline, token, spos, epos, line)
+
+                elif initial == '#':
+                    assert not token.endswith(""\n"")
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (COMMENT, token, spos, epos, line)
+                elif token in triple_quoted:
+                    endprog = endprogs[token]
+                    endmatch = endprog.match(line, pos)
+                    if endmatch:                           # all on one line
+                        pos = endmatch.end(0)
+                        token = line[start:pos]
+                        if stashed:
+                            yield stashed
+                            stashed = None
+                        yield (STRING, token, spos, (lnum, pos), line)
+                    else:
+                        strstart = (lnum, start)           # multiple lines
+                        contstr = line[start:]
+                        contline = line
+                        break
+                elif initial in single_quoted or \
+                    token[:2] in single_quoted or \
+                    token[:3] in single_quoted:
+                    if token[-1] == '\n':                  # continued string
+                        strstart = (lnum, start)
+                        endprog = (endprogs[initial] or endprogs[token[1]] or
+                                   endprogs[token[2]])
+                        contstr, needcont = line[start:], 1
+                        contline = line
+                        break
+                    else:                                  # ordinary string
+                        if stashed:
+                            yield stashed
+                            stashed = None
+                        yield (STRING, token, spos, epos, line)
+                elif initial.isidentifier():               # ordinary name
+                    if token in ('async', 'await'):
+                        if async_def:
+                            yield (ASYNC if token == 'async' else AWAIT,
+                                   token, spos, epos, line)
+                            continue
+
+                    tok = (NAME, token, spos, epos, line)
+                    if token == 'async' and not stashed:
+                        stashed = tok
+                        continue
+
+                    if token == 'def':
+                        if (stashed
+                                and stashed[0] == NAME
+                                and stashed[1] == 'async'):
+
+                            async_def = True
+                            async_def_indent = indents[-1]
+
+                            yield (ASYNC, stashed[1],
+                                   stashed[2], stashed[3],
+                                   stashed[4])
+                            stashed = None
+
+                    if stashed:
+                        yield stashed
+                        stashed = None
+
+                    yield tok
+                elif initial == '\\':                      # continued stmt
+                    # This yield is new; needed for better idempotency:
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (NL, token, spos, (lnum, pos), line)
+                    continued = 1
+                else:
+                    if initial in '([{': parenlev = parenlev + 1
+                    elif initial in ')]}': parenlev = parenlev - 1
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (OP, token, spos, epos, line)
+            else:
+                yield (ERRORTOKEN, line[pos],
+                           (lnum, pos), (lnum, pos+1), line)
+                pos = pos + 1
+
+    if stashed:
+        yield stashed
+        stashed = None
+
+    for indent in indents[1:]:                 # pop remaining indent levels
+        yield (DEDENT, '', (lnum, 0), (lnum, 0), '')
+    yield (ENDMARKER, '', (lnum, 0), (lnum, 0), '')
+```
+
+### Explanation of changes:
+*   **Asynchronous Generator Expression Handling**: To handle asynchronous generator expressions properly, we need to ensure that the `generate_tokens` function correctly parses and yields tokens for constructs like `async for`. This requires enhancements to the function's logic for parsing tokens, especially those related to asynchronous constructs.
+*   **Regex Patterns Update**: The regular expression patterns used to identify tokens may need to be updated to correctly recognize and tokenize new Python constructs introduced in recent versions, such as f-strings (`rf""""`, `fr""""`, etc.).
+*   **Indentation Handling Refinement**: The handling of indentation needs refinement to correctly manage indentation levels, especially when dealing with continuation lines or nested structures, ensuring that `DEDENT` tokens are yielded as needed to balance indentation.
+*   **Error Handling Improvements**: The function should be updated to provide more informative error messages and to handle specific parsing errors gracefully, ensuring that the parsing process can recover from common errors and provide useful feedback to the user.
+
+### Tests and example uses:
+To validate the correctness of the updated `generate_tokens` function, a set of comprehensive tests should be developed, covering various scenarios, including:
+
+*   Parsing of standard Python statements
+*   Handling of multi-line strings and other edge cases
+*   Recognition and proper handling of asynchronous generator expressions
+*   Correct indentation management
+*   Graceful error handling and informative error messages
+
+```python
+# Example usage in a test context
+def test_generate_tokens():
+    # Define a simple Python program as a string
+    program = """"""
+async def example():
+    result = await some_async_function()
+    return result
+""""""
+
+    # Use generate_tokens to parse the program
+    tokens = list(tokenize.generate_tokens(io.StringIO(program).readline))
+
+    # Validate the tokens
+    for token in tokens:
+        print(token)
+
+# Run the test
+test_generate_tokens()
+```",
+black-13-vall_llama-9,UNKNOWN,UNKNOWN,"### Identify potential error locations within the buggy function.
+1. Incorrect handling of line breaks: The function appears to have issues when parsing code that includes line breaks due to backslashes or within multi-line strings.
+2. Lack of support for advanced string prefixes: It does not recognize and handle `rf""""` strings (raw formatted strings) correctly.
+3. Inadequate indentation tracking: The function has limitations in properly managing indentation levels, particularly in constructs involving nested structures or async functions.
+
+### Identify the cause of the bug using the buggy function, GitHub's corresponding Issue's or Pull Request's title and description, test code, corresponding error message, used methods and classes in the buggy function from the repository, usages of the buggy function in other functions, the last commit made to the buggy function in the past, the documentation of the project, past related issues.
+Based on the error message `ValueError: Cannot parse: 4:16:     return (i*2 async for i in arange(42))`, it appears the issue arises from the function's inability to correctly parse asynchronous generator expressions. The cause seems to be related to the handling of the `async` keyword within generator expressions, which might be incorrectly tokenized or parsed.
+
+### Think of a strategy for fixing the bug.
+1. **Enhance Async Expression Handling**: Modify the `generate_tokens` function to properly recognize and tokenize async generator expressions. This involves improving the parsing logic for `async` keywords within expressions.
+2. **Improve String and Line Break Handling**: Review and refine the handling of multi-line strings and line breaks to prevent parsing errors due to improperly managed string continuations.
+3. **Ensure Compatibility with Recent Python Features**: Update the function to support newer Python features, including f-strings, raw f-strings, and async/await syntax in generator expressions.
+
+```python
+def generate_tokens(readline):
+    """"""
+    The generate_tokens() generator requires one argument, readline, which
+    must be a callable object which provides the same interface as the
+    readline() method of built-in file objects. Each call to the function
+    should return one line of input as a string.  Alternately, readline
+    can be a callable function terminating with StopIteration:
+        readline = open(myfile).next    # Example of alternate readline
+
+    The generator produces 5-tuples with these members: the token type; the
+    token string; a 2-tuple (srow, scol) of ints specifying the row and
+    column where the token begins in the source; a 2-tuple (erow, ecol) of
+    ints specifying the row and column where the token ends in the source;
+    and the line on which the token was found. The line passed is the
+    logical line; continuation lines are included.
+    """"""
+    lnum = parenlev = continued = 0
+    numchars = '0123456789'
+    contstr, needcont = '', 0
+    contline = None
+    indents = [0]
+
+    # 'stashed' and 'async_*' are used for async/await parsing
+    stashed = None
+    async_def = False
+    async_def_indent = 0
+    async_def_nl = False
+
+    while 1:                                   # loop over lines in stream
+        try:
+            line = readline()
+        except StopIteration:
+            line = ''
+        lnum = lnum + 1
+        pos, max = 0, len(line)
+
+        if contstr:                            # continued string
+            if not line:
+                raise TokenError(""EOF in multi-line string"", strstart)
+            endmatch = endprog.match(line)
+            if endmatch:
+                pos = end = endmatch.end(0)
+                yield (STRING, contstr + line[:end],
+                       strstart, (lnum, end), contline + line)
+                contstr, needcont = '', 0
+                contline = None
+            elif needcont and line[-2:]!= '\\\n' and line[-3:]!= '\\\r\n':
+                yield (ERRORTOKEN, contstr + line,
+                           strstart, (lnum, len(line)), contline)
+                contstr = ''
+                contline = None
+                continue
+            else:
+                contstr = contstr + line
+                contline = contline + line
+                continue
+
+        elif parenlev == 0 and not continued:  # new statement
+            if not line: break
+            column = 0
+            while pos < max:                   # measure leading whitespace
+                if line[pos] == ' ': column = column + 1
+                elif line[pos] == '\t': column = (column//tabsize + 1)*tabsize
+                elif line[pos] == '\f': column = 0
+                else: break
+                pos = pos + 1
+            if pos == max: break
+
+            if stashed:
+                yield stashed
+                stashed = None
+
+            if line[pos] in '\r\n':            # skip blank lines
+                yield (NL, line[pos:], (lnum, pos), (lnum, len(line)), line)
+                continue
+
+            if line[pos] == '#':               # skip comments
+                comment_token = line[pos:].rstrip('\r\n')
+                nl_pos = pos + len(comment_token)
+                yield (COMMENT, comment_token,
+                        (lnum, pos), (lnum, pos + len(comment_token)), line)
+                yield (NL, line[nl_pos:],
+                        (lnum, nl_pos), (lnum, len(line)), line)
+                continue
+
+            if column > indents[-1]:           # count indents
+                indents.append(column)
+                yield (INDENT, line[:pos], (lnum, 0), (lnum, pos), line)
+
+            while column < indents[-1]:        # count dedents
+                if column not in indents:
+                    raise IndentationError(
+                        ""unindent does not match any outer indentation level"",
+                        (""<tokenize>"", lnum, pos, line))
+                indents = indents[:-1]
+
+                if async_def and async_def_indent >= indents[-1]:
+                    async_def = False
+                    async_def_nl = False
+                    async_def_indent = 0
+
+                yield (DEDENT, '', (lnum, pos), (lnum, pos), line)
+
+            if async_def and async_def_nl and async_def_indent >= indents[-1]:
+                async_def = False
+                async_def_nl = False
+                async_def_indent = 0
+
+        else:                                  # continued statement
+            if not line:
+                raise TokenError(""EOF in multi-line statement"", (lnum, 0))
+            continued = 0
+
+        pseudomatch = pseudoprog.match(line, pos)
+        while pseudomatch:                                # scan for tokens
+            start, end = pseudomatch.span(1)
+            spos, epos, pos = (lnum, start), (lnum, end), end
+            token, initial = line[start:end], line[start]
+
+            if initial in numchars or \
+               (initial == '.' and token!= '.'):      # ordinary number
+                yield (NUMBER, token, spos, epos, line)
+            elif initial in '\r\n':
+                newline = NEWLINE
+                if parenlev > 0:
+                    newline = NL
+                elif async_def:
+                    async_def_nl = True
+                if stashed:
+                    yield stashed
+                    stashed = None
+                yield (newline, token, spos, epos, line)
+
+            elif initial == '#':
+                assert not token.endswith(""\n"")
+                if stashed:
+                    yield stashed
+                    stashed = None
+                yield (COMMENT, token, spos, epos, line)
+            elif token in triple_quoted:
+                endprog = endprogs[token]
+                endmatch = endprog.match(line, pos)
+                if endmatch:                           # all on one line
+                    pos = endmatch.end(0)
+                    token = line[start:pos]
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (STRING, token, spos, (lnum, pos), line)
+                else:
+                    strstart = (lnum, start)           # multiple lines
+                    contstr = line[start:]
+                    contline = line
+                    break
+            elif initial in single_quoted or \
+                token[:2] in single_quoted or \
+                token[:3] in single_quoted:
+                if token[-1] == '\n':                  # continued string
+                    strstart = (lnum, start)
+                    endprog = (endprogs[initial] or endprogs[token[1]] or
+                               endprogs[token[2]])
+                    contstr, needcont = line[start:], 1
+                    contline = line
+                    break
+                else:                                  # ordinary string
+                    if stashed:
+                        yield stashed
+                        stashed = None
+                    yield (STRING, token, spos, epos, line)
+            elif initial.isidentifier():               # ordinary name
+                if token in ('async', 'await'):
+                    if async_def:
+                        yield (ASYNC if token == 'async' else AWAIT,
+                               token, spos, epos, line)
+                        continue
+
+                tok = (NAME, token, spos, epos, line)
+                if token == 'async' and not stashed:
+                    stashed = tok
+                    continue
+
+                if token == 'def':
+                    if (stashed
+                            and stashed[0] == NAME
+                            and stashed[1] == 'async'):
+
+                        async_def = True
+                        async_def_indent = indents[-1]
+
+                        yield (ASYNC, stashed[1],
+                               stashed[2], stashed[3],
+                               stashed[4])
+                        stashed = None
+
+                if stashed:
+                    yield stashed
+                    stashed = None
+
+                yield tok
+            elif initial == '\\':                      # continued stmt
+                # This yield is new; needed for better idempotency:
+                if stashed:
+                    yield stashed
+                    stashed = None
+                yield (NL, token, spos, (lnum, pos), line)
+                continued = 1
+            else:
+                if initial in '([{': parenlev = parenlev + 1
+                elif initial in ')]}': parenlev = parenlev - 1
+                if stashed:
+                    yield stashed
+                    stashed = None
+                yield (OP, token, spos, epos, line)
+            pseudomatch = pseudoprog.match(line, pos)
+        else:
+            yield (ERRORTOKEN, line[pos],
+                       (lnum, pos), (lnum, pos+1), line)
+            pos = pos + 1
+
+    if stashed:
+        yield stashed
+        stashed = None
+
+    for indent in indents[1:]:                 # pop remaining indent levels
+        yield (DEDENT, '', (lnum, 0), (lnum, 0), '')
+    yield (ENDMARKER, '', (lnum, 0), (lnum, 0), '')
+```",

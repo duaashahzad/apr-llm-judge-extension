@@ -1,0 +1,210 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-100-v0_gpt-0,UNKNOWN,UNKNOWN,"```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    if fill_method is None:
+        data = self
+    else:
+        data = self.fillna(method=fill_method, limit=limit, axis=axis)
+
+    rs = data.div(data.shift(periods=periods, freq=freq, axis=axis, **kwargs)) - 1
+    rs = rs.loc[~rs.index.duplicated(keep='first')]  # Changed this line
+    rs = rs.reindex_like(data)
+    if freq is None:
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+    return rs
+```",
+pandas-100-v0_gpt-1,UNKNOWN,UNKNOWN,"```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    if fill_method is None:
+        data = self
+    else:
+        data = self.fillna(method=fill_method, limit=limit, axis=axis)
+
+    rs = data.div(data.shift(periods=periods, freq=freq, axis=axis, **kwargs)) - 1
+    rs = rs.loc[~rs.index.duplicated(keep='first')]  # Ensure first occurrence is kept
+    rs = rs.reindex_like(data)
+
+    if freq is None:
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+    return rs
+```",
+pandas-100-v0_gpt-2,UNKNOWN,UNKNOWN,"```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    
+    data = self if fill_method is None else self.fillna(method=fill_method, limit=limit, axis=axis)
+
+    rs = data.div(data.shift(periods=periods, freq=freq, axis=axis, **kwargs)) - 1
+    rs = rs.loc[~rs.index.duplicated()]
+    rs = rs.reindex_like(data)
+    
+    if freq is None:
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+
+    # Handle the case where we are filling method is None
+    if fill_method is None:
+        rs = rs.where(~rs.index.duplicated(), np.nan)  # Setting to nan where indices are duplicated
+    
+    return rs
+```",
+pandas-100-v0_gpt-3,UNKNOWN,UNKNOWN,"```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    
+    # Handle fill_method when it's None
+    if fill_method is None:
+        data = self
+    else:
+        data = self.fillna(method=fill_method, limit=limit, axis=axis)
+
+    # Calculate the percentage change
+    rs = data.div(data.shift(periods=periods, freq=freq, axis=axis, **kwargs)) - 1
+    rs = rs.loc[~rs.index.duplicated()]
+    rs = rs.reindex_like(data)
+
+    # Handle mask correctly to avoid errors with duplicated indices
+    if freq is None:
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+    # Adjust nan values for fill_method == None case
+    if fill_method is None:
+        # Fill the NaN values in 'rs' based on the order in the index
+        for idx in rs.index:
+            if pd.isna(rs.loc[idx]).all():
+                continue
+            rs.loc[idx] = rs.loc[idx].fillna(method='pad')
+            
+    return rs
+```",
+pandas-100-v0_gpt-4,UNKNOWN,UNKNOWN,"```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    if fill_method is None:
+        data = self
+        # Handle the NaN values before performing pct_change
+        data_filled = data.fillna(method='pad', limit=limit)
+    else:
+        data = self.fillna(method=fill_method, limit=limit, axis=axis)
+        data_filled = data
+
+    rs = data_filled.div(data_filled.shift(periods=periods, freq=freq, axis=axis, **kwargs)) - 1
+    rs = rs.loc[~rs.index.duplicated()]
+    rs = rs.reindex_like(data)
+    if freq is None:
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+    return rs
+```",
+pandas-100-v0_gpt-5,UNKNOWN,UNKNOWN,"```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    
+    # Apply fill method only if it's not None
+    if fill_method is None:
+        data = self
+    else:
+        data = self.fillna(method=fill_method, limit=limit, axis=axis)
+
+    # Calculate the percentage change
+    rs = data.div(data.shift(periods=periods, freq=freq, axis=axis, **kwargs)) - 1
+    rs = rs.loc[~rs.index.duplicated()]
+    rs = rs.reindex_like(data)
+
+    # Create a mask based on NaN values in the original data
+    if freq is None:
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+
+    # Handle fill methods explicitly when fill_method is None
+    if fill_method is None:
+        rs[rs.index.duplicated()] = np.nan
+
+    return rs
+```",
+pandas-100-v0_gpt-6,UNKNOWN,UNKNOWN,"```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    data = self.fillna(method=fill_method, limit=limit, axis=axis) if fill_method is not None else self
+
+    rs = data.div(data.shift(periods=periods, freq=freq, axis=axis, **kwargs)) - 1
+    rs = rs.loc[~rs.index.duplicated(keep='first')]
+    rs = rs.reindex_like(data)
+    if freq is None:
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+
+    return rs
+```",
+pandas-100-v0_gpt-7,UNKNOWN,UNKNOWN,"```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    if fill_method is None:
+        data = self
+    else:
+        data = self.fillna(method=fill_method, limit=limit, axis=axis)
+
+    # Calculate percentage change
+    rs = data.div(data.shift(periods=periods, freq=freq, axis=axis, **kwargs)) - 1
+    rs = rs.loc[~rs.index.duplicated(keep='first')]  # Keep only the first occurrence of duplicate indices
+    rs = rs.reindex_like(data)
+
+    if freq is None:
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+    return rs
+```",
+pandas-100-v0_gpt-8,UNKNOWN,UNKNOWN,"```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    
+    if fill_method is None:
+        data = self
+    else:
+        # Ensure that we handle the case for None fill_method correctly
+        data = self.fillna(method=fill_method, limit=limit, axis=axis) if fill_method is not None else self
+
+    rs = data.div(data.shift(periods=periods, freq=freq, axis=axis, **kwargs)) - 1
+    rs = rs.loc[~rs.index.duplicated(keep='first')]  # Handle duplicated indices properly
+    rs = rs.reindex_like(data)
+    
+    if freq is None:
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+    
+    return rs
+```",
+pandas-100-v0_gpt-9,UNKNOWN,UNKNOWN,"```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    if fill_method is None:
+        data = self
+        
+        # Reset index while keeping duplicates if fill_method is None
+        data = data.reset_index().groupby('index')[self._stat_axis_name]
+    else:
+        data = self.fillna(method=fill_method, limit=limit, axis=axis)
+
+    # Calculate percentage change
+    rs = data.div(data.shift(periods=periods, freq=freq, axis=axis, **kwargs)) - 1
+    rs = rs.loc[~rs.index.duplicated()]
+    rs = rs.reindex_like(data)
+    if freq is None:
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+    return rs
+```",

@@ -1,0 +1,784 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-24-vall_gpt-0,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    """"""
+    Localize tz-naive Datetime Array/Index to tz-aware
+    Datetime Array/Index.
+    
+    ... [existing docstring content omitted for brevity] ...
+    """"""
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+    if nonexistent not in nonexistent_options and not isinstance(
+        nonexistent, timedelta
+    ):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object.""
+        )
+
+    if self.tz is not None:
+        if tz is None:
+            new_dates = tzconversion.tz_convert(self.asi8, timezones.UTC, self.tz)
+        else:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+        # Convert to UTC
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+    
+    new_dates = new_dates.view(DT64NS_DTYPE)
+    dtype = tz_to_dtype(tz)
+
+    # Invalidate freq if we have timezone changes
+    if nonexistent == 'shift_forward' or nonexistent == 'shift_backward':
+        if self.freq is not None and tz is not None:
+            new_index = self._simple_new(new_dates, dtype=dtype, freq=None)
+        else:
+            new_index = self._simple_new(new_dates, dtype=dtype, freq=self.freq)
+    else:
+        new_index = self._simple_new(new_dates, dtype=dtype, freq=self.freq)
+
+    return new_index
+```",
+pandas-24-vall_gpt-1,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+    if nonexistent not in nonexistent_options and not isinstance(nonexistent, timedelta):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object""
+        )
+
+    if self.tz is not None:
+        if tz is None:
+            new_dates = tzconversion.tz_convert(self.asi8, timezones.UTC, self.tz)
+        else:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+        # Convert to UTC
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+    
+    new_dates = new_dates.view(DT64NS_DTYPE)
+    dtype = tz_to_dtype(tz)
+
+    # Drop frequency if we are dealing with a case that involves DST transition
+    if isinstance(tz, DstTzInfo) and self.freq is not None:
+        # Check for potential non-uniqueness in new_dates
+        if len(set(new_dates)) < len(new_dates):  # Check for duplicates
+            freq = None  # Invalidate freq due to DST transition
+        else:
+            freq = self.freq
+    else:
+        freq = self.freq
+    
+    return self._simple_new(new_dates, dtype=dtype, freq=freq)
+```",
+pandas-24-vall_gpt-2,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+    if nonexistent not in nonexistent_options and not isinstance(nonexistent, timedelta):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object""
+        )
+
+    if self.tz is not None:
+        if tz is None:
+            # If already tz-aware and converting to None, need to infer the frequency
+            new_dates = tzconversion.tz_convert(self.asi8, timezones.UTC, self.tz)
+            new_freq = None  # No frequency when dropping timezone
+        else:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+        # Convert to UTC
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+        new_freq = tz_to_dtype(tz).freq
+
+    new_dates = new_dates.view(DT64NS_DTYPE)
+    dtype = tz_to_dtype(tz)
+
+    # Set freq to None if there were changes that may result in duplicates/missing timestamps
+    if new_freq is not None and isinstance(self.freq, pd.DateOffset) and (ambiguous != ""raise"" or nonexistent != ""raise""):
+        new_freq = None
+
+    return self._simple_new(new_dates, dtype=dtype, freq=new_freq)
+```",
+pandas-24-vall_gpt-3,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    """"""
+    Localize tz-naive Datetime Array/Index to tz-aware
+    Datetime Array/Index.
+
+    ...
+
+    Returns
+    -------
+    Same type as self
+        Array/Index converted to the specified time zone.
+
+    Raises
+    ------
+    TypeError
+        If the Datetime Array/Index is tz-aware and tz is not None.
+
+    ...
+    """"""
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+    if nonexistent not in nonexistent_options and not isinstance(nonexistent, timedelta):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object""
+        )
+
+    if self.tz is not None:
+        if tz is None:
+            # Convert to naive and drop frequency
+            new_dates = tzconversion.tz_convert(self.asi8, timezones.UTC, self.tz)
+            freq = None  # Dropping freq when converting to naive
+        else:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+        # Convert to UTC
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+    
+    new_dates = new_dates.view(DT64NS_DTYPE)
+    dtype = tz_to_dtype(tz)
+    # Handling frequency after localization
+    if isinstance(nonexistent, str) and nonexistent == ""shift_forward"":
+        if self.freq is not None:
+            freq = None  # Drop freq if looming DST would conflict
+        else:
+            freq = self.freq
+    
+    return self._simple_new(new_dates, dtype=dtype, freq=freq)
+```",
+pandas-24-vall_gpt-4,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    """"""Localize tz-naive Datetime Array/Index to tz-aware Datetime Array/Index.
+
+    This method takes a time zone (tz) naive Datetime Array/Index object
+    and makes this time zone aware. It does not move the time to another
+    time zone.
+    Time zone localization helps to switch from time zone aware to time
+    zone unaware objects.
+
+    Parameters
+    ----------
+    tz : str, pytz.timezone, dateutil.tz.tzfile or None
+        Time zone to convert timestamps to. Passing ``None`` will
+        remove the time zone information preserving local time.
+    ambiguous : 'infer', 'NaT', bool array, default 'raise'
+        When clocks moved backward due to DST, ambiguous times may arise.
+        For example in Central European Time (UTC+01), when going from
+        03:00 DST to 02:00 non-DST, 02:30:00 local time occurs both at
+        00:30:00 UTC and at 01:30:00 UTC. In such a situation, the
+        `ambiguous` parameter dictates how ambiguous times should be
+        handled.
+
+        - 'infer' will attempt to infer fall dst-transition hours based on
+          order
+        - bool-ndarray where True signifies a DST time, False signifies a
+          non-DST time (note that this flag is only applicable for
+          ambiguous times)
+        - 'NaT' will return NaT where there are ambiguous times
+        - 'raise' will raise an AmbiguousTimeError if there are ambiguous
+          times.
+
+    nonexistent : 'shift_forward', 'shift_backward', 'NaT', timedelta, \
+        or 'raise'
+        A nonexistent time does not exist in a particular timezone
+        where clocks moved forward due to DST.
+
+        - 'shift_forward' will shift the nonexistent time forward to the
+          closest existing time
+        - 'shift_backward' will shift the nonexistent time backward to the
+          closest existing time
+        - 'NaT' will return NaT where there are nonexistent times
+        - timedelta objects will shift nonexistent times by the timedelta
+        - 'raise' will raise a NonExistentTimeError if there are
+          nonexistent times.
+
+    Returns
+    -------
+    Same type as self
+        Array/Index converted to the specified time zone.
+
+    Raises
+    ------
+    TypeError
+        If the Datetime Array/Index is tz-aware and tz is not None.
+
+    See Also
+    --------
+    DatetimeIndex.tz_convert : Convert tz-aware DatetimeIndex from
+        one time zone to another.
+    """"""
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+    if nonexistent not in nonexistent_options and not isinstance(nonexistent, timedelta):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object""
+        )
+    
+    if self.tz is not None:
+        if tz is None:
+            new_dates = tzconversion.tz_convert(self.asi8, timezones.UTC, self.tz)
+            return self._simple_new(new_dates, dtype=DT64NS_DTYPE, freq=None)
+        else:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+    
+    new_dates = new_dates.view(DT64NS_DTYPE)
+    dtype = tz_to_dtype(tz)
+    
+    if isinstance(new_dates, (np.ndarray, DT64NS_DTYPE)) and self.freq is not None:
+        if nonexistent not in [None, ""NaT"", ""raise""]:
+            inferred_freq = new_dates.inferred_freq
+            if inferred_freq is None:
+                return self._simple_new(new_dates, dtype=dtype, freq=None)
+
+    return self._simple_new(new_dates, dtype=dtype, freq=self.freq)
+```",
+pandas-24-vall_gpt-5,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+    if nonexistent not in nonexistent_options and not isinstance(
+        nonexistent, timedelta
+    ):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object""
+        )
+
+    if self.tz is not None:
+        if tz is None:
+            new_dates = tzconversion.tz_convert(self.asi8, timezones.UTC, self.tz)
+        else:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+    
+    # Set freq to None if there are adjustments for DST
+    if nonexistent != 'raise' or ambiguous != 'raise':
+        if not self.freq or self.freq.is_ambiguous():
+            return self._simple_new(new_dates.view(DT64NS_DTYPE), dtype=tz_to_dtype(tz), freq=None)
+    
+    new_dates = new_dates.view(DT64NS_DTYPE)
+    dtype = tz_to_dtype(tz)
+    return self._simple_new(new_dates, dtype=dtype, freq=self.freq)
+```",
+pandas-24-vall_gpt-6,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    """"""
+    Localize tz-naive Datetime Array/Index to tz-aware
+    Datetime Array/Index.
+    
+    This method takes a time zone (tz) naive Datetime Array/Index object
+    and makes this time zone aware. It does not move the time to another
+    time zone.
+    
+    Parameters
+    ----------
+    tz : str, pytz.timezone, dateutil.tz.tzfile or None
+        Time zone to convert timestamps to. Passing ``None`` will
+        remove the time zone information preserving local time.
+    ambiguous : 'infer', 'NaT', bool array, default 'raise'
+        When clocks moved backward due to DST, ambiguous times may arise.
+        For example in Central European Time (UTC+01), when going from
+        03:00 DST to 02:00 non-DST, 02:30:00 local time occurs both at
+        00:30:00 UTC and at 01:30:00 UTC. In such a situation, the
+        `ambiguous` parameter dictates how ambiguous times should be
+        handled.
+        - 'infer' will attempt to infer fall dst-transition hours based on
+          order
+        - bool-ndarray where True signifies a DST time, False signifies a
+          non-DST time (note that this flag is only applicable for
+          ambiguous times)
+        - 'NaT' will return NaT where there are ambiguous times
+        - 'raise' will raise an AmbiguousTimeError if there are ambiguous
+          times.
+    
+    nonexistent : 'shift_forward', 'shift_backward', 'NaT', timedelta, \
+    or 'raise'
+        A nonexistent time does not exist in a particular timezone
+        where clocks moved forward due to DST.
+        - 'shift_forward' will shift the nonexistent time forward to the
+          closest existing time
+        - 'shift_backward' will shift the nonexistent time backward to the
+          closest existing time
+        - 'NaT' will return NaT where there are nonexistent times
+        - timdelta objects will shift nonexistent times by the timedelta
+        - 'raise' will raise a NonExistentTimeError if there are
+          nonexistent times.
+    
+    Returns
+    -------
+    Same type as self
+        Array/Index converted to the specified time zone.
+    
+    Raises
+    ------
+    TypeError
+        If the Datetime Array/Index is tz-aware and tz is not None.
+    """"""
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+
+    if nonexistent not in nonexistent_options and not isinstance(nonexistent, timedelta):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object""
+        )
+
+    if self.tz is not None:
+        if tz is None:
+            # Convert to UTC without changing timestamps
+            new_dates = tzconversion.tz_convert(self.asi8, timezones.UTC, self.tz)
+            freq = None  # Removing frequency since we're localizing to UTC
+        else:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+        # Convert to UTC and handle ambiguity for transitions
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+        # Determine frequency based on localization
+        freq = new_dates.inferred_freq if new_dates.inferred_freq else None
+
+    new_dates = new_dates.view(DT64NS_DTYPE)
+    dtype = tz_to_dtype(tz)
+    return self._simple_new(new_dates, dtype=dtype, freq=freq)
+```",
+pandas-24-vall_gpt-7,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    """"""
+    Localize tz-naive Datetime Array/Index to tz-aware
+    Datetime Array/Index.
+
+    ...
+
+    Returns
+    -------
+    Same type as self
+        Array/Index converted to the specified time zone.
+    
+    Raises
+    ------
+    TypeError
+        If the Datetime Array/Index is tz-aware and tz is not None.
+    """"""
+    
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+    if nonexistent not in nonexistent_options and not isinstance(nonexistent, timedelta):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object""
+        )
+
+    if self.tz is not None:
+        if tz is None:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+
+        # Handle frequency invalidation based on the DST change
+        if ambiguous != ""raise"" and nonexistent != ""raise"":
+            if (self.freq is not None and ambiguous == ""infer"") or nonexistent == ""shift_forward"":
+                new_dates = new_dates.view(DT64NS_DTYPE)
+                
+                inferred_freq = pd.infer_freq(new_dates)
+                if inferred_freq is None:
+                    self.freq = None
+
+    dtype = tz_to_dtype(tz)
+    return self._simple_new(new_dates, dtype=dtype, freq=self.freq)
+```",
+pandas-24-vall_gpt-8,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    """"""
+    Localize tz-naive Datetime Array/Index to tz-aware
+    Datetime Array/Index.
+
+    This method takes a time zone (tz) naive Datetime Array/Index object
+    and makes this time zone aware. It does not move the time to another
+    time zone.
+    Time zone localization helps to switch from time zone aware to time
+    zone unaware objects.
+
+    Parameters
+    ----------
+    tz : str, pytz.timezone, dateutil.tz.tzfile or None
+        Time zone to convert timestamps to. Passing ``None`` will
+        remove the time zone information preserving local time.
+    ambiguous : 'infer', 'NaT', bool array, default 'raise'
+        When clocks moved backward due to DST, ambiguous times may arise.
+        For example in Central European Time (UTC+01), when going from
+        03:00 DST to 02:00 non-DST, 02:30:00 local time occurs both at
+        00:30:00 UTC and at 01:30:00 UTC. In such a situation, the
+        `ambiguous` parameter dictates how ambiguous times should be
+        handled.
+
+        - 'infer' will attempt to infer fall dst-transition hours based on
+          order
+        - bool-ndarray where True signifies a DST time, False signifies a
+          non-DST time (note that this flag is only applicable for
+          ambiguous times)
+        - 'NaT' will return NaT where there are ambiguous times
+        - 'raise' will raise an AmbiguousTimeError if there are ambiguous
+          times.
+
+    nonexistent : 'shift_forward', 'shift_backward', 'NaT', timedelta, \
+        or 'raise'
+        A nonexistent time does not exist in a particular timezone
+        where clocks moved forward due to DST.
+
+        - 'shift_forward' will shift the nonexistent time forward to the
+          closest existing time
+        - 'shift_backward' will shift the nonexistent time backward to the
+          closest existing time
+        - 'NaT' will return NaT where there are nonexistent times
+        - timedelta objects will shift nonexistent times by the timedelta
+        - 'raise' will raise a NonExistentTimeError if there are
+          nonexistent times.
+
+        .. versionadded:: 0.24.0
+
+    Returns
+    -------
+    Same type as self
+        Array/Index converted to the specified time zone.
+
+    Raises
+    ------
+    TypeError
+        If the Datetime Array/Index is tz-aware and tz is not None.
+
+    See Also
+    --------
+    DatetimeIndex.tz_convert : Convert tz-aware DatetimeIndex from
+        one time zone to another.
+
+    Examples
+    --------
+    >>> tz_naive = pd.date_range('2018-03-01 09:00', periods=3)
+    >>> tz_naive
+    DatetimeIndex(['2018-03-01 09:00:00', '2018-03-02 09:00:00',
+                   '2018-03-03 09:00:00'],
+                  dtype='datetime64[ns]', freq='D')
+
+    Localize DatetimeIndex in US/Eastern time zone:
+
+    >>> tz_aware = tz_naive.tz_localize(tz='US/Eastern')
+    >>> tz_aware
+    DatetimeIndex(['2018-03-01 09:00:00-05:00',
+                   '2018-03-02 09:00:00-05:00',
+                   '2018-03-03 09:00:00-05:00'],
+                  dtype='datetime64[ns, US/Eastern]', freq='D')
+
+    With the ``tz=None``, we can remove the time zone information
+    while keeping the local time (not converted to UTC):
+
+    >>> tz_aware.tz_localize(None)
+    DatetimeIndex(['2018-03-01 09:00:00', '2018-03-02 09:00:00',
+                   '2018-03-03 09:00:00'],
+                  dtype='datetime64[ns]', freq='D')
+
+    Be careful with DST changes. When there is sequential data, pandas can
+    infer the DST time:
+
+    >>> s = pd.to_datetime(pd.Series(['2018-10-28 01:30:00',
+    ...                               '2018-10-28 02:00:00',
+    ...                               '2018-10-28 02:30:00',
+    ...                               '2018-10-28 02:00:00',
+    ...                               '2018-10-28 02:30:00',
+    ...                               '2018-10-28 03:00:00',
+    ...                               '2018-10-28 03:30:00']))
+    >>> s.dt.tz_localize('CET', ambiguous='infer')
+    0   2018-10-28 01:30:00+02:00
+    1   2018-10-28 02:00:00+02:00
+    2   2018-10-28 02:30:00+02:00
+    3   2018-10-28 02:00:00+01:00
+    4   2018-10-28 02:30:00+01:00
+    5   2018-10-28 03:00:00+01:00
+    6   2018-10-28 03:30:00+01:00
+    dtype: datetime64[ns, CET]
+
+    In some cases, inferring the DST is impossible. In such cases, you can
+    pass an ndarray to the ambiguous parameter to set the DST explicitly
+
+    >>> s = pd.to_datetime(pd.Series(['2018-10-28 01:20:00',
+    ...                               '2018-10-28 02:36:00',
+    ...                               '2018-10-28 03:46:00']))
+    >>> s.dt.tz_localize('CET', ambiguous=np.array([True, True, False]))
+    0   2018-10-28 01:20:00+02:00
+    1   2018-10-28 02:36:00+02:00
+    2   2018-10-28 03:46:00+01:00
+    dtype: datetime64[ns, CET]
+
+    If the DST transition causes nonexistent times, you can shift these
+    dates forward or backwards with a timedelta object or `'shift_forward'`
+    or `'shift_backwards'`.
+
+    >>> s = pd.to_datetime(pd.Series(['2015-03-29 02:30:00',
+    ...                               '2015-03-29 03:30:00']))
+    >>> s.dt.tz_localize('Europe/Warsaw', nonexistent='shift_forward')
+    0   2015-03-29 03:00:00+02:00
+    1   2015-03-29 03:30:00+02:00
+    dtype: datetime64[ns, Europe/Warsaw]
+
+    >>> s.dt.tz_localize('Europe/Warsaw', nonexistent='shift_backward')
+    0   2015-03-29 01:59:59.999999999+01:00
+    1   2015-03-29 03:30:00+02:00
+    dtype: datetime64[ns, Europe/Warsaw]
+
+    >>> s.dt.tz_localize('Europe/Warsaw', nonexistent=pd.Timedelta('1H'))
+    0   2015-03-29 03:30:00+02:00
+    1   2015-03-29 03:30:00+02:00
+    dtype: datetime64[ns, Europe/Warsaw]
+    """"""
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+    if nonexistent not in nonexistent_options and not isinstance(
+        nonexistent, timedelta):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object""
+        )
+
+    if self.tz is not None:
+        if tz is None:
+            new_dates = tzconversion.tz_convert(self.asi8, timezones.UTC, self.tz)
+            return self._simple_new(new_dates, dtype=DT64NS_DTYPE, freq=None)
+        else:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+
+        # Convert to UTC
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+
+    new_dates = new_dates.view(DT64NS_DTYPE)
+    dtype = tz_to_dtype(tz)
+
+    # Determine if frequency should be invalidated
+    if isinstance(new_dates, DatetimeArray) and (self.freq is not None) and nonexistent == ""shift_forward"":
+        freq = None
+    else:
+        freq = self.freq
+
+    return self._simple_new(new_dates, dtype=dtype, freq=freq)
+```",
+pandas-24-vall_gpt-9,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    """"""
+    Localize tz-naive Datetime Array/Index to tz-aware
+    Datetime Array/Index.
+
+    This method takes a time zone (tz) naive Datetime Array/Index object
+    and makes this time zone aware. It does not move the time to another
+    time zone.
+    Time zone localization helps to switch from time zone aware to time
+    zone unaware objects.
+
+    Parameters
+    ----------
+    tz : str, pytz.timezone, dateutil.tz.tzfile or None
+        Time zone to convert timestamps to. Passing ``None`` will
+        remove the time zone information preserving local time.
+    ambiguous : 'infer', 'NaT', bool array, default 'raise'
+        When clocks moved backward due to DST, ambiguous times may arise.
+        For example in Central European Time (UTC+01), when going from
+        03:00 DST to 02:00 non-DST, 02:30:00 local time occurs both at
+        00:30:00 UTC and at 01:30:00 UTC. In such a situation, the
+        `ambiguous` parameter dictates how ambiguous times should be
+        handled.
+
+        - 'infer' will attempt to infer fall dst-transition hours based on
+          order
+        - bool-ndarray where True signifies a DST time, False signifies a
+          non-DST time (note that this flag is only applicable for
+          ambiguous times)
+        - 'NaT' will return NaT where there are ambiguous times
+        - 'raise' will raise an AmbiguousTimeError if there are ambiguous
+          times.
+
+    nonexistent : 'shift_forward', 'shift_backward', 'NaT', timedelta, \
+    default 'raise'
+        A nonexistent time does not exist in a particular timezone
+        where clocks moved forward due to DST.
+
+        - 'shift_forward' will shift the nonexistent time forward to the
+          closest existing time
+        - 'shift_backward' will shift the nonexistent time backward to the
+          closest existing time
+        - 'NaT' will return NaT where there are nonexistent times
+        - timedelta objects will shift nonexistent times by the timedelta
+        - 'raise' will raise a NonExistentTimeError if there are
+          nonexistent times.
+
+    Returns
+    -------
+    Same type as self
+        Array/Index converted to the specified time zone.
+
+    Raises
+    ------
+    TypeError
+        If the Datetime Array/Index is tz-aware and tz is not None.
+
+    See Also
+    --------
+    DatetimeIndex.tz_convert : Convert tz-aware DatetimeIndex from
+        one time zone to another.
+
+    Examples
+    --------
+    >>> tz_naive = pd.date_range('2018-03-01 09:00', periods=3)
+    >>> tz_naive
+    DatetimeIndex(['2018-03-01 09:00:00', '2018-03-02 09:00:00',
+                   '2018-03-03 09:00:00'],
+                  dtype='datetime64[ns]', freq='D')
+
+    Localize DatetimeIndex in US/Eastern time zone:
+
+    >>> tz_aware = tz_naive.tz_localize(tz='US/Eastern')
+    >>> tz_aware
+    DatetimeIndex(['2018-03-01 09:00:00-05:00',
+                   '2018-03-02 09:00:00-05:00',
+                   '2018-03-03 09:00:00-05:00'],
+                  dtype='datetime64[ns, US/Eastern]', freq='D')
+
+    With the ``tz=None``, we can remove the time zone information
+    while keeping the local time (not converted to UTC):
+
+    >>> tz_aware.tz_localize(None)
+    DatetimeIndex(['2018-03-01 09:00:00', '2018-03-02 09:00:00',
+                   '2018-03-03 09:00:00'],
+                  dtype='datetime64[ns]', freq='D')
+
+    Be careful with DST changes. When there is sequential data, pandas can
+    infer the DST time:
+
+    >>> s = pd.to_datetime(pd.Series(['2018-10-28 01:30:00',
+    ...                               '2018-10-28 02:00:00',
+    ...                               '2018-10-28 02:30:00',
+    ...                               '2018-10-28 02:00:00',
+    ...                               '2018-10-28 02:30:00',
+    ...                               '2018-10-28 03:00:00',
+    ...                               '2018-10-28 03:30:00']))
+    >>> s.dt.tz_localize('CET', ambiguous='infer')
+    0   2018-10-28 01:30:00+02:00
+    1   2018-10-28 02:00:00+02:00
+    2   2018-10-28 02:30:00+02:00
+    3   2018-10-28 02:00:00+01:00
+    4   2018-10-28 02:30:00+01:00
+    5   2018-10-28 03:00:00+01:00
+    6   2018-10-28 03:30:00+01:00
+    dtype: datetime64[ns, CET]
+
+    In some cases, inferring the DST is impossible. In such cases, you can
+    pass an ndarray to the ambiguous parameter to set the DST explicitly
+
+    >>> s = pd.to_datetime(pd.Series(['2018-10-28 01:20:00',
+    ...                               '2018-10-28 02:36:00',
+    ...                               '2018-10-28 03:46:00']))
+    >>> s.dt.tz_localize('CET', ambiguous=np.array([True, True, False]))
+    0   2018-10-28 01:20:00+02:00
+    1   2018-10-28 02:36:00+02:00
+    2   2018-10-28 03:46:00+01:00
+    dtype: datetime64[ns, CET]
+
+    If the DST transition causes nonexistent times, you can shift these
+    dates forward or backwards with a timedelta object or `'shift_forward'`
+    or `'shift_backward'`.
+
+    >>> s = pd.to_datetime(pd.Series(['2015-03-29 02:30:00',
+    ...                               '2015-03-29 03:30:00']))
+    >>> s.dt.tz_localize('Europe/Warsaw', nonexistent='shift_forward')
+    0   2015-03-29 03:00:00+02:00
+    1   2015-03-29 03:30:00+02:00
+    dtype: datetime64[ns, Europe/Warsaw]
+
+    >>> s.dt.tz_localize('Europe/Warsaw', nonexistent='shift_backward')
+    0   2015-03-29 01:59:59.999999999+01:00
+    1   2015-03-29 03:30:00+02:00
+    dtype: datetime64[ns, Europe/Warsaw]
+
+    >>> s.dt.tz_localize('Europe/Warsaw', nonexistent=pd.Timedelta('1H'))
+    0   2015-03-29 03:30:00+02:00
+    1   2015-03-29 03:30:00+02:00
+    dtype: datetime64[ns, Europe/Warsaw]
+    """"""
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+    if nonexistent not in nonexistent_options and not isinstance(
+        nonexistent, timedelta
+    ):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object""
+        )
+
+    if self.tz is not None:
+        if tz is None:
+            new_dates = tzconversion.tz_convert(self.asi8, timezones.UTC, self.tz)
+        else:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+        # Convert to UTC
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+
+    # Ensure freq is None on DST transitions
+    if not hasattr(self, 'freq') or self.freq is None:
+        freq = None
+    else:
+        freq = self.freq
+
+    new_dates = new_dates.view(DT64NS_DTYPE)
+    dtype = tz_to_dtype(tz)
+    
+    if isinstance(freq, pd.DateOffset):
+        return self._simple_new(new_dates, dtype=dtype, freq=None)
+
+    if ambiguous != ""infer"":
+        inferred_freq = new_dates.inferred_freq
+        if inferred_freq is None:
+            freq = None
+            
+    return self._simple_new(new_dates, dtype=dtype, freq=freq)
+```",

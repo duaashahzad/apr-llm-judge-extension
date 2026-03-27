@@ -1,0 +1,372 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-143-v0_llama-0,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if not (method is None and tolerance is None and is_list_like(target)):
+        return super().get_indexer(target, method=method, tolerance=tolerance, limit=limit)
+
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        # Work on reversed range for simplicity:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        # checks/conversions/roundings are delegated to general method
+        return super().get_indexer(target, method=method, tolerance=tolerance, limit=limit)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+    locs[~valid] = -1
+    locs[valid] = locs[valid] / step
+
+    if method == ""pad"" and limit is not None:
+        max_loc = np.max(locs)
+        locs[(locs == max_loc) & (target_array > self.stop - limit - 1)] = -1
+
+    if step!= self.step:
+        # We reversed this range: transform to original locs
+        locs[valid] = len(self) - 1 - locs[valid]
+    return ensure_platform_int(locs)
+```",
+pandas-143-v0_llama-1,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if not (method is None and tolerance is None and is_list_like(target)):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        # Work on reversed range for simplicity:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        # checks/conversions/roundings are delegated to general method
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+    locs[~valid] = -1
+    locs[valid] = locs[valid] / step
+
+    if step!= self.step:
+        # We reversed this range: transform to original locs
+        locs[valid] = len(self) - 1 - locs[valid]
+
+    # Apply limit
+    if method in [""ffill"", ""pad""] and limit is not None:
+        prev_loc = -1
+        for i, loc in enumerate(locs):
+            if loc!= -1 and loc > prev_loc + limit:
+                locs[i] = -1
+            prev_loc = loc if loc!= -1 else prev_loc
+
+    return ensure_platform_int(locs)
+```",
+pandas-143-v0_llama-2,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if not (method is None and tolerance is None and is_list_like(target)):
+        if method == ""pad"" and limit is not None:
+            target_array = np.asarray(target)
+            locs = target_array - self.start
+            valid = (locs % self.step == 0) & (locs >= 0) & (target_array < self.stop)
+            locs[~valid] = -1
+            locs[valid] = locs[valid] / self.step
+
+            # Apply the limit
+            max_valid_loc = np.max(locs[valid])
+            locs[(locs > max_valid_loc) & (locs!= -1)] = max_valid_loc
+
+            return ensure_platform_int(locs)
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        # Work on reversed range for simplicity:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        # checks/conversions/roundings are delegated to general method
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+    locs[~valid] = -1
+    locs[valid] = locs[valid] / step
+
+    if step!= self.step:
+        # We reversed this range: transform to original locs
+        locs[valid] = len(self) - 1 - locs[valid]
+
+    # Apply the limit
+    if method == ""pad"" and limit is not None:
+        max_valid_loc = np.max(locs[valid])
+        locs[(locs > max_valid_loc) & (locs!= -1)] = max_valid_loc
+
+    return ensure_platform_int(locs)
+```",
+pandas-143-v0_llama-3,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if not (method is None and tolerance is None and is_list_like(target)):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        # Work on reversed range for simplicity:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        # checks/conversions/roundings are delegated to general method
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+    locs[~valid] = -1
+    locs[valid] = locs[valid] / step
+
+    if step!= self.step:
+        # We reversed this range: transform to original locs
+        locs[valid] = len(self) - 1 - locs[valid]
+
+    # Adjust for limit
+    if method == ""pad"" and limit is not None:
+        for i in range(len(locs)):
+            if locs[i]!= -1 and locs[i] > limit:
+                locs[i] = -1
+
+    return ensure_platform_int(locs)
+```",
+pandas-143-v0_llama-4,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if not (method is None and tolerance is None and is_list_like(target)):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        # Work on reversed range for simplicity:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        # checks/conversions/roundings are delegated to general method
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+    locs[~valid] = -1
+    locs[valid] = locs[valid] / step
+
+    if step!= self.step:
+        # We reversed this range: transform to original locs
+        locs[valid] = len(self) - 1 - locs[valid]
+
+    if method in [""pad"", ""ffill""] and limit is not None:
+        mask = locs >= 0
+        locs_diff = np.diff(np.concatenate([[0], locs[mask]]))
+        locs_diff = np.concatenate([locs_diff, [0]])
+        locs[mask][locs_diff > limit] = -1
+
+    return ensure_platform_int(locs)
+```",
+pandas-143-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if not (method is None and tolerance is None and is_list_like(target)):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        # Work on reversed range for simplicity:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        # checks/conversions/roundings are delegated to general method
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+    locs[~valid] = -1
+    locs[valid] = locs[valid] / step
+
+    if method == ""pad"" and limit is not None:
+        max_loc = len(self) - 1
+        locs[(locs > max_loc) & (locs!= -1)] = max_loc
+
+    if step!= self.step:
+        # We reversed this range: transform to original locs
+        locs[valid] = len(self) - 1 - locs[valid]
+    return ensure_platform_int(locs)
+```",
+pandas-143-v0_llama-6,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if not (method is None and tolerance is None and is_list_like(target)):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        # Work on reversed range for simplicity:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        # checks/conversions/roundings are delegated to general method
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+    locs[~valid] = -1
+    locs[valid] = locs[valid] / step
+
+    if step!= self.step:
+        # We reversed this range: transform to original locs
+        locs[valid] = len(self) - 1 - locs[valid]
+
+    # Limit the number of consecutive fills
+    if method in [""pad"", ""ffill""]:
+        if limit is not None:
+            consecutive_fills = 0
+            for i in range(len(target_array)):
+                if locs[i] == -1:
+                    consecutive_fills += 1
+                    if consecutive_fills > limit:
+                        locs[i] = -1
+                else:
+                    consecutive_fills = 0
+        elif method == ""pad"":
+            for i in range(len(target_array)):
+                if locs[i] == -1:
+                    locs[i] = -1
+    return ensure_platform_int(locs)
+```",
+pandas-143-v0_llama-7,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if not (method is None and tolerance is None and is_list_like(target)):
+        if method == ""pad"" and limit is not None:
+            target_array = np.asarray(target)
+            locs = target_array - self.start
+            valid = (locs >= 0) & (target_array < self.stop)
+            locs[valid] = locs[valid]
+            padded_locs = locs.copy()
+            for i in range(1, limit + 1):
+                mask = (locs == self.stop - i) & (padded_locs == self.stop - 1)
+                padded_locs[mask] = self.stop - i - 1
+            return ensure_platform_int(padded_locs)
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        # Work on reversed range for simplicity:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        # checks/conversions/roundings are delegated to general method
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+    locs[~valid] = -1
+    locs[valid] = locs[valid] / step
+
+    if step!= self.step:
+        # We reversed this range: transform to original locs
+        locs[valid] = len(self) - 1 - locs[valid]
+
+    if method == ""pad"" and limit is not None:
+        padded_locs = locs.copy()
+        for i in range(1, limit + 1):
+            mask = (locs == len(self) - 1) & (padded_locs == len(self) - 1)
+            if step > 0:
+                padded_locs[mask] = len(self) - i - 1
+            else:
+                padded_locs[mask] = -i - 1
+        return ensure_platform_int(padded_locs)
+
+    return ensure_platform_int(locs)
+```",
+pandas-143-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if not (method is None and tolerance is None and is_list_like(target)):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        # Work on reversed range for simplicity:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        # checks/conversions/roundings are delegated to general method
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+    locs[~valid] = -1
+    locs[valid] = locs[valid] / step
+
+    if step!= self.step:
+        # We reversed this range: transform to original locs
+        locs[valid] = len(self) - 1 - locs[valid]
+
+    if method == ""pad"" and limit is not None:
+        last_valid_idx = np.max(locs[locs!= -1])
+        locs[(locs!= -1) & (locs > last_valid_idx + limit)] = -1
+
+    return ensure_platform_int(locs)
+```",
+pandas-143-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if not (method is None and tolerance is None and is_list_like(target)):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        # Work on reversed range for simplicity:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        # checks/conversions/roundings are delegated to general method
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+    locs[~valid] = -1
+    locs[valid] = locs[valid] / step
+
+    if step!= self.step:
+        # We reversed this range: transform to original locs
+        locs[valid] = len(self) - 1 - locs[valid]
+
+    if method == ""pad"" and limit is not None:
+        max_index = len(self) - 1
+        for i in range(len(locs)):
+            if locs[i] == max_index:
+                for j in range(i + 1, len(locs)):
+                    if target[j] - target[i] > limit:
+                        locs[j] = -1
+                        break
+
+    return ensure_platform_int(locs)
+```",

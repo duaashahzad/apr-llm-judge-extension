@@ -1,0 +1,368 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+httpie-4-vall_llama-0,UNKNOWN,UNKNOWN,"```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    headers = dict(self._orig.headers)
+
+    # Remove any existing 'Host' or 'host' headers
+    headers.pop('Host', None)
+    headers.pop('host', None)
+
+    if url.netloc:
+        headers['Host'] = url.netloc.split('@')[-1]
+
+    headers = ['%s: %s' % (name, value)
+               for name, value in headers.items()]
+
+    headers.insert(0, request_line)
+    headers = '\r\n'.join(headers).strip()
+
+    if isinstance(headers, bytes):
+        # Python < 3
+        headers = headers.decode('utf8')
+    return headers
+```",
+httpie-4-vall_llama-1,UNKNOWN,UNKNOWN,"### Corrected Function
+
+```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    headers = dict(self._orig.headers)
+
+    # Check for 'host' or 'Host' to avoid duplicate Host headers
+    if 'host' in [key.lower() for key in headers.keys()]:
+        # Remove any existing 'host' or 'Host' headers
+        headers = {key: value for key, value in headers.items() if key.lower()!= 'host'}
+    else:
+        # Add the Host header if it doesn't exist
+        headers['Host'] = url.netloc.split('@')[-1]
+
+    headers = ['%s: %s' % (name, value)
+               for name, value in headers.items()]
+
+    headers.insert(0, request_line)
+    headers = '\r\n'.join(headers).strip()
+
+    if isinstance(headers, bytes):
+        # Python < 3
+        headers = headers.decode('utf8')
+    return headers
+```",
+httpie-4-vall_llama-2,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the bug**: The issue arises when the `Host` header is overridden using the command line option `-pHh` or `--print headers` along with specifying a custom `Host` header. If the casing of the command line option isn't correct (e.g., using `host` instead of `Host`), it results in duplicate `Host` headers in the request.
+
+2. **Location of the bug**: The problem lies in how the `Host` header is handled within the `headers` property of the class. Specifically, the issue is with the line where it checks if `'Host'` is not in `headers` and then adds it. However, this check is case-sensitive and does not account for a `host` header (lowercase 'h') being already present.
+
+3. **Identifying the cause**: The cause of the bug is that the function does not properly handle the case when the `Host` header is being overridden but with incorrect casing (e.g., `host` instead of `Host`). This leads to both the original `Host` header (derived from the URL) and the custom `host` header being present in the request.
+
+4. **Strategy for fixing the bug**: To fix this issue, the function needs to be modified to correctly handle the casing of the `Host` header. This can be achieved by ensuring that any existing `host` or `Host` header is properly overwritten or removed before adding a new `Host` header derived from the URL or command line override.
+
+### Fixed solution:
+```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    headers = dict(self._orig.headers)
+    
+    # Check for both 'Host' and 'host' to handle case sensitivity
+    if 'host' in [key.lower() for key in headers.keys()]:
+        # Remove any existing 'host' or 'Host' header
+        headers = {k: v for k, v in headers.items() if k.lower()!= 'host'}
+    
+    # Add or overwrite the 'Host' header
+    if 'Host' not in headers:
+        headers['Host'] = url.netloc.split('@')[-1]
+
+    headers = ['%s: %s' % (name, value)
+               for name, value in headers.items()]
+
+    headers.insert(0, request_line)
+    headers = '\r\n'.join(headers).strip()
+
+    if isinstance(headers, bytes):
+        # Python < 3
+        headers = headers.decode('utf8')
+    return headers
+```
+
+### Explanation of changes:
+- **Added a check for 'host' or 'Host' in headers**: Before adding a new `Host` header, the function now checks if any key in the `headers` dictionary is 'host' or 'Host' (case-insensitive). If found, it removes that header to avoid duplication.
+- **Remove existing 'host' or 'Host' header**: If a 'host' or 'Host' header is found, the function removes it from the `headers` dictionary to ensure only one `Host` header is present in the final request.
+- **Keep the addition of the 'Host' header**: After potentially removing an existing 'host' or 'Host' header, the function checks again if a `Host` header is present. If not, it adds one based on the URL's netloc.
+
+### Tests and example uses:
+- **Test case for duplicate 'Host' headers**: A test should be written to ensure that specifying a custom `Host` header (regardless of casing) does not result in duplicate `Host` headers in the request.
+- **Test case for correct 'Host' header override**: Another test should verify that the custom `Host` header correctly overwrites any automatically generated `Host` header from the URL.",
+httpie-4-vall_llama-3,UNKNOWN,UNKNOWN,"```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    headers = dict(self._orig.headers)
+
+    # Check if 'host' or 'Host' is already in headers to avoid duplicates
+    if 'host' in [key.lower() for key in headers.keys()]:
+        # If 'host' or 'Host' is already present, do not add it again
+        pass
+    else:
+        # If 'host' or 'Host' is not present, add it
+        headers['Host'] = url.netloc.split('@')[-1]
+
+    headers = ['%s: %s' % (name, value)
+               for name, value in headers.items()]
+
+    headers.insert(0, request_line)
+    headers = '\r\n'.join(headers).strip()
+
+    if isinstance(headers, bytes):
+        # Python < 3
+        headers = headers.decode('utf8')
+    return headers
+```",
+httpie-4-vall_llama-4,UNKNOWN,UNKNOWN,"### Corrected Function
+
+The issue here is that when a custom `Host` header is specified, it gets added to the headers list even if a `Host` header already exists. This results in duplicate `Host` headers. We need to ensure that only one `Host` header is included in the output.
+
+
+```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    # Make a copy of the original headers to avoid modifying it directly
+    headers_dict = dict(self._orig.headers)
+
+    # Check if 'host' or 'Host' is already present in the headers
+    if 'host' in [k.lower() for k in headers_dict.keys()]:
+        # If 'host' or 'Host' is already present, remove it to avoid duplication
+        headers_dict = {k: v for k, v in headers_dict.items() if k.lower()!= 'host'}
+
+    # If 'Host' is not in the headers, add it
+    if 'Host' not in headers_dict:
+        headers_dict['Host'] = url.netloc.split('@')[-1]
+
+    # Convert the headers dictionary to a list of formatted strings
+    headers = ['%s: %s' % (name, value)
+               for name, value in headers_dict.items()]
+
+    # Insert the request line at the beginning of the headers list
+    headers.insert(0, request_line)
+
+    # Join the headers with the appropriate line ending and strip any trailing whitespace
+    headers = '\r\n'.join(headers).strip()
+
+    # If the headers are in bytes format (for Python < 3), decode them to UTF-8
+    if isinstance(headers, bytes):
+        headers = headers.decode('utf8')
+
+    return headers
+```",
+httpie-4-vall_llama-5,UNKNOWN,UNKNOWN,"```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    headers = dict(self._orig.headers)
+
+    if 'host' in [key.lower() for key in headers.keys()]:
+        headers['Host'] = [v for k, v in headers.items() if k.lower() == 'host'][0]
+        headers = {k: v for k, v in headers.items() if k.lower()!= 'host'}
+
+    if 'Host' not in headers:
+        headers['Host'] = url.netloc.split('@')[-1]
+
+    headers = ['%s: %s' % (name, value)
+               for name, value in headers.items()]
+
+    headers.insert(0, request_line)
+    headers = '\r\n'.join(headers).strip()
+
+    if isinstance(headers, bytes):
+        # Python < 3
+        headers = headers.decode('utf8')
+    return headers
+```",
+httpie-4-vall_llama-6,UNKNOWN,UNKNOWN,"```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    headers = dict(self._orig.headers)
+
+    # Check if 'host' or 'Host' is already in headers to avoid duplication
+    if 'host' in [key.lower() for key in headers.keys()]:
+        pass
+    else:
+        headers['Host'] = url.netloc.split('@')[-1]
+
+    headers = ['%s: %s' % (name, value)
+               for name, value in headers.items()]
+
+    headers.insert(0, request_line)
+    headers = '\r\n'.join(headers).strip()
+
+    if isinstance(headers, bytes):
+        # Python < 3
+        headers = headers.decode('utf8')
+    return headers
+```",
+httpie-4-vall_llama-7,UNKNOWN,UNKNOWN,"```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    headers = dict(self._orig.headers)
+
+    # Check if 'host' or 'Host' is already in the headers
+    if 'host' in [key.lower() for key in headers.keys()]:
+        # Remove any existing 'host' or 'Host' header
+        headers = {key: value for key, value in headers.items() if key.lower()!= 'host'}
+    elif 'Host' not in headers:
+        # If not, add the 'Host' header from the URL
+        headers['Host'] = url.netloc.split('@')[-1]
+
+    headers = ['%s: %s' % (name, value)
+               for name, value in headers.items()]
+
+    headers.insert(0, request_line)
+    headers = '\r\n'.join(headers).strip()
+
+    if isinstance(headers, bytes):
+        # Python < 3
+        headers = headers.decode('utf8')
+    return headers
+```",
+httpie-4-vall_llama-8,UNKNOWN,UNKNOWN,"```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    headers = dict(self._orig.headers)
+
+    # Check if 'host' or 'Host' is already in headers to avoid duplication
+    if 'host' in [key.lower() for key in headers.keys()]:
+        # If 'host' or 'Host' is already present, do not add it again
+        pass
+    else:
+        # If 'host' or 'Host' is not present, add it from the URL
+        headers['Host'] = url.netloc.split('@')[-1]
+
+    headers = ['%s: %s' % (name, value)
+               for name, value in headers.items()]
+
+    headers.insert(0, request_line)
+    headers = '\r\n'.join(headers).strip()
+
+    if isinstance(headers, bytes):
+        # Python < 3
+        headers = headers.decode('utf8')
+    return headers
+```",
+httpie-4-vall_llama-9,UNKNOWN,UNKNOWN,"### Analyzing the Bug
+
+
+1. **Analyzing the Code**: The provided code is a property method named `headers` which appears to be part of a class, likely representing an HTTP request or a similar construct. It handles the construction of HTTP headers and the request line. The method utilizes `urlsplit` from the `httpie.compat` module to parse URLs and extract necessary components.
+
+2. **GitHub Issue**: The GitHub issue titled ""Duplicate Host headers when custom Host specified"" points towards the problem. When a custom `Host` header is specified with a different casing (e.g., `host:` instead of `Host:`), it results in duplicate `Host` headers in the request, which is not the expected behavior.
+
+3. **Error Message and Test Failure**: The error message and the failing test (`test_Host_header_overwrite`) suggest that the issue arises when trying to override the `Host` header with a custom value. The test checks if the count of `host:` in the response is exactly 1, but it finds 2, indicating a duplication.
+
+4. **Code Review**: Looking at the `headers` method, the issue seems to stem from the fact that it checks for `'Host'` in a case-sensitive manner. If the `Host` header is already present (regardless of case), it does not override it but instead adds its own version, leading to duplication.
+
+5. **Fixing the Bug**: The solution involves making the check for the `Host` header case-insensitive and ensuring that any existing `Host` header (regardless of case) is replaced with the new one to avoid duplication.
+
+### Corrected Function
+
+
+```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    headers = dict(self._orig.headers)
+
+    # Check for Host header in a case-insensitive manner
+    if 'host' in [k.lower() for k in headers.keys()]:
+        # Remove any existing Host header (regardless of case)
+        headers = {k: v for k, v in headers.items() if k.lower()!= 'host'}
+
+    # Add or update the Host header
+    if url.netloc:
+        headers['Host'] = url.netloc.split('@')[-1]
+
+    headers = ['%s: %s' % (name, value)
+               for name, value in headers.items()]
+
+    headers.insert(0, request_line)
+    headers = '\r\n'.join(headers).strip()
+
+    if isinstance(headers, bytes):
+        # Python < 3
+        headers = headers.decode('utf8')
+    return headers
+```",

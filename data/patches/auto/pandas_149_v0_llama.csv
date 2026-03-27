@@ -1,0 +1,413 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-149-v0_llama-0,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Analysis of the Buggy Function:** The provided function is `write` from the `FastParquetImpl` class, which is used to write DataFrames to Parquet files. The function seems to handle both local file paths and cloud storage URLs (like S3 or GCS).
+2. **Understanding the Error:** The error occurs when trying to write a DataFrame to a non-existent GCS file using the `fastparquet` engine. The `FileNotFoundError` is raised because the function attempts to open the file in read mode (`'rb'`) before writing, which fails if the file does not exist.
+3. **Identifying Potential Error Locations:** The issue lies in how the `get_filepath_or_buffer` function handles cloud storage URLs. Specifically, for GCS URLs, it attempts to open the file without first checking if it exists or if the mode is correct for writing.
+4. **Cause of the Bug:** The bug arises from not properly handling the mode when opening a file for writing on GCS. The `get_filepath_or_buffer` function should be able to handle both existing and non-existing files, especially when the intent is to write (create or overwrite) the file.
+5. **Strategy for Fixing the Bug:** To fix this bug, we need to modify the `write` function in `FastParquetImpl` to correctly handle GCS URLs by opening the file in write mode (`'wb'`) if the file does not exist. This involves checking if the path is a GCS URL and adjusting the mode accordingly before calling `get_filepath_or_buffer`.
+
+### Fixed solution:
+```python
+def write(
+    self, df, path, compression=""snappy"", index=None, partition_cols=None, **kwargs
+):
+    self.validate_dataframe(df)
+    
+    if ""partition_on"" in kwargs and partition_cols is not None:
+        raise ValueError(
+            ""Cannot use both partition_on and ""
+            ""partition_cols. Use partition_cols for ""
+            ""partitioning data""
+        )
+    elif ""partition_on"" in kwargs:
+        partition_cols = kwargs.pop(""partition_on"")
+
+    if partition_cols is not None:
+        kwargs[""file_scheme""] = ""hive""
+
+    mode = ""wb"" if is_s3_url(path) or path.startswith(""gs://"") else None
+    path, _, _, _ = get_filepath_or_buffer(path, mode=mode)
+    
+    # If the path is a GCS or S3 URL, we need to open it in 'wb' mode to write.
+    if is_s3_url(path) or path.startswith(""gs://""):
+        kwargs[""open_with""] = lambda path, _: path
+
+    with catch_warnings(record=True):
+        self.api.write(
+            path,
+            df,
+            compression=compression,
+            write_index=index,
+            partition_on=partition_cols,
+            **kwargs
+        )
+```
+
+### Explanation of changes:
+- **Added Mode Variable:** A `mode` variable is introduced to specify the mode in which the file should be opened, especially for cloud storage URLs. If the URL is an S3 or GCS URL, the mode is set to `'wb'` for writing in binary mode.
+- **Modified get_filepath_or_buffer Call:** The call to `get_filepath_or_buffer` now includes the `mode` parameter to ensure that cloud storage URLs are handled correctly for writing.
+- **Adjusted Open Mode for Cloud Storage:** For S3 or GCS URLs, `kwargs[""open_with""]` is set to a lambda function that simply returns the path, allowing the file to be written directly.
+
+### Tests and example uses:
+The provided test function `test_to_parquet_gcs_new_file` should now pass without raising a `FileNotFoundError`, demonstrating that the `write` function correctly handles writing to non-existent GCS files using the `fastparquet` engine.",
+pandas-149-v0_llama-1,UNKNOWN,UNKNOWN,"```python
+def write(
+    self, df, path, compression=""snappy"", index=None, partition_cols=None, **kwargs
+):
+    self.validate_dataframe(df)
+    # thriftpy/protocol/compact.py:339:
+    # DeprecationWarning: tostring() is deprecated.
+    # Use tobytes() instead.
+
+    if ""partition_on"" in kwargs and partition_cols is not None:
+        raise ValueError(
+            ""Cannot use both partition_on and ""
+            ""partition_cols. Use partition_cols for ""
+            ""partitioning data""
+        )
+    elif ""partition_on"" in kwargs:
+        partition_cols = kwargs.pop(""partition_on"")
+
+    if partition_cols is not None:
+        kwargs[""file_scheme""] = ""hive""
+
+    if is_s3_url(path) or path.startswith(""gs://""):
+        # path is s3:// or gs:// so we need to open the file in 'wb' mode.
+        # TODO: Support 'ab'
+        try:
+            path, _, _, _ = get_filepath_or_buffer(path, mode=""wb"")
+        except FileNotFoundError:
+            path, _, _, _ = get_filepath_or_buffer(path, mode=""wb"")
+        # And pass the opened file to the fastparquet internal impl.
+        kwargs[""open_with""] = lambda path, _: path
+    else:
+        path, _, _, _ = get_filepath_or_buffer(path)
+
+    with catch_warnings(record=True):
+        self.api.write(
+            path,
+            df,
+            compression=compression,
+            write_index=index,
+            partition_on=partition_cols,
+            **kwargs
+        )
+```",
+pandas-149-v0_llama-2,UNKNOWN,UNKNOWN,"```python
+def write(
+    self, df, path, compression=""snappy"", index=None, partition_cols=None, **kwargs
+):
+    self.validate_dataframe(df)
+    # thriftpy/protocol/compact.py:339:
+    # DeprecationWarning: tostring() is deprecated.
+    # Use tobytes() instead.
+
+    if ""partition_on"" in kwargs and partition_cols is not None:
+        raise ValueError(
+            ""Cannot use both partition_on and ""
+            ""partition_cols. Use partition_cols for ""
+            ""partitioning data""
+        )
+    elif ""partition_on"" in kwargs:
+        partition_cols = kwargs.pop(""partition_on"")
+
+    if partition_cols is not None:
+        kwargs[""file_scheme""] = ""hive""
+
+    if is_s3_url(path) or path.startswith(""gs://""):
+        # path is s3:// or gs:// so we need to open the file in 'wb' mode.
+        # TODO: Support 'ab'
+        kwargs[""open_with""] = lambda path, _: open(path, ""wb"")
+    else:
+        path, _, _, _ = get_filepath_or_buffer(path)
+
+    with catch_warnings(record=True):
+        self.api.write(
+            path,
+            df,
+            compression=compression,
+            write_index=index,
+            partition_on=partition_cols,
+            **kwargs
+        )
+```",
+pandas-149-v0_llama-3,UNKNOWN,UNKNOWN,"```python
+def write(
+    self, df, path, compression=""snappy"", index=None, partition_cols=None, **kwargs
+):
+    self.validate_dataframe(df)
+    
+    if ""partition_on"" in kwargs and partition_cols is not None:
+        raise ValueError(
+            ""Cannot use both partition_on and ""
+            ""partition_cols. Use partition_cols for ""
+            ""partitioning data""
+        )
+    elif ""partition_on"" in kwargs:
+        partition_cols = kwargs.pop(""partition_on"")
+
+    if partition_cols is not None:
+        kwargs[""file_scheme""] = ""hive""
+
+    if is_s3_url(path) or path.startswith('gs://'):
+        # path is s3:// or gs:// so we need to open the s3file in 'wb' mode.
+        # TODO: Support 'ab'
+        path, _, _, _ = get_filepath_or_buffer(path, mode=""wb"")
+        # And pass the opened s3file to the fastparquet internal impl.
+        kwargs[""open_with""] = lambda path, _: path
+    else:
+        path, _, _, _ = get_filepath_or_buffer(path)
+
+    with catch_warnings(record=True):
+        self.api.write(
+            path,
+            df,
+            compression=compression,
+            write_index=index,
+            partition_on=partition_cols,
+            **kwargs
+        )
+```",
+pandas-149-v0_llama-4,UNKNOWN,UNKNOWN,"```python
+def write(
+    self, df, path, compression=""snappy"", index=None, partition_cols=None, **kwargs
+):
+    self.validate_dataframe(df)
+    # thriftpy/protocol/compact.py:339:
+    # DeprecationWarning: tostring() is deprecated.
+    # Use tobytes() instead.
+
+    if ""partition_on"" in kwargs and partition_cols is not None:
+        raise ValueError(
+            ""Cannot use both partition_on and ""
+            ""partition_cols. Use partition_cols for ""
+            ""partitioning data""
+        )
+    elif ""partition_on"" in kwargs:
+        partition_cols = kwargs.pop(""partition_on"")
+
+    if partition_cols is not None:
+        kwargs[""file_scheme""] = ""hive""
+
+    if is_s3_url(path) or path.startswith(""gs://""):
+        # path is s3:// or gs:// so we need to open the file in 'wb' mode.
+        # TODO: Support 'ab'
+        try:
+            path, _, _, _ = get_filepath_or_buffer(path, mode=""rb"")
+        except FileNotFoundError:
+            path, _, _, _ = get_filepath_or_buffer(path, mode=""wb"")
+        # And pass the opened file to the fastparquet internal impl.
+        kwargs[""open_with""] = lambda path, _: path
+    else:
+        path, _, _, _ = get_filepath_or_buffer(path)
+
+    with catch_warnings(record=True):
+        self.api.write(
+            path,
+            df,
+            compression=compression,
+            write_index=index,
+            partition_on=partition_cols,
+            **kwargs
+        )
+```",
+pandas-149-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+def write(
+    self, df, path, compression=""snappy"", index=None, partition_cols=None, **kwargs
+):
+    self.validate_dataframe(df)
+    # thriftpy/protocol/compact.py:339:
+    # DeprecationWarning: tostring() is deprecated.
+    # Use tobytes() instead.
+
+    if ""partition_on"" in kwargs and partition_cols is not None:
+        raise ValueError(
+            ""Cannot use both partition_on and ""
+            ""partition_cols. Use partition_cols for ""
+            ""partitioning data""
+        )
+    elif ""partition_on"" in kwargs:
+        partition_cols = kwargs.pop(""partition_on"")
+
+    if partition_cols is not None:
+        kwargs[""file_scheme""] = ""hive""
+
+    if is_s3_url(path) or path.startswith(""gs://""):
+        # path is s3:// or gs:// so we need to open the file in 'wb' mode.
+        # TODO: Support 'ab'
+        path, _, _, _ = get_filepath_or_buffer(path, mode=""wb"")
+        # And pass the opened file to the fastparquet internal impl.
+        kwargs[""open_with""] = lambda path, _: path
+    else:
+        path, _, _, _ = get_filepath_or_buffer(path)
+
+    with catch_warnings(record=True):
+        self.api.write(
+            path,
+            df,
+            compression=compression,
+            write_index=index,
+            partition_on=partition_cols,
+            **kwargs
+        )
+```",
+pandas-149-v0_llama-6,UNKNOWN,UNKNOWN,"```python
+def write(
+    self, df, path, compression=""snappy"", index=None, partition_cols=None, **kwargs
+):
+    self.validate_dataframe(df)
+    
+    if ""partition_on"" in kwargs and partition_cols is not None:
+        raise ValueError(
+            ""Cannot use both partition_on and ""
+            ""partition_cols. Use partition_cols for ""
+            ""partitioning data""
+        )
+    elif ""partition_on"" in kwargs:
+        partition_cols = kwargs.pop(""partition_on"")
+
+    if partition_cols is not None:
+        kwargs[""file_scheme""] = ""hive""
+
+    if is_s3_url(path) or path.startswith('gs://'):
+        # path is s3:// or gs:// so we need to open the s3file in 'wb' mode.
+        # TODO: Support 'ab'
+        
+        path, _, _, _ = get_filepath_or_buffer(path, mode=""wb"")
+        # And pass the opened s3file to the fastparquet internal impl.
+        kwargs[""open_with""] = lambda path, _: path
+    else:
+        path, _, _, _ = get_filepath_or_buffer(path)
+
+    with catch_warnings(record=True):
+        self.api.write(
+            path,
+            df,
+            compression=compression,
+            write_index=index,
+            partition_on=partition_cols,
+            **kwargs
+        )
+```",
+pandas-149-v0_llama-7,UNKNOWN,UNKNOWN,"```python
+def write(
+    self, df, path, compression=""snappy"", index=None, partition_cols=None, **kwargs
+):
+    self.validate_dataframe(df)
+    # thriftpy/protocol/compact.py:339:
+    # DeprecationWarning: tostring() is deprecated.
+    # Use tobytes() instead.
+
+    if ""partition_on"" in kwargs and partition_cols is not None:
+        raise ValueError(
+            ""Cannot use both partition_on and ""
+            ""partition_cols. Use partition_cols for ""
+            ""partitioning data""
+        )
+    elif ""partition_on"" in kwargs:
+        partition_cols = kwargs.pop(""partition_on"")
+
+    if partition_cols is not None:
+        kwargs[""file_scheme""] = ""hive""
+
+    if is_s3_url(path) or path.startswith('gs://'):
+        # path is s3:// or gs:// so we need to open the file in 'wb' mode.
+        # TODO: Support 'ab'
+        try:
+            path, _, _, _ = get_filepath_or_buffer(path, mode=""rb"")
+        except FileNotFoundError:
+            path, _, _, _ = get_filepath_or_buffer(path, mode=""wb"")
+        # And pass the opened file to the fastparquet internal impl.
+        kwargs[""open_with""] = lambda path, _: path
+    else:
+        path, _, _, _ = get_filepath_or_buffer(path)
+
+    with catch_warnings(record=True):
+        self.api.write(
+            path,
+            df,
+            compression=compression,
+            write_index=index,
+            partition_on=partition_cols,
+            **kwargs
+        )
+```",
+pandas-149-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+def write(
+    self, df, path, compression=""snappy"", index=None, partition_cols=None, **kwargs
+):
+    self.validate_dataframe(df)
+    # thriftpy/protocol/compact.py:339:
+    # DeprecationWarning: tostring() is deprecated.
+    # Use tobytes() instead.
+
+    if ""partition_on"" in kwargs and partition_cols is not None:
+        raise ValueError(
+            ""Cannot use both partition_on and ""
+            ""partition_cols. Use partition_cols for ""
+            ""partitioning data""
+        )
+    elif ""partition_on"" in kwargs:
+        partition_cols = kwargs.pop(""partition_on"")
+
+    if partition_cols is not None:
+        kwargs[""file_scheme""] = ""hive""
+
+    if is_s3_url(path) or path.startswith(""gs://""):
+        # path is s3:// or gs:// so we need to open the file in 'wb' mode.
+        path, _, _, _ = get_filepath_or_buffer(path, mode=""wb"")
+        # And pass the opened file to the fastparquet internal impl.
+        kwargs[""open_with""] = lambda path, _: path
+    else:
+        path, _, _, _ = get_filepath_or_buffer(path)
+
+    with catch_warnings(record=True):
+        self.api.write(
+            path,
+            df,
+            compression=compression,
+            write_index=index,
+            partition_on=partition_cols,
+            **kwargs
+        )
+```",
+pandas-149-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+def write(
+    self, df, path, compression=""snappy"", index=None, partition_cols=None, **kwargs
+):
+    self.validate_dataframe(df)
+    # thriftpy/protocol/compact.py:339:
+    # DeprecationWarning: tostring() is deprecated.
+    # Use tobytes() instead.
+
+    if ""partition_on"" in kwargs and partition_cols is not None:
+        raise ValueError(
+            ""Cannot use both partition_on and ""
+            ""partition_cols. Use partition_cols for ""
+            ""partitioning data""
+        )
+    elif ""partition_on"" in kwargs:
+        partition_cols = kwargs.pop(""partition_on"")
+
+    if partition_cols is not None:
+        kwargs[""file_scheme""] = ""hive""
+
+    if is_s3_url(path) or path.startswith(""gs://""):
+        # path is s3:// or gs:// so we need to open the file in 'wb' mode.
+        # TODO: Support 'ab'
+        path, _, _, _ = get_filepath_or_buffer(path, mode=""wb"")
+        # And pass the opened file to the fastparquet internal impl.
+        kwargs[""open_with""] = lambda path, _: path
+    else:
+        path, _, _, _ = get_filepath_or_buffer(path)
+
+    with catch_warnings(record=True):
+        self.api.write(
+            path,
+            df,
+            compression=compression,
+            write_index=index,
+            partition_on=partition_cols,
+            **kwargs
+        )
+```",

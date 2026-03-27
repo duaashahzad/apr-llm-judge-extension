@@ -1,0 +1,2440 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-128-v0_llama-0,UNKNOWN,UNKNOWN,"```python
+def read_json(
+    path_or_buf=None,
+    orient=None,
+    typ=""frame"",
+    dtype=None,
+    convert_axes=None,
+    convert_dates=True,
+    keep_default_dates=True,
+    numpy=False,
+    precise_float=False,
+    date_unit=None,
+    encoding=None,
+    lines=False,
+    chunksize=None,
+    compression=""infer"",
+):
+    """"""
+    Convert a JSON string to pandas object.
+
+    Parameters
+    ----------
+    path_or_buf : a valid JSON str, path object or file-like object
+        Any valid string path is acceptable. The string could be a URL. Valid
+        URL schemes include http, ftp, s3, and file. For file URLs, a host is
+        expected. A local file could be:
+        ``file://localhost/path/to/table.json``.
+
+        If you want to pass in a path object, pandas accepts any
+        ``os.PathLike``.
+
+        By file-like object, we refer to objects with a ``read()`` method,
+        such as a file handler (e.g. via builtin ``open`` function)
+        or ``StringIO``.
+    orient : str
+        Indication of expected JSON string format.
+        Compatible JSON strings can be produced by ``to_json()`` with a
+        corresponding orient value.
+        The set of possible orients is:
+
+        - ``'split'`` : dict like
+          ``{index -> [index], columns -> [columns], data -> [values]}``
+        - ``'records'`` : list like
+          ``[{column -> value},..., {column -> value}]``
+        - ``'index'`` : dict like ``{index -> {column -> value}}``
+        - ``'columns'`` : dict like ``{column -> {index -> value}}``
+        - ``'values'`` : just the values array
+
+        The allowed and default values depend on the value
+        of the `typ` parameter.
+
+        * when ``typ == 'series'``,
+
+          - allowed orients are ``{'split','records','index'}``
+          - default is ``'index'``
+          - The Series index must be unique for orient ``'index'``.
+
+        * when ``typ == 'frame'``,
+
+          - allowed orients are ``{'split','records','index',
+            'columns','values', 'table'}``
+          - default is ``'columns'``
+          - The DataFrame index must be unique for orients ``'index'`` and
+            ``'columns'``.
+          - The DataFrame columns must be unique for orients ``'index'``,
+            ``'columns'``, and ``'records'``.
+
+       .. versionadded:: 0.23.0
+           'table' as an allowed value for the ``orient`` argument
+
+    typ : {'frame', 'series'}, default 'frame'
+        The type of object to recover.
+
+    dtype : bool or dict, default None
+        If True, infer dtypes; if a dict of column to dtype, then use those;
+        if False, then don't infer dtypes at all, applies only to the data.
+
+        For all ``orient`` values except ``'table'``, default is True.
+
+       .. versionchanged:: 0.25.0
+
+           Not applicable for ``orient='table'``.
+
+    convert_axes : bool, default None
+        Try to convert the axes to the proper dtypes.
+
+        For all ``orient`` values except ``'table'``, default is True.
+
+       .. versionchanged:: 0.25.0
+
+           Not applicable for ``orient='table'``.
+
+    convert_dates : bool or list of str, default True
+        List of columns to parse for dates. If True, then try to parse
+        datelike columns. A column label is datelike if
+
+        * it ends with ``'_at'``,
+
+        * it ends with ``'_time'``,
+
+        * it begins with ``'timestamp'``,
+
+        * it is ``'modified'``, or
+
+        * it is ``'date'``.
+
+    keep_default_dates : bool, default True
+        If parsing dates, then parse the default datelike columns.
+
+    numpy : bool, default False
+        Direct decoding to numpy arrays. Supports numeric data only, but
+        non-numeric column and index labels are supported. Note also that the
+        JSON ordering MUST be the same for each term if numpy=True.
+
+    precise_float : bool, default False
+        Set to enable usage of higher precision (strtod) function when
+        decoding string to double values. Default (False) is to use fast but
+        less precise builtin functionality.
+
+    date_unit : str, default None
+        The timestamp unit to detect if converting dates. The default behaviour
+        is to try and detect the correct precision, but if this is not desired
+        then pass one of 's', 'ms', 'us' or 'ns' to force parsing only seconds,
+        milliseconds, microseconds or nanoseconds respectively.
+
+    encoding : str, default is 'utf-8'
+        The encoding to use to decode py3 bytes.
+
+    lines : bool, default False
+        Read the file as a json object per line.
+
+    chunksize : int, optional
+        Return JsonReader object for iteration.
+        See the `line-delimited json docs
+        <http://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#line-delimited-json>`_
+        for more information on ``chunksize``.
+        This can only be passed if `lines=True`.
+        If this is None, the file will be read into memory all at once.
+
+       .. versionadded:: 0.21.0
+
+    compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}, default 'infer'
+        For on-the-fly decompression of on-disk data. If 'infer', then use
+        gzip, bz2, zip or xz if path_or_buf is a string ending in
+        '.gz', '.bz2', '.zip', or 'xz', respectively, and no decompression
+        otherwise. If using 'zip', the ZIP file must contain only one data
+        file to be read in. Set to None for no decompression.
+
+       .. versionadded:: 0.21.0
+
+    Returns
+    -------
+    Series or DataFrame
+        The type returned depends on the value of `typ`.
+
+    See Also
+    --------
+    DataFrame.to_json : Convert a DataFrame to a JSON string.
+    Series.to_json : Convert a Series to a JSON string.
+
+    Notes
+    -----
+    Specific to ``orient='table'``, if a :class:`DataFrame` with a literal
+    :class:`Index` name of `index` gets written with :func:`to_json`, the
+    subsequent read operation will incorrectly set the :class:`Index` name to
+    ``None``. This is because `index` is also used by :func:`DataFrame.to_json`
+    to denote a missing :class:`Index` name, and the subsequent
+    :func:`read_json` operation cannot distinguish between the two. The same
+    limitation is encountered with a :class:`MultiIndex` and any names
+    beginning with ``'level_'``.
+
+    Examples
+    --------
+
+    >>> df = pd.DataFrame([['a', 'b'], ['c', 'd']],
+   ...                   index=['row 1', 'row 2'],
+   ...                   columns=['col 1', 'col 2'])
+
+    Encoding/decoding a Dataframe using ``'split'`` formatted JSON:
+
+    >>> df.to_json(orient='split')
+    '{""columns"":[""col 1"",""col 2""],
+      ""index"":[""row 1"",""row 2""],
+      ""data"":[[""a"",""b""],[""c"",""d""]]}'
+    >>> pd.read_json(_, orient='split')
+          col 1 col 2
+    row 1     a     b
+    row 2     c     d
+
+    Encoding/decoding a Dataframe using ``'index'`` formatted JSON:
+
+    >>> df.to_json(orient='index')
+    '{""row 1"":{""col 1"":""a"",""col 2"":""b""},""row 2"":{""col 1"":""c"",""col 2"":""d""}}'
+    >>> pd.read_json(_, orient='index')
+          col 1 col 2
+    row 1     a     b
+    row 2     c     d
+
+    Encoding/decoding a Dataframe using ``'records'`` formatted JSON.
+    Note that index labels are not preserved with this encoding.
+
+    >>> df.to_json(orient='records')
+    '[{""col 1"":""a"",""col 2"":""b""},{""col 1"":""c"",""col 2"":""d""}]'
+    >>> pd.read_json(_, orient='records')
+      col 1 col 2
+    0     a     b
+    1     c     d
+
+    Encoding with Table Schema
+
+    >>> df.to_json(orient='table')
+    '{""schema"": {""fields"": [{""name"": ""index"", ""type"": ""string""},
+                            {""name"": ""col 1"", ""type"": ""string""},
+                            {""name"": ""col 2"", ""type"": ""string""}],
+                    ""primaryKey"": ""index"",
+                    ""pandas_version"": ""0.20.0""},
+        ""data"": [{""index"": ""row 1"", ""col 1"": ""a"", ""col 2"": ""b""},
+                {""index"": ""row 2"", ""col 1"": ""c"", ""col 2"": ""d""}]}'
+    """"""
+
+    if orient == ""table"" and dtype:
+        raise ValueError(""cannot pass both dtype and orient='table'"")
+    if orient == ""table"" and convert_axes:
+        raise ValueError(""cannot pass both convert_axes and orient='table'"")
+
+    if dtype is None and orient!= ""table"":
+        dtype = True
+    if convert_axes is None and orient!= ""table"":
+        convert_axes = True
+
+    compression = _infer_compression(path_or_buf, compression)
+    if encoding is None:
+        encoding = 'utf-8'
+    filepath_or_buffer, _, compression, should_close = get_filepath_or_buffer(
+        path_or_buf, encoding=encoding, compression=compression
+    )
+
+    json_reader = JsonReader(
+        filepath_or_buffer,
+        orient=orient,
+        typ=typ,
+        dtype=dtype,
+        convert_axes=convert_axes,
+        convert_dates=convert_dates,
+        keep_default_dates=keep_default_dates,
+        numpy=numpy,
+        precise_float=precise_float,
+        date_unit=date_unit,
+        encoding=encoding,
+        lines=lines,
+        chunksize=chunksize,
+        compression=compression,
+    )
+
+    if chunksize:
+        return json_reader
+
+    result = json_reader.read()
+    if should_close:
+        filepath_or_buffer.close()
+
+    return result
+```",
+pandas-128-v0_llama-1,UNKNOWN,UNKNOWN,"```python
+def read_json(
+    path_or_buf=None,
+    orient=None,
+    typ=""frame"",
+    dtype=None,
+    convert_axes=None,
+    convert_dates=True,
+    keep_default_dates=True,
+    numpy=False,
+    precise_float=False,
+    date_unit=None,
+    encoding='utf-8',  # Set default encoding to 'utf-8'
+    lines=False,
+    chunksize=None,
+    compression=""infer"",
+):
+    """"""
+    Convert a JSON string to pandas object.
+
+    Parameters
+    ----------
+    path_or_buf : a valid JSON str, path object or file-like object
+        Any valid string path is acceptable. The string could be a URL. Valid
+        URL schemes include http, ftp, s3, and file. For file URLs, a host is
+        expected. A local file could be:
+        ``file://localhost/path/to/table.json``.
+
+        If you want to pass in a path object, pandas accepts any
+        ``os.PathLike``.
+
+        By file-like object, we refer to objects with a ``read()`` method,
+        such as a file handler (e.g. via builtin ``open`` function)
+        or ``StringIO``.
+    orient : str
+        Indication of expected JSON string format.
+        Compatible JSON strings can be produced by ``to_json()`` with a
+        corresponding orient value.
+        The set of possible orients is:
+
+        - ``'split'`` : dict like
+          ``{index -> [index], columns -> [columns], data -> [values]}``
+        - ``'records'`` : list like
+          ``[{column -> value},..., {column -> value}]``
+        - ``'index'`` : dict like ``{index -> {column -> value}}``
+        - ``'columns'`` : dict like ``{column -> {index -> value}}``
+        - ``'values'`` : just the values array
+
+        The allowed and default values depend on the value
+        of the `typ` parameter.
+
+        * when ``typ == 'series'``,
+
+          - allowed orients are ``{'split','records','index'}``
+          - default is ``'index'``
+          - The Series index must be unique for orient ``'index'``.
+
+        * when ``typ == 'frame'``,
+
+          - allowed orients are ``{'split','records','index',
+            'columns','values', 'table'}``
+          - default is ``'columns'``
+          - The DataFrame index must be unique for orients ``'index'`` and
+            ``'columns'``.
+          - The DataFrame columns must be unique for orients ``'index'``,
+            ``'columns'``, and ``'records'``.
+
+       .. versionadded:: 0.23.0
+           'table' as an allowed value for the ``orient`` argument
+
+    typ : {'frame', 'series'}, default 'frame'
+        The type of object to recover.
+
+    dtype : bool or dict, default None
+        If True, infer dtypes; if a dict of column to dtype, then use those;
+        if False, then don't infer dtypes at all, applies only to the data.
+
+        For all ``orient`` values except ``'table'``, default is True.
+
+       .. versionchanged:: 0.25.0
+
+           Not applicable for ``orient='table'``.
+
+    convert_axes : bool, default None
+        Try to convert the axes to the proper dtypes.
+
+        For all ``orient`` values except ``'table'``, default is True.
+
+       .. versionchanged:: 0.25.0
+
+           Not applicable for ``orient='table'``.
+
+    convert_dates : bool or list of str, default True
+        List of columns to parse for dates. If True, then try to parse
+        datelike columns. A column label is datelike if
+
+        * it ends with ``'_at'``,
+
+        * it ends with ``'_time'``,
+
+        * it begins with ``'timestamp'``,
+
+        * it is ``'modified'``, or
+
+        * it is ``'date'``.
+
+    keep_default_dates : bool, default True
+        If parsing dates, then parse the default datelike columns.
+
+    numpy : bool, default False
+        Direct decoding to numpy arrays. Supports numeric data only, but
+        non-numeric column and index labels are supported. Note also that the
+        JSON ordering MUST be the same for each term if numpy=True.
+
+    precise_float : bool, default False
+        Set to enable usage of higher precision (strtod) function when
+        decoding string to double values. Default (False) is to use fast but
+        less precise builtin functionality.
+
+    date_unit : str, default None
+        The timestamp unit to detect if converting dates. The default behaviour
+        is to try and detect the correct precision, but if this is not desired
+        then pass one of 's', 'ms', 'us' or 'ns' to force parsing only seconds,
+        milliseconds, microseconds or nanoseconds respectively.
+
+    encoding : str, default 'utf-8'
+        The encoding to use to decode py3 bytes.
+
+    lines : bool, default False
+        Read the file as a json object per line.
+
+    chunksize : int, optional
+        Return JsonReader object for iteration.
+        See the `line-delimited json docs
+        <http://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#line-delimited-json>`_
+        for more information on ``chunksize``.
+        This can only be passed if `lines=True`.
+        If this is None, the file will be read into memory all at once.
+
+       .. versionadded:: 0.21.0
+
+    compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}, default 'infer'
+        For on-the-fly decompression of on-disk data. If 'infer', then use
+        gzip, bz2, zip or xz if path_or_buf is a string ending in
+        '.gz', '.bz2', '.zip', or 'xz', respectively, and no decompression
+        otherwise. If using 'zip', the ZIP file must contain only one data
+        file to be read in. Set to None for no decompression.
+
+       .. versionadded:: 0.21.0
+
+    Returns
+    -------
+    Series or DataFrame
+        The type returned depends on the value of `typ`.
+
+    See Also
+    --------
+    DataFrame.to_json : Convert a DataFrame to a JSON string.
+    Series.to_json : Convert a Series to a JSON string.
+
+    Notes
+    -----
+    Specific to ``orient='table'``, if a :class:`DataFrame` with a literal
+    :class:`Index` name of `index` gets written with :func:`to_json`, the
+    subsequent read operation will incorrectly set the :class:`Index` name to
+    ``None``. This is because `index` is also used by :func:`DataFrame.to_json`
+    to denote a missing :class:`Index` name, and the subsequent
+    :func:`read_json` operation cannot distinguish between the two. The same
+    limitation is encountered with a :class:`MultiIndex` and any names
+    beginning with ``'level_'``.
+
+    Examples
+    --------
+    >>> df = pd.DataFrame([['a', 'b'], ['c', 'd']],
+   ...                   index=['row 1', 'row 2'],
+   ...                   columns=['col 1', 'col 2'])
+
+    Encoding/decoding a Dataframe using ``'split'`` formatted JSON:
+
+    >>> df.to_json(orient='split')
+    '{""columns"":[""col 1"",""col 2""],
+      ""index"":[""row 1"",""row 2""],
+      ""data"":[[""a"",""b""],[""c"",""d""]]}'
+    >>> pd.read_json(_, orient='split')
+          col 1 col 2
+    row 1     a     b
+    row 2     c     d
+
+    Encoding/decoding a Dataframe using ``'index'`` formatted JSON:
+
+    >>> df.to_json(orient='index')
+    '{""row 1"":{""col 1"":""a"",""col 2"":""b""},""row 2"":{""col 1"":""c"",""col 2"":""d""}}'
+    >>> pd.read_json(_, orient='index')
+          col 1 col 2
+    row 1     a     b
+    row 2     c     d
+
+    Encoding/decoding a Dataframe using ``'records'`` formatted JSON.
+    Note that index labels are not preserved with this encoding.
+
+    >>> df.to_json(orient='records')
+    '[{""col 1"":""a"",""col 2"":""b""},{""col 1"":""c"",""col 2"":""d""}]'
+    >>> pd.read_json(_, orient='records')
+      col 1 col 2
+    0     a     b
+    1     c     d
+
+    Encoding with Table Schema
+
+    >>> df.to_json(orient='table')
+    '{""schema"": {""fields"": [{""name"": ""index"", ""type"": ""string""},
+                            {""name"": ""col 1"", ""type"": ""string""},
+                            {""name"": ""col 2"", ""type"": ""string""}],
+                    ""primaryKey"": ""index"",
+                    ""pandas_version"": ""0.20.0""},
+        ""data"": [{""index"": ""row 1"", ""col 1"": ""a"", ""col 2"": ""b""},
+                {""index"": ""row 2"", ""col 1"": ""c"", ""col 2"": ""d""}]}'
+    """"""
+
+    if orient == ""table"" and dtype:
+        raise ValueError(""cannot pass both dtype and orient='table'"")
+    if orient == ""table"" and convert_axes:
+        raise ValueError(""cannot pass both convert_axes and orient='table'"")
+
+    if dtype is None and orient!= ""table"":
+        dtype = True
+    if convert_axes is None and orient!= ""table"":
+        convert_axes = True
+
+    compression = _infer_compression(path_or_buf, compression)
+    if encoding is None:
+        encoding = 'utf-8'  # If encoding is not provided, default to 'utf-8'
+    filepath_or_buffer, _, compression, should_close = get_filepath_or_buffer(
+        path_or_buf, encoding=encoding, compression=compression
+    )
+
+    json_reader = JsonReader(
+        filepath_or_buffer,
+        orient=orient,
+        typ=typ,
+        dtype=dtype,
+        convert_axes=convert_axes,
+        convert_dates=convert_dates,
+        keep_default_dates=keep_default_dates,
+        numpy=numpy,
+        precise_float=precise_float,
+        date_unit=date_unit,
+        encoding=encoding,
+        lines=lines,
+        chunksize=chunksize,
+        compression=compression,
+    )
+
+    if chunksize:
+        return json_reader
+
+    result = json_reader.read()
+    if should_close:
+        filepath_or_buffer.close()
+
+    return result
+```",
+pandas-128-v0_llama-2,UNKNOWN,UNKNOWN,"```python
+def read_json(
+    path_or_buf=None,
+    orient=None,
+    typ=""frame"",
+    dtype=None,
+    convert_axes=None,
+    convert_dates=True,
+    keep_default_dates=True,
+    numpy=False,
+    precise_float=False,
+    date_unit=None,
+    encoding=None,
+    lines=False,
+    chunksize=None,
+    compression=""infer"",
+):
+    """"""
+    Convert a JSON string to pandas object.
+
+    Parameters
+    ----------
+    path_or_buf : a valid JSON str, path object or file-like object
+        Any valid string path is acceptable. The string could be a URL. Valid
+        URL schemes include http, ftp, s3, and file. For file URLs, a host is
+        expected. A local file could be:
+        ``file://localhost/path/to/table.json``.
+
+        If you want to pass in a path object, pandas accepts any
+        ``os.PathLike``.
+
+        By file-like object, we refer to objects with a ``read()`` method,
+        such as a file handler (e.g. via builtin ``open`` function)
+        or ``StringIO``.
+    orient : str
+        Indication of expected JSON string format.
+        Compatible JSON strings can be produced by ``to_json()`` with a
+        corresponding orient value.
+        The set of possible orients is:
+
+        - ``'split'`` : dict like
+          ``{index -> [index], columns -> [columns], data -> [values]}``
+        - ``'records'`` : list like
+          ``[{column -> value},..., {column -> value}]``
+        - ``'index'`` : dict like ``{index -> {column -> value}}``
+        - ``'columns'`` : dict like ``{column -> {index -> value}}``
+        - ``'values'`` : just the values array
+
+        The allowed and default values depend on the value
+        of the `typ` parameter.
+
+        * when ``typ == 'series'``,
+
+          - allowed orients are ``{'split','records','index'}``
+          - default is ``'index'``
+          - The Series index must be unique for orient ``'index'``.
+
+        * when ``typ == 'frame'``,
+
+          - allowed orients are ``{'split','records','index',
+            'columns','values', 'table'}``
+          - default is ``'columns'``
+          - The DataFrame index must be unique for orients ``'index'`` and
+            ``'columns'``.
+          - The DataFrame columns must be unique for orients ``'index'``,
+            ``'columns'``, and ``'records'``.
+
+       .. versionadded:: 0.23.0
+           'table' as an allowed value for the ``orient`` argument
+
+    typ : {'frame', 'series'}, default 'frame'
+        The type of object to recover.
+
+    dtype : bool or dict, default None
+        If True, infer dtypes; if a dict of column to dtype, then use those;
+        if False, then don't infer dtypes at all, applies only to the data.
+
+        For all ``orient`` values except ``'table'``, default is True.
+
+       .. versionchanged:: 0.25.0
+
+           Not applicable for ``orient='table'``.
+
+    convert_axes : bool, default None
+        Try to convert the axes to the proper dtypes.
+
+        For all ``orient`` values except ``'table'``, default is True.
+
+       .. versionchanged:: 0.25.0
+
+           Not applicable for ``orient='table'``.
+
+    convert_dates : bool or list of str, default True
+        List of columns to parse for dates. If True, then try to parse
+        datelike columns. A column label is datelike if
+
+        * it ends with ``'_at'``,
+
+        * it ends with ``'_time'``,
+
+        * it begins with ``'timestamp'``,
+
+        * it is ``'modified'``, or
+
+        * it is ``'date'``.
+
+    keep_default_dates : bool, default True
+        If parsing dates, then parse the default datelike columns.
+
+    numpy : bool, default False
+        Direct decoding to numpy arrays. Supports numeric data only, but
+        non-numeric column and index labels are supported. Note also that the
+        JSON ordering MUST be the same for each term if numpy=True.
+
+    precise_float : bool, default False
+        Set to enable usage of higher precision (strtod) function when
+        decoding string to double values. Default (False) is to use fast but
+        less precise builtin functionality.
+
+    date_unit : str, default None
+        The timestamp unit to detect if converting dates. The default behaviour
+        is to try and detect the correct precision, but if this is not desired
+        then pass one of 's', 'ms', 'us' or 'ns' to force parsing only seconds,
+        milliseconds, microseconds or nanoseconds respectively.
+
+    encoding : str, default is 'utf-8'
+        The encoding to use to decode py3 bytes.
+
+    lines : bool, default False
+        Read the file as a json object per line.
+
+    chunksize : int, optional
+        Return JsonReader object for iteration.
+        See the `line-delimited json docs
+        <http://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#line-delimited-json>`_
+        for more information on ``chunksize``.
+        This can only be passed if `lines=True`.
+        If this is None, the file will be read into memory all at once.
+
+       .. versionadded:: 0.21.0
+
+    compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}, default 'infer'
+        For on-the-fly decompression of on-disk data. If 'infer', then use
+        gzip, bz2, zip or xz if path_or_buf is a string ending in
+        '.gz', '.bz2', '.zip', or 'xz', respectively, and no decompression
+        otherwise. If using 'zip', the ZIP file must contain only one data
+        file to be read in. Set to None for no decompression.
+
+       .. versionadded:: 0.21.0
+
+    Returns
+    -------
+    Series or DataFrame
+        The type returned depends on the value of `typ`.
+
+    See Also
+    --------
+    DataFrame.to_json : Convert a DataFrame to a JSON string.
+    Series.to_json : Convert a Series to a JSON string.
+
+    Notes
+    -----
+    Specific to ``orient='table'``, if a :class:`DataFrame` with a literal
+    :class:`Index` name of `index` gets written with :func:`to_json`, the
+    subsequent read operation will incorrectly set the :class:`Index` name to
+    ``None``. This is because `index` is also used by :func:`DataFrame.to_json`
+    to denote a missing :class:`Index` name, and the subsequent
+    :func:`read_json` operation cannot distinguish between the two. The same
+    limitation is encountered with a :class:`MultiIndex` and any names
+    beginning with ``'level_'``.
+
+    Examples
+    --------
+    >>> df = pd.DataFrame([['a', 'b'], ['c', 'd']],
+   ...                   index=['row 1', 'row 2'],
+   ...                   columns=['col 1', 'col 2'])
+
+    Encoding/decoding a Dataframe using ``'split'`` formatted JSON:
+
+    >>> df.to_json(orient='split')
+    '{""columns"":[""col 1"",""col 2""],
+      ""index"":[""row 1"",""row 2""],
+      ""data"":[[""a"",""b""],[""c"",""d""]]}'
+    >>> pd.read_json(_, orient='split')
+          col 1 col 2
+    row 1     a     b
+    row 2     c     d
+
+    Encoding/decoding a Dataframe using ``'index'`` formatted JSON:
+
+    >>> df.to_json(orient='index')
+    '{""row 1"":{""col 1"":""a"",""col 2"":""b""},""row 2"":{""col 1"":""c"",""col 2"":""d""}}'
+    >>> pd.read_json(_, orient='index')
+          col 1 col 2
+    row 1     a     b
+    row 2     c     d
+
+    Encoding/decoding a Dataframe using ``'records'`` formatted JSON.
+    Note that index labels are not preserved with this encoding.
+
+    >>> df.to_json(orient='records')
+    '[{""col 1"":""a"",""col 2"":""b""},{""col 1"":""c"",""col 2"":""d""}]'
+    >>> pd.read_json(_, orient='records')
+      col 1 col 2
+    0     a     b
+    1     c     d
+
+    Encoding with Table Schema
+
+    >>> df.to_json(orient='table')
+    '{""schema"": {""fields"": [{""name"": ""index"", ""type"": ""string""},
+                            {""name"": ""col 1"", ""type"": ""string""},
+                            {""name"": ""col 2"", ""type"": ""string""}],
+                    ""primaryKey"": ""index"",
+                    ""pandas_version"": ""0.20.0""},
+        ""data"": [{""index"": ""row 1"", ""col 1"": ""a"", ""col 2"": ""b""},
+                {""index"": ""row 2"", ""col 1"": ""c"", ""col 2"": ""d""}]}'
+    """"""
+
+    if orient == ""table"" and dtype:
+        raise ValueError(""cannot pass both dtype and orient='table'"")
+    if orient == ""table"" and convert_axes:
+        raise ValueError(""cannot pass both convert_axes and orient='table'"")
+
+    if dtype is None and orient!= ""table"":
+        dtype = True
+    if convert_axes is None and orient!= ""table"":
+        convert_axes = True
+
+    compression = _infer_compression(path_or_buf, compression)
+    
+    # Assign the default encoding value
+    if encoding is None:
+        encoding = 'utf-8'
+
+    filepath_or_buffer, _, compression, should_close = get_filepath_or_buffer(
+        path_or_buf, encoding=encoding, compression=compression
+    )
+
+    json_reader = JsonReader(
+        filepath_or_buffer,
+        orient=orient,
+        typ=typ,
+        dtype=dtype,
+        convert_axes=convert_axes,
+        convert_dates=convert_dates,
+        keep_default_dates=keep_default_dates,
+        numpy=numpy,
+        precise_float=precise_float,
+        date_unit=date_unit,
+        encoding=encoding,
+        lines=lines,
+        chunksize=chunksize,
+        compression=compression,
+    )
+
+    if chunksize:
+        return json_reader
+
+    result = json_reader.read()
+    if should_close:
+        filepath_or_buffer.close()
+
+    return result
+```",
+pandas-128-v0_llama-3,UNKNOWN,UNKNOWN,"```python
+def read_json(
+    path_or_buf=None,
+    orient=None,
+    typ=""frame"",
+    dtype=None,
+    convert_axes=None,
+    convert_dates=True,
+    keep_default_dates=True,
+    numpy=False,
+    precise_float=False,
+    date_unit=None,
+    encoding=None,
+    lines=False,
+    chunksize=None,
+    compression=""infer"",
+):
+    """"""
+    Convert a JSON string to pandas object.
+
+    Parameters
+    ----------
+    path_or_buf : a valid JSON str, path object or file-like object
+        Any valid string path is acceptable. The string could be a URL. Valid
+        URL schemes include http, ftp, s3, and file. For file URLs, a host is
+        expected. A local file could be:
+        ``file://localhost/path/to/table.json``.
+
+        If you want to pass in a path object, pandas accepts any
+        ``os.PathLike``.
+
+        By file-like object, we refer to objects with a ``read()`` method,
+        such as a file handler (e.g. via builtin ``open`` function)
+        or ``StringIO``.
+    orient : str
+        Indication of expected JSON string format.
+        Compatible JSON strings can be produced by ``to_json()`` with a
+        corresponding orient value.
+        The set of possible orients is:
+
+        - ``'split'`` : dict like
+          ``{index -> [index], columns -> [columns], data -> [values]}``
+        - ``'records'`` : list like
+          ``[{column -> value},..., {column -> value}]``
+        - ``'index'`` : dict like ``{index -> {column -> value}}``
+        - ``'columns'`` : dict like ``{column -> {index -> value}}``
+        - ``'values'`` : just the values array
+
+        The allowed and default values depend on the value
+        of the `typ` parameter.
+
+        * when ``typ == 'series'``,
+
+          - allowed orients are ``{'split','records','index'}``
+          - default is ``'index'``
+          - The Series index must be unique for orient ``'index'``.
+
+        * when ``typ == 'frame'``,
+
+          - allowed orients are ``{'split','records','index',
+            'columns','values', 'table'}``
+          - default is ``'columns'``
+          - The DataFrame index must be unique for orients ``'index'`` and
+            ``'columns'``.
+          - The DataFrame columns must be unique for orients ``'index'``,
+            ``'columns'``, and ``'records'``.
+
+       .. versionadded:: 0.23.0
+           'table' as an allowed value for the ``orient`` argument
+
+    typ : {'frame', 'series'}, default 'frame'
+        The type of object to recover.
+
+    dtype : bool or dict, default None
+        If True, infer dtypes; if a dict of column to dtype, then use those;
+        if False, then don't infer dtypes at all, applies only to the data.
+
+        For all ``orient`` values except ``'table'``, default is True.
+
+       .. versionchanged:: 0.25.0
+
+           Not applicable for ``orient='table'``.
+
+    convert_axes : bool, default None
+        Try to convert the axes to the proper dtypes.
+
+        For all ``orient`` values except ``'table'``, default is True.
+
+       .. versionchanged:: 0.25.0
+
+           Not applicable for ``orient='table'``.
+
+    convert_dates : bool or list of str, default True
+        List of columns to parse for dates. If True, then try to parse
+        datelike columns. A column label is datelike if
+
+        * it ends with ``'_at'``,
+
+        * it ends with ``'_time'``,
+
+        * it begins with ``'timestamp'``,
+
+        * it is ``'modified'``, or
+
+        * it is ``'date'``.
+
+    keep_default_dates : bool, default True
+        If parsing dates, then parse the default datelike columns.
+
+    numpy : bool, default False
+        Direct decoding to numpy arrays. Supports numeric data only, but
+        non-numeric column and index labels are supported. Note also that the
+        JSON ordering MUST be the same for each term if numpy=True.
+
+    precise_float : bool, default False
+        Set to enable usage of higher precision (strtod) function when
+        decoding string to double values. Default (False) is to use fast but
+        less precise builtin functionality.
+
+    date_unit : str, default None
+        The timestamp unit to detect if converting dates. The default behaviour
+        is to try and detect the correct precision, but if this is not desired
+        then pass one of 's', 'ms', 'us' or 'ns' to force parsing only seconds,
+        milliseconds, microseconds or nanoseconds respectively.
+
+    encoding : str, default is 'utf-8'
+        The encoding to use to decode py3 bytes.
+
+    lines : bool, default False
+        Read the file as a json object per line.
+
+    chunksize : int, optional
+        Return JsonReader object for iteration.
+        See the `line-delimited json docs
+        <http://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#line-delimited-json>`_
+        for more information on ``chunksize``.
+        This can only be passed if `lines=True`.
+        If this is None, the file will be read into memory all at once.
+
+       .. versionadded:: 0.21.0
+
+    compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}, default 'infer'
+        For on-the-fly decompression of on-disk data. If 'infer', then use
+        gzip, bz2, zip or xz if path_or_buf is a string ending in
+        '.gz', '.bz2', '.zip', or 'xz', respectively, and no decompression
+        otherwise. If using 'zip', the ZIP file must contain only one data
+        file to be read in. Set to None for no decompression.
+
+       .. versionadded:: 0.21.0
+
+    Returns
+    -------
+    Series or DataFrame
+        The type returned depends on the value of `typ`.
+
+    See Also
+    --------
+    DataFrame.to_json : Convert a DataFrame to a JSON string.
+    Series.to_json : Convert a Series to a JSON string.
+
+    Notes
+    -----
+    Specific to ``orient='table'``, if a :class:`DataFrame` with a literal
+    :class:`Index` name of `index` gets written with :func:`to_json`, the
+    subsequent read operation will incorrectly set the :class:`Index` name to
+    ``None``. This is because `index` is also used by :func:`DataFrame.to_json`
+    to denote a missing :class:`Index` name, and the subsequent
+    :func:`read_json` operation cannot distinguish between the two. The same
+    limitation is encountered with a :class:`MultiIndex` and any names
+    beginning with ``'level_'``.
+
+    Examples
+    --------
+
+    >>> df = pd.DataFrame([['a', 'b'], ['c', 'd']],
+   ...                   index=['row 1', 'row 2'],
+   ...                   columns=['col 1', 'col 2'])
+
+    Encoding/decoding a Dataframe using ``'split'`` formatted JSON:
+
+    >>> df.to_json(orient='split')
+    '{""columns"":[""col 1"",""col 2""],
+      ""index"":[""row 1"",""row 2""],
+      ""data"":[[""a"",""b""],[""c"",""d""]]}'
+    >>> pd.read_json(_, orient='split')
+          col 1 col 2
+    row 1     a     b
+    row 2     c     d
+
+    Encoding/decoding a Dataframe using ``'index'`` formatted JSON:
+
+    >>> df.to_json(orient='index')
+    '{""row 1"":{""col 1"":""a"",""col 2"":""b""},""row 2"":{""col 1"":""c"",""col 2"":""d""}}'
+    >>> pd.read_json(_, orient='index')
+          col 1 col 2
+    row 1     a     b
+    row 2     c     d
+
+    Encoding/decoding a Dataframe using ``'records'`` formatted JSON.
+    Note that index labels are not preserved with this encoding.
+
+    >>> df.to_json(orient='records')
+    '[{""col 1"":""a"",""col 2"":""b""},{""col 1"":""c"",""col 2"":""d""}]'
+    >>> pd.read_json(_, orient='records')
+      col 1 col 2
+    0     a     b
+    1     c     d
+
+    Encoding with Table Schema
+
+    >>> df.to_json(orient='table')
+    '{""schema"": {""fields"": [{""name"": ""index"", ""type"": ""string""},
+                            {""name"": ""col 1"", ""type"": ""string""},
+                            {""name"": ""col 2"", ""type"": ""string""}],
+                    ""primaryKey"": ""index"",
+                    ""pandas_version"": ""0.20.0""},
+        ""data"": [{""index"": ""row 1"", ""col 1"": ""a"", ""col 2"": ""b""},
+                {""index"": ""row 2"", ""col 1"": ""c"", ""col 2"": ""d""}]}'
+    """"""
+
+    if orient == ""table"" and dtype:
+        raise ValueError(""cannot pass both dtype and orient='table'"")
+    if orient == ""table"" and convert_axes:
+        raise ValueError(""cannot pass both convert_axes and orient='table'"")
+
+    if dtype is None and orient!= ""table"":
+        dtype = True
+    if convert_axes is None and orient!= ""table"":
+        convert_axes = True
+
+    compression = _infer_compression(path_or_buf, compression)
+    
+    if encoding is None:
+        encoding = 'utf-8'
+
+    filepath_or_buffer, _, compression, should_close = get_filepath_or_buffer(
+        path_or_buf, encoding=encoding, compression=compression
+    )
+
+    json_reader = JsonReader(
+        filepath_or_buffer,
+        orient=orient,
+        typ=typ,
+        dtype=dtype,
+        convert_axes=convert_axes,
+        convert_dates=convert_dates,
+        keep_default_dates=keep_default_dates,
+        numpy=numpy,
+        precise_float=precise_float,
+        date_unit=date_unit,
+        encoding=encoding,
+        lines=lines,
+        chunksize=chunksize,
+        compression=compression,
+    )
+
+    if chunksize:
+        return json_reader
+
+    result = json_reader.read()
+    if should_close:
+        filepath_or_buffer.close()
+
+    return result
+```",
+pandas-128-v0_llama-4,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Review of the Issue Description and Code**: The provided code and issue description reveal a problem with `pd.read_json()` not using 'utf-8' as the default encoding when reading a JSON file. The function is expected to use 'utf-8' by default but instead uses the system's preferred encoding, which can lead to decoding errors for non-ASCII characters.
+
+2. **Understanding of the Parameters and Variables**: The key parameters involved in this issue are `path_or_buf`, `encoding`, and `compression`. The `path_or_buf` parameter is the path to the JSON file or a file-like object, `encoding` specifies the encoding to use for the file, and `compression` specifies whether the file is compressed and, if so, how.
+
+3. **Analysis of the Failing Test**: The failing test `test_readjson_unicode` creates a JSON file with Unicode characters, sets the preferred encoding to 'cp949' (a non-utf-8 encoding), and then attempts to read the file using `pd.read_json()`. The test fails because `pd.read_json()` does not correctly decode the Unicode characters due to using the wrong encoding.
+
+4. **Identification of the Bug**: The bug lies in how `pd.read_json()` determines the encoding of the file when the `encoding` parameter is not provided. Currently, it relies on the `get_filepath_or_buffer` function, which may not always default to 'utf-8' as expected.
+
+5. **Strategy for Fixing the Bug**: To fix this bug, we need to ensure that `pd.read_json()` uses 'utf-8' as the default encoding when reading files unless another encoding is explicitly specified. This involves modifying the function to handle the encoding parameter correctly and default to 'utf-8' when necessary.
+
+### Fixed solution:
+```python
+def read_json(
+    path_or_buf=None,
+    orient=None,
+    typ=""frame"",
+    dtype=None,
+    convert_axes=None,
+    convert_dates=True,
+    keep_default_dates=True,
+    numpy=False,
+    precise_float=False,
+    date_unit=None,
+    encoding=None,
+    lines=False,
+    chunksize=None,
+    compression=""infer"",
+):
+    """"""
+    Convert a JSON string to pandas object.
+
+    Parameters
+    ----------
+    path_or_buf : a valid JSON str, path object or file-like object
+        Any valid string path is acceptable. The string could be a URL. Valid
+        URL schemes include http, ftp, s3, and file. For file URLs, a host is
+        expected. A local file could be:
+        ``file://localhost/path/to/table.json``.
+
+        If you want to pass in a path object, pandas accepts any
+        ``os.PathLike``.
+
+        By file-like object, we refer to objects with a ``read()`` method,
+        such as a file handler (e.g. via builtin ``open`` function)
+        or ``StringIO``.
+    orient : str
+        Indication of expected JSON string format.
+        Compatible JSON strings can be produced by ``to_json()`` with a
+        corresponding orient value.
+        The set of possible orients is:
+
+        - ``'split'`` : dict like
+          ``{index -> [index], columns -> [columns], data -> [values]}``
+        - ``'records'`` : list like
+          ``[{column -> value},..., {column -> value}]``
+        - ``'index'`` : dict like ``{index -> {column -> value}}``
+        - ``'columns'`` : dict like ``{column -> {index -> value}}``
+        - ``'values'`` : just the values array
+
+        The allowed and default values depend on the value
+        of the `typ` parameter.
+
+        * when ``typ == 'series'``,
+
+          - allowed orients are ``{'split','records','index'}``
+          - default is ``'index'``
+          - The Series index must be unique for orient ``'index'``.
+
+        * when ``typ == 'frame'``,
+
+          - allowed orients are ``{'split','records','index',
+            'columns','values', 'table'}``
+          - default is ``'columns'``
+          - The DataFrame index must be unique for orients ``'index'`` and
+            ``'columns'``.
+          - The DataFrame columns must be unique for orients ``'index'``,
+            ``'columns'``, and ``'records'``.
+
+       .. versionadded:: 0.23.0
+           'table' as an allowed value for the ``orient`` argument
+
+    typ : {'frame', 'series'}, default 'frame'
+        The type of object to recover.
+
+    dtype : bool or dict, default None
+        If True, infer dtypes; if a dict of column to dtype, then use those;
+        if False, then don't infer dtypes at all, applies only to the data.
+
+        For all ``orient`` values except ``'table'``, default is True.
+
+       .. versionchanged:: 0.25.0
+
+           Not applicable for ``orient='table'``.
+
+    convert_axes : bool, default None
+        Try to convert the axes to the proper dtypes.
+
+        For all ``orient`` values except ``'table'``, default is True.
+
+       .. versionchanged:: 0.25.0
+
+           Not applicable for ``orient='table'``.
+
+    convert_dates : bool or list of str, default True
+        List of columns to parse for dates. If True, then try to parse
+        datelike columns. A column label is datelike if
+
+        * it ends with ``'_at'``,
+
+        * it ends with ``'_time'``,
+
+        * it begins with ``'timestamp'``,
+
+        * it is ``'modified'``, or
+
+        * it is ``'date'``.
+
+    keep_default_dates : bool, default True
+        If parsing dates, then parse the default datelike columns.
+
+    numpy : bool, default False
+        Direct decoding to numpy arrays. Supports numeric data only, but
+        non-numeric column and index labels are supported. Note also that the
+        JSON ordering MUST be the same for each term if numpy=True.
+
+    precise_float : bool, default False
+        Set to enable usage of higher precision (strtod) function when
+        decoding string to double values. Default (False) is to use fast but
+        less precise builtin functionality.
+
+    date_unit : str, default None
+        The timestamp unit to detect if converting dates. The default behaviour
+        is to try and detect the correct precision, but if this is not desired
+        then pass one of 's', 'ms', 'us' or 'ns' to force parsing only seconds,
+        milliseconds, microseconds or nanoseconds respectively.
+
+    encoding : str, default is 'utf-8'
+        The encoding to use to decode py3 bytes.
+
+    lines : bool, default False
+        Read the file as a json object per line.
+
+    chunksize : int, optional
+        Return JsonReader object for iteration.
+        See the `line-delimited json docs
+        <http://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#line-delimited-json>`_
+        for more information on ``chunksize``.
+        This can only be passed if `lines=True`.
+        If this is None, the file will be read into memory all at once.
+
+       .. versionadded:: 0.21.0
+
+    compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}, default 'infer'
+        For on-the-fly decompression of on-disk data. If 'infer', then use
+        gzip, bz2, zip or xz if path_or_buf is a string ending in
+        '.gz', '.bz2', '.zip', or 'xz', respectively, and no decompression
+        otherwise. If using 'zip', the ZIP file must contain only one data
+        file to be read in. Set to None for no decompression.
+
+       .. versionadded:: 0.21.0
+
+    Returns
+    -------
+    Series or DataFrame
+        The type returned depends on the value of `typ`.
+
+    See Also
+    --------
+    DataFrame.to_json : Convert a DataFrame to a JSON string.
+    Series.to_json : Convert a Series to a JSON string.
+
+    Notes
+    -----
+    Specific to ``orient='table'``, if a :class:`DataFrame` with a literal
+    :class:`Index` name of `index` gets written with :func:`to_json`, the
+    subsequent read operation will incorrectly set the :class:`Index` name to
+    ``None``. This is because `index` is also used by :func:`DataFrame.to_json`
+    to denote a missing :class:`Index` name, and the subsequent
+    :func:`read_json` operation cannot distinguish between the two. The same
+    limitation is encountered with a :class:`MultiIndex` and any names
+    beginning with ``'level_'``.
+
+    Examples
+    --------
+    >>> df = pd.DataFrame([['a', 'b'], ['c', 'd']],
+   ...                   index=['row 1', 'row 2'],
+   ...                   columns=['col 1', 'col 2'])
+
+    Encoding/decoding a Dataframe using ``'split'`` formatted JSON:
+
+    >>> df.to_json(orient='split')
+    '{""columns"":[""col 1"",""col 2""],
+      ""index"":[""row 1"",""row 2""],
+      ""data"":[[""a"",""b""],[""c"",""d""]]}'
+    >>> pd.read_json(_, orient='split')
+          col 1 col 2
+    row 1     a     b
+    row 2     c     d
+
+    Encoding/decoding a Dataframe using ``'index'`` formatted JSON:
+
+    >>> df.to_json(orient='index')
+    '{""row 1"":{""col 1"":""a"",""col 2"":""b""},""row 2"":{""col 1"":""c"",""col 2"":""d""}}'
+    >>> pd.read_json(_, orient='index')
+          col 1 col 2
+    row 1     a     b
+    row 2     c     d
+
+    Encoding/decoding a Dataframe using ``'records'`` formatted JSON.
+    Note that index labels are not preserved with this encoding.
+
+    >>> df.to_json(orient='records')
+    '[{""col 1"":""a"",""col 2"":""b""},{""col 1"":""c"",""col 2"":""d""}]'
+    >>> pd.read_json(_, orient='records')
+      col 1 col 2
+    0     a     b
+    1     c     d
+
+    Encoding with Table Schema
+
+    >>> df.to_json(orient='table')
+    '{""schema"": {""fields"": [{""name"": ""index"", ""type"": ""string""},
+                            {""name"": ""col 1"", ""type"": ""string""},
+                            {""name"": ""col 2"", ""type"": ""string""}],
+                    ""primaryKey"": ""index"",
+                    ""pandas_version"": ""0.20.0""},
+        ""data"": [{""index"": ""row 1"", ""col 1"": ""a"", ""col 2"": ""b""},
+                {""index"": ""row 2"", ""col 1"": ""c"", ""col 2"": ""d""}]}'
+    """"""
+
+    if orient == ""table"" and dtype:
+        raise ValueError(""cannot pass both dtype and orient='table'"")
+    if orient == ""table"" and convert_axes:
+        raise ValueError(""cannot pass both convert_axes and orient='table'"")
+
+    if dtype is None and orient!= ""table"":
+        dtype = True
+    if convert_axes is None and orient!= ""table"":
+        convert_axes = True
+
+    # Ensure default encoding is 'utf-8' if not provided
+    if encoding is None:
+        encoding = 'utf-8'
+
+    compression = _infer_compression(path_or_buf, compression)
+    filepath_or_buffer, _, compression, should_close = get_filepath_or_buffer(
+        path_or_buf, encoding=encoding, compression=compression
+    )
+
+    json_reader = JsonReader(
+        filepath_or_buffer,
+        orient=orient,
+        typ=typ,
+        dtype=dtype,
+        convert_axes=convert_axes,
+        convert_dates=convert_dates,
+        keep_default_dates=keep_default_dates,
+        numpy=numpy,
+        precise_float=precise_float,
+        date_unit=date_unit,
+        encoding=encoding,
+        lines=lines,
+        chunksize=chunksize,
+        compression=compression,
+    )
+
+    if chunksize:
+        return json_reader
+
+    result = json_reader.read()
+    if should_close:
+        filepath_or_buffer.close()
+
+    return result
+```
+
+### Explanation of changes:
+- **Explicit Encoding Default**: We explicitly set `encoding` to `'utf-8'` if it is `None`, ensuring that `pd.read_json()` always defaults to using 'utf-8' encoding unless another encoding is specified.
+
+### Tests and example uses:
+The provided test `test_readjson_unicode` should now pass with the modified `read_json` function. You can also try reading a JSON file with Unicode characters to verify that the function correctly decodes them. For example:
+```python
+import pandas as pd
+
+# Create a JSON file with Unicode characters
+data = '{""name"": ""École"", ""city"": ""Paris""}'
+with open('example.json', 'w', encoding='utf-8') as f:
+    f.write(data)
+
+# Read the JSON file
+df = pd.read_json('example.json')
+
+# Verify the contents
+print(df)
+```
+This should correctly print the DataFrame with the Unicode characters decoded properly.",
+pandas-128-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+def read_json(
+    path_or_buf=None,
+    orient=None,
+    typ=""frame"",
+    dtype=None,
+    convert_axes=None,
+    convert_dates=True,
+    keep_default_dates=True,
+    numpy=False,
+    precise_float=False,
+    date_unit=None,
+    encoding='utf-8',  # Set default encoding to 'utf-8'
+    lines=False,
+    chunksize=None,
+    compression=""infer"",
+):
+    """"""
+    Convert a JSON string to pandas object.
+
+    Parameters
+    ----------
+    path_or_buf : a valid JSON str, path object or file-like object
+        Any valid string path is acceptable. The string could be a URL. Valid
+        URL schemes include http, ftp, s3, and file. For file URLs, a host is
+        expected. A local file could be:
+        ``file://localhost/path/to/table.json``.
+
+        If you want to pass in a path object, pandas accepts any
+        ``os.PathLike``.
+
+        By file-like object, we refer to objects with a ``read()`` method,
+        such as a file handler (e.g. via builtin ``open`` function)
+        or ``StringIO``.
+    orient : str
+        Indication of expected JSON string format.
+        Compatible JSON strings can be produced by ``to_json()`` with a
+        corresponding orient value.
+        The set of possible orients is:
+
+        - ``'split'`` : dict like
+          ``{index -> [index], columns -> [columns], data -> [values]}``
+        - ``'records'`` : list like
+          ``[{column -> value},..., {column -> value}]``
+        - ``'index'`` : dict like ``{index -> {column -> value}}``
+        - ``'columns'`` : dict like ``{column -> {index -> value}}``
+        - ``'values'`` : just the values array
+
+        The allowed and default values depend on the value
+        of the `typ` parameter.
+
+        * when ``typ == 'series'``,
+
+          - allowed orients are ``{'split','records','index'}``
+          - default is ``'index'``
+          - The Series index must be unique for orient ``'index'``.
+
+        * when ``typ == 'frame'``,
+
+          - allowed orients are ``{'split','records','index',
+            'columns','values', 'table'}``
+          - default is ``'columns'``
+          - The DataFrame index must be unique for orients ``'index'`` and
+            ``'columns'``.
+          - The DataFrame columns must be unique for orients ``'index'``,
+            ``'columns'``, and ``'records'``.
+
+       .. versionadded:: 0.23.0
+           'table' as an allowed value for the ``orient`` argument
+
+    typ : {'frame', 'series'}, default 'frame'
+        The type of object to recover.
+
+    dtype : bool or dict, default None
+        If True, infer dtypes; if a dict of column to dtype, then use those;
+        if False, then don't infer dtypes at all, applies only to the data.
+
+        For all ``orient`` values except ``'table'``, default is True.
+
+       .. versionchanged:: 0.25.0
+
+           Not applicable for ``orient='table'``.
+
+    convert_axes : bool, default None
+        Try to convert the axes to the proper dtypes.
+
+        For all ``orient`` values except ``'table'``, default is True.
+
+       .. versionchanged:: 0.25.0
+
+           Not applicable for ``orient='table'``.
+
+    convert_dates : bool or list of str, default True
+        List of columns to parse for dates. If True, then try to parse
+        datelike columns. A column label is datelike if
+
+        * it ends with ``'_at'``,
+
+        * it ends with ``'_time'``,
+
+        * it begins with ``'timestamp'``,
+
+        * it is ``'modified'``, or
+
+        * it is ``'date'``.
+
+    keep_default_dates : bool, default True
+        If parsing dates, then parse the default datelike columns.
+
+    numpy : bool, default False
+        Direct decoding to numpy arrays. Supports numeric data only, but
+        non-numeric column and index labels are supported. Note also that the
+        JSON ordering MUST be the same for each term if numpy=True.
+
+    precise_float : bool, default False
+        Set to enable usage of higher precision (strtod) function when
+        decoding string to double values. Default (False) is to use fast but
+        less precise builtin functionality.
+
+    date_unit : str, default None
+        The timestamp unit to detect if converting dates. The default behaviour
+        is to try and detect the correct precision, but if this is not desired
+        then pass one of 's', 'ms', 'us' or 'ns' to force parsing only seconds,
+        milliseconds, microseconds or nanoseconds respectively.
+
+    encoding : str, default is 'utf-8'
+        The encoding to use to decode py3 bytes.
+
+    lines : bool, default False
+        Read the file as a json object per line.
+
+    chunksize : int, optional
+        Return JsonReader object for iteration.
+        See the `line-delimited json docs
+        <http://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#line-delimited-json>`_
+        for more information on ``chunksize``.
+        This can only be passed if `lines=True`.
+        If this is None, the file will be read into memory all at once.
+
+       .. versionadded:: 0.21.0
+
+    compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}, default 'infer'
+        For on-the-fly decompression of on-disk data. If 'infer', then use
+        gzip, bz2, zip or xz if path_or_buf is a string ending in
+        '.gz', '.bz2', '.zip', or 'xz', respectively, and no decompression
+        otherwise. If using 'zip', the ZIP file must contain only one data
+        file to be read in. Set to None for no decompression.
+
+       .. versionadded:: 0.21.0
+
+    Returns
+    -------
+    Series or DataFrame
+        The type returned depends on the value of `typ`.
+
+    See Also
+    --------
+    DataFrame.to_json : Convert a DataFrame to a JSON string.
+    Series.to_json : Convert a Series to a JSON string.
+
+    Notes
+    -----
+    Specific to ``orient='table'``, if a :class:`DataFrame` with a literal
+    :class:`Index` name of `index` gets written with :func:`to_json`, the
+    subsequent read operation will incorrectly set the :class:`Index` name to
+    ``None``. This is because `index` is also used by :func:`DataFrame.to_json`
+    to denote a missing :class:`Index` name, and the subsequent
+    :func:`read_json` operation cannot distinguish between the two. The same
+    limitation is encountered with a :class:`MultiIndex` and any names
+    beginning with ``'level_'``.
+
+    Examples
+    --------
+    >>> import json
+    >>> df = pd.DataFrame([['a', 'b'], ['c', 'd']],
+   ...                   index=['row 1', 'row 2'],
+   ...                   columns=['col 1', 'col 2'])
+
+    Encoding/decoding a Dataframe using ``'split'`` formatted JSON:
+
+    >>> df.to_json(orient='split')
+    '{""columns"":[""col 1"",""col 2""],
+      ""index"":[""row 1"",""row 2""],
+      ""data"":[[""a"",""b""],[""c"",""d""]]}'
+    >>> pd.read_json(_, orient='split')
+          col 1 col 2
+    row 1     a     b
+    row 2     c     d
+
+    Encoding/decoding a Dataframe using ``'index'`` formatted JSON:
+
+    >>> df.to_json(orient='index')
+    '{""row 1"":{""col 1"":""a"",""col 2"":""b""},""row 2"":{""col 1"":""c"",""col 2"":""d""}}'
+    >>> pd.read_json(_, orient='index')
+          col 1 col 2
+    row 1     a     b
+    row 2     c     d
+
+    Encoding/decoding a Dataframe using ``'records'`` formatted JSON.
+    Note that index labels are not preserved with this encoding.
+
+    >>> df.to_json(orient='records')
+    '[{""col 1"":""a"",""col 2"":""b""},{""col 1"":""c"",""col 2"":""d""}]'
+    >>> pd.read_json(_, orient='records')
+      col 1 col 2
+    0     a     b
+    1     c     d
+
+    Encoding with Table Schema
+
+    >>> df.to_json(orient='table')
+    '{""schema"": {""fields"": [{""name"": ""index"", ""type"": ""string""},
+                            {""name"": ""col 1"", ""type"": ""string""},
+                            {""name"": ""col 2"", ""type"": ""string""}],
+                    ""primaryKey"": ""index"",
+                    ""pandas_version"": ""0.20.0""},
+        ""data"": [{""index"": ""row 1"", ""col 1"": ""a"", ""col 2"": ""b""},
+                {""index"": ""row 2"", ""col 1"": ""c"", ""col 2"": ""d""}]}'
+    """"""
+
+    if orient == ""table"" and dtype:
+        raise ValueError(""cannot pass both dtype and orient='table'"")
+    if orient == ""table"" and convert_axes:
+        raise ValueError(""cannot pass both convert_axes and orient='table'"")
+
+    if dtype is None and orient!= ""table"":
+        dtype = True
+    if convert_axes is None and orient!= ""table"":
+        convert_axes = True
+
+    compression = _infer_compression(path_or_buf, compression)
+    filepath_or_buffer, _, compression, should_close = get_filepath_or_buffer(
+        path_or_buf, encoding=encoding, compression=compression
+    )
+
+    json_reader = JsonReader(
+        filepath_or_buffer,
+        orient=orient,
+        typ=typ,
+        dtype=dtype,
+        convert_axes=convert_axes,
+        convert_dates=convert_dates,
+        keep_default_dates=keep_default_dates,
+        numpy=numpy,
+        precise_float=precise_float,
+        date_unit=date_unit,
+        encoding=encoding,
+        lines=lines,
+        chunksize=chunksize,
+        compression=compression,
+    )
+
+    if chunksize:
+        return json_reader
+
+    result = json_reader.read()
+    if should_close:
+        filepath_or_buffer.close()
+
+    return result
+```",
+pandas-128-v0_llama-6,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the Issue**: The `pd.read_json()` function is not using 'utf-8' as the default encoding when reading JSON files. This leads to incorrect decoding of non-ASCII characters in the JSON data.
+
+2. **Identifying the Cause**: The issue arises from the fact that the `open()` function in Python, which is used by `pd.read_json()`, relies on the locale's preferred encoding if no encoding is specified. The `read_json()` function does not explicitly set the encoding to 'utf-8' when calling `open()`, leading to potential decoding errors with non-ASCII characters.
+
+3. **Analyzing the Provided Code**: In the given buggy function, `read_json()`, the `encoding` parameter is set to `None` by default. When `get_filepath_or_buffer()` is called, it uses this `encoding` value. However, in the case where `encoding` is not provided (i.e., it is `None`), `get_filepath_or_buffer()` should default to 'utf-8' to align with the documentation's claim that 'utf-8' is the default encoding.
+
+4. **Determining the Fix**: To fix this issue, we need to ensure that `get_filepath_or_buffer()` uses 'utf-8' as the encoding when `encoding` is `None`. We can achieve this by setting a default value for the `encoding` parameter in the `read_json()` function.
+
+### Fixed solution:
+```python
+def read_json(
+    path_or_buf=None,
+    orient=None,
+    typ=""frame"",
+    dtype=None,
+    convert_axes=None,
+    convert_dates=True,
+    keep_default_dates=True,
+    numpy=False,
+    precise_float=False,
+    date_unit=None,
+    encoding='utf-8',  # Set default encoding to 'utf-8'
+    lines=False,
+    chunksize=None,
+    compression=""infer"",
+):
+    #... (rest of the function remains unchanged)
+```
+
+### Explanation of changes:
+*   We changed the default value of the `encoding` parameter in the `read_json()` function from `None` to `'utf-8'`. This ensures that when no encoding is specified, `pd.read_json()` will use 'utf-8' as the default encoding, aligning with its documentation and fixing the issue with decoding non-ASCII characters.
+
+### Tests and example uses:
+The provided test function `test_readjson_unicode()` should now pass with the corrected `read_json()` function. Additionally, you can test `read_json()` with different encodings and JSON files containing non-ASCII characters to verify its correctness. For example:
+```python
+import pandas as pd
+
+# Create a JSON file with non-ASCII characters
+with open('test.json', 'w', encoding='utf-8') as f:
+    f.write('{""key"": ""АБВГДабвгдга""}')
+
+# Read the JSON file using read_json() with default encoding
+df = pd.read_json('test.json')
+print(df)
+```",
+pandas-128-v0_llama-7,UNKNOWN,UNKNOWN,"```python
+def read_json(
+    path_or_buf=None,
+    orient=None,
+    typ=""frame"",
+    dtype=None,
+    convert_axes=None,
+    convert_dates=True,
+    keep_default_dates=True,
+    numpy=False,
+    precise_float=False,
+    date_unit=None,
+    encoding=None,
+    lines=False,
+    chunksize=None,
+    compression=""infer"",
+):
+    """"""
+    Convert a JSON string to pandas object.
+
+    Parameters
+    ----------
+    path_or_buf : a valid JSON str, path object or file-like object
+        Any valid string path is acceptable. The string could be a URL. Valid
+        URL schemes include http, ftp, s3, and file. For file URLs, a host is
+        expected. A local file could be:
+        ``file://localhost/path/to/table.json``.
+
+        If you want to pass in a path object, pandas accepts any
+        ``os.PathLike``.
+
+        By file-like object, we refer to objects with a ``read()`` method,
+        such as a file handler (e.g. via builtin ``open`` function)
+        or ``StringIO``.
+    orient : str
+        Indication of expected JSON string format.
+        Compatible JSON strings can be produced by ``to_json()`` with a
+        corresponding orient value.
+        The set of possible orients is:
+
+        - ``'split'`` : dict like
+          ``{index -> [index], columns -> [columns], data -> [values]}``
+        - ``'records'`` : list like
+          ``[{column -> value},..., {column -> value}]``
+        - ``'index'`` : dict like ``{index -> {column -> value}}``
+        - ``'columns'`` : dict like ``{column -> {index -> value}}``
+        - ``'values'`` : just the values array
+
+        The allowed and default values depend on the value
+        of the `typ` parameter.
+
+        * when ``typ == 'series'``,
+
+          - allowed orients are ``{'split','records','index'}``
+          - default is ``'index'``
+          - The Series index must be unique for orient ``'index'``.
+
+        * when ``typ == 'frame'``,
+
+          - allowed orients are ``{'split','records','index',
+            'columns','values', 'table'}``
+          - default is ``'columns'``
+          - The DataFrame index must be unique for orients ``'index'`` and
+            ``'columns'``.
+          - The DataFrame columns must be unique for orients ``'index'``,
+            ``'columns'``, and ``'records'``.
+
+       .. versionadded:: 0.23.0
+           'table' as an allowed value for the ``orient`` argument
+
+    typ : {'frame', 'series'}, default 'frame'
+        The type of object to recover.
+
+    dtype : bool or dict, default None
+        If True, infer dtypes; if a dict of column to dtype, then use those;
+        if False, then don't infer dtypes at all, applies only to the data.
+
+        For all ``orient`` values except ``'table'``, default is True.
+
+       .. versionchanged:: 0.25.0
+
+           Not applicable for ``orient='table'``.
+
+    convert_axes : bool, default None
+        Try to convert the axes to the proper dtypes.
+
+        For all ``orient`` values except ``'table'``, default is True.
+
+       .. versionchanged:: 0.25.0
+
+           Not applicable for ``orient='table'``.
+
+    convert_dates : bool or list of str, default True
+        List of columns to parse for dates. If True, then try to parse
+        datelike columns. A column label is datelike if
+
+        * it ends with ``'_at'``,
+
+        * it ends with ``'_time'``,
+
+        * it begins with ``'timestamp'``,
+
+        * it is ``'modified'``, or
+
+        * it is ``'date'``.
+
+    keep_default_dates : bool, default True
+        If parsing dates, then parse the default datelike columns.
+
+    numpy : bool, default False
+        Direct decoding to numpy arrays. Supports numeric data only, but
+        non-numeric column and index labels are supported. Note also that the
+        JSON ordering MUST be the same for each term if numpy=True.
+
+    precise_float : bool, default False
+        Set to enable usage of higher precision (strtod) function when
+        decoding string to double values. Default (False) is to use fast but
+        less precise builtin functionality.
+
+    date_unit : str, default None
+        The timestamp unit to detect if converting dates. The default behaviour
+        is to try and detect the correct precision, but if this is not desired
+        then pass one of 's', 'ms', 'us' or 'ns' to force parsing only seconds,
+        milliseconds, microseconds or nanoseconds respectively.
+
+    encoding : str, default is 'utf-8'
+        The encoding to use to decode py3 bytes.
+
+    lines : bool, default False
+        Read the file as a json object per line.
+
+    chunksize : int, optional
+        Return JsonReader object for iteration.
+        See the `line-delimited json docs
+        <http://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#line-delimited-json>`_
+        for more information on ``chunksize``.
+        This can only be passed if `lines=True`.
+        If this is None, the file will be read into memory all at once.
+
+       .. versionadded:: 0.21.0
+
+    compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}, default 'infer'
+        For on-the-fly decompression of on-disk data. If 'infer', then use
+        gzip, bz2, zip or xz if path_or_buf is a string ending in
+        '.gz', '.bz2', '.zip', or 'xz', respectively, and no decompression
+        otherwise. If using 'zip', the ZIP file must contain only one data
+        file to be read in. Set to None for no decompression.
+
+       .. versionadded:: 0.21.0
+
+    Returns
+    -------
+    Series or DataFrame
+        The type returned depends on the value of `typ`.
+
+    See Also
+    --------
+    DataFrame.to_json : Convert a DataFrame to a JSON string.
+    Series.to_json : Convert a Series to a JSON string.
+
+    Notes
+    -----
+    Specific to ``orient='table'``, if a :class:`DataFrame` with a literal
+    :class:`Index` name of `index` gets written with :func:`to_json`, the
+    subsequent read operation will incorrectly set the :class:`Index` name to
+    ``None``. This is because `index` is also used by :func:`DataFrame.to_json`
+    to denote a missing :class:`Index` name, and the subsequent
+    :func:`read_json` operation cannot distinguish between the two. The same
+    limitation is encountered with a :class:`MultiIndex` and any names
+    beginning with ``'level_'``.
+
+    Examples
+    --------
+    >>> import json
+    >>> df = pd.DataFrame([['a', 'b'], ['c', 'd']],
+   ...                   index=['row 1', 'row 2'],
+   ...                   columns=['col 1', 'col 2'])
+    >>> df.to_json(orient='split')
+    '{""columns"":[""col 1"",""col 2""],
+      ""index"":[""row 1"",""row 2""],
+      ""data"":[[""a"",""b""],[""c"",""d""]]}'
+    >>> pd.read_json(_, orient='split')
+          col 1 col 2
+    row 1     a     b
+    row 2     c     d
+
+    >>> df.to_json(orient='index')
+    '{""row 1"":{""col 1"":""a"",""col 2"":""b""},""row 2"":{""col 1"":""c"",""col 2"":""d""}}'
+    >>> pd.read_json(_, orient='index')
+          col 1 col 2
+    row 1     a     b
+    row 2     c     d
+
+    >>> df.to_json(orient='records')
+    '[{""col 1"":""a"",""col 2"":""b""},{""col 1"":""c"",""col 2"":""d""}]'
+    >>> pd.read_json(_, orient='records')
+      col 1 col 2
+    0     a     b
+    1     c     d
+
+    >>> df.to_json(orient='table')
+    '{""schema"": {""fields"": [{""name"": ""index"", ""type"": ""string""},
+                            {""name"": ""col 1"", ""type"": ""string""},
+                            {""name"": ""col 2"", ""type"": ""string""}],
+                    ""primaryKey"": ""index"",
+                    ""pandas_version"": ""0.20.0""},
+        ""data"": [{""index"": ""row 1"", ""col 1"": ""a"", ""col 2"": ""b""},
+                {""index"": ""row 2"", ""col 1"": ""c"", ""col 2"": ""d""}]}'
+    """"""
+
+    if orient == ""table"" and dtype:
+        raise ValueError(""cannot pass both dtype and orient='table'"")
+    if orient == ""table"" and convert_axes:
+        raise ValueError(""cannot pass both convert_axes and orient='table'"")
+
+    if dtype is None and orient!= ""table"":
+        dtype = True
+    if convert_axes is None and orient!= ""table"":
+        convert_axes = True
+
+    compression = _infer_compression(path_or_buf, compression)
+    if encoding is None:
+        encoding = 'utf-8' # Changed to always use 'utf-8' as default encoding
+    
+    filepath_or_buffer, _, compression, should_close = get_filepath_or_buffer(
+        path_or_buf, encoding=encoding, compression=compression
+    )
+
+    json_reader = JsonReader(
+        filepath_or_buffer,
+        orient=orient,
+        typ=typ,
+        dtype=dtype,
+        convert_axes=convert_axes,
+        convert_dates=convert_dates,
+        keep_default_dates=keep_default_dates,
+        numpy=numpy,
+        precise_float=precise_float,
+        date_unit=date_unit,
+        encoding=encoding,
+        lines=lines,
+        chunksize=chunksize,
+        compression=compression,
+    )
+
+    if chunksize:
+        return json_reader
+
+    result = json_reader.read()
+    if should_close:
+        filepath_or_buffer.close()
+
+    return result
+```",
+pandas-128-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+def read_json(
+    path_or_buf=None,
+    orient=None,
+    typ=""frame"",
+    dtype=None,
+    convert_axes=None,
+    convert_dates=True,
+    keep_default_dates=True,
+    numpy=False,
+    precise_float=False,
+    date_unit=None,
+    encoding=None,
+    lines=False,
+    chunksize=None,
+    compression=""infer"",
+):
+    """"""
+    Convert a JSON string to pandas object.
+
+    Parameters
+    ----------
+    path_or_buf : a valid JSON str, path object or file-like object
+        Any valid string path is acceptable. The string could be a URL. Valid
+        URL schemes include http, ftp, s3, and file. For file URLs, a host is
+        expected. A local file could be:
+        ``file://localhost/path/to/table.json``.
+
+        If you want to pass in a path object, pandas accepts any
+        ``os.PathLike``.
+
+        By file-like object, we refer to objects with a ``read()`` method,
+        such as a file handler (e.g. via builtin ``open`` function)
+        or ``StringIO``.
+    orient : str
+        Indication of expected JSON string format.
+        Compatible JSON strings can be produced by ``to_json()`` with a
+        corresponding orient value.
+        The set of possible orients is:
+
+        - ``'split'`` : dict like
+          ``{index -> [index], columns -> [columns], data -> [values]}``
+        - ``'records'`` : list like
+          ``[{column -> value},..., {column -> value}]``
+        - ``'index'`` : dict like ``{index -> {column -> value}}``
+        - ``'columns'`` : dict like ``{column -> {index -> value}}``
+        - ``'values'`` : just the values array
+
+        The allowed and default values depend on the value
+        of the `typ` parameter.
+
+        * when ``typ == 'series'``,
+
+          - allowed orients are ``{'split','records','index'}``
+          - default is ``'index'``
+          - The Series index must be unique for orient ``'index'``.
+
+        * when ``typ == 'frame'``,
+
+          - allowed orients are ``{'split','records','index',
+            'columns','values', 'table'}``
+          - default is ``'columns'``
+          - The DataFrame index must be unique for orients ``'index'`` and
+            ``'columns'``.
+          - The DataFrame columns must be unique for orients ``'index'``,
+            ``'columns'``, and ``'records'``.
+
+       .. versionadded:: 0.23.0
+           'table' as an allowed value for the ``orient`` argument
+
+    typ : {'frame', 'series'}, default 'frame'
+        The type of object to recover.
+
+    dtype : bool or dict, default None
+        If True, infer dtypes; if a dict of column to dtype, then use those;
+        if False, then don't infer dtypes at all, applies only to the data.
+
+        For all ``orient`` values except ``'table'``, default is True.
+
+       .. versionchanged:: 0.25.0
+
+           Not applicable for ``orient='table'``.
+
+    convert_axes : bool, default None
+        Try to convert the axes to the proper dtypes.
+
+        For all ``orient`` values except ``'table'``, default is True.
+
+       .. versionchanged:: 0.25.0
+
+           Not applicable for ``orient='table'``.
+
+    convert_dates : bool or list of str, default True
+        List of columns to parse for dates. If True, then try to parse
+        datelike columns. A column label is datelike if
+
+        * it ends with ``'_at'``,
+
+        * it ends with ``'_time'``,
+
+        * it begins with ``'timestamp'``,
+
+        * it is ``'modified'``, or
+
+        * it is ``'date'``.
+
+    keep_default_dates : bool, default True
+        If parsing dates, then parse the default datelike columns.
+
+    numpy : bool, default False
+        Direct decoding to numpy arrays. Supports numeric data only, but
+        non-numeric column and index labels are supported. Note also that the
+        JSON ordering MUST be the same for each term if numpy=True.
+
+    precise_float : bool, default False
+        Set to enable usage of higher precision (strtod) function when
+        decoding string to double values. Default (False) is to use fast but
+        less precise builtin functionality.
+
+    date_unit : str, default None
+        The timestamp unit to detect if converting dates. The default behaviour
+        is to try and detect the correct precision, but if this is not desired
+        then pass one of 's', 'ms', 'us' or 'ns' to force parsing only seconds,
+        milliseconds, microseconds or nanoseconds respectively.
+
+    encoding : str, default 'utf-8'
+        The encoding to use to decode py3 bytes.
+
+    lines : bool, default False
+        Read the file as a json object per line.
+
+    chunksize : int, optional
+        Return JsonReader object for iteration.
+        See the `line-delimited json docs
+        <http://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#line-delimited-json>`_
+        for more information on ``chunksize``.
+        This can only be passed if `lines=True`.
+        If this is None, the file will be read into memory all at once.
+
+       .. versionadded:: 0.21.0
+
+    compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}, default 'infer'
+        For on-the-fly decompression of on-disk data. If 'infer', then use
+        gzip, bz2, zip or xz if path_or_buf is a string ending in
+        '.gz', '.bz2', '.zip', or 'xz', respectively, and no decompression
+        otherwise. If using 'zip', the ZIP file must contain only one data
+        file to be read in. Set to None for no decompression.
+
+       .. versionadded:: 0.21.0
+
+    Returns
+    -------
+    Series or DataFrame
+        The type returned depends on the value of `typ`.
+
+    See Also
+    --------
+    DataFrame.to_json : Convert a DataFrame to a JSON string.
+    Series.to_json : Convert a Series to a JSON string.
+
+    Notes
+    -----
+    Specific to ``orient='table'``, if a :class:`DataFrame` with a literal
+    :class:`Index` name of `index` gets written with :func:`to_json`, the
+    subsequent read operation will incorrectly set the :class:`Index` name to
+    ``None``. This is because `index` is also used by :func:`DataFrame.to_json`
+    to denote a missing :class:`Index` name, and the subsequent
+    :func:`read_json` operation cannot distinguish between the two. The same
+    limitation is encountered with a :class:`MultiIndex` and any names
+    beginning with ``'level_'``.
+
+    Examples
+    --------
+    >>> df = pd.DataFrame([['a', 'b'], ['c', 'd']],
+   ...                   index=['row 1', 'row 2'],
+   ...                   columns=['col 1', 'col 2'])
+
+    Encoding/decoding a Dataframe using ``'split'`` formatted JSON:
+
+    >>> df.to_json(orient='split')
+    '{""columns"":[""col 1"",""col 2""],
+      ""index"":[""row 1"",""row 2""],
+      ""data"":[[""a"",""b""],[""c"",""d""]]}'
+    >>> pd.read_json(_, orient='split')
+          col 1 col 2
+    row 1     a     b
+    row 2     c     d
+
+    Encoding/decoding a Dataframe using ``'index'`` formatted JSON:
+
+    >>> df.to_json(orient='index')
+    '{""row 1"":{""col 1"":""a"",""col 2"":""b""},""row 2"":{""col 1"":""c"",""col 2"":""d""}}'
+    >>> pd.read_json(_, orient='index')
+          col 1 col 2
+    row 1     a     b
+    row 2     c     d
+
+    Encoding/decoding a Dataframe using ``'records'`` formatted JSON.
+    Note that index labels are not preserved with this encoding.
+
+    >>> df.to_json(orient='records')
+    '[{""col 1"":""a"",""col 2"":""b""},{""col 1"":""c"",""col 2"":""d""}]'
+    >>> pd.read_json(_, orient='records')
+      col 1 col 2
+    0     a     b
+    1     c     d
+
+    Encoding with Table Schema
+
+    >>> df.to_json(orient='table')
+    '{""schema"": {""fields"": [{""name"": ""index"", ""type"": ""string""},
+                            {""name"": ""col 1"", ""type"": ""string""},
+                            {""name"": ""col 2"", ""type"": ""string""}],
+                    ""primaryKey"": ""index"",
+                    ""pandas_version"": ""0.20.0""},
+        ""data"": [{""index"": ""row 1"", ""col 1"": ""a"", ""col 2"": ""b""},
+                {""index"": ""row 2"", ""col 1"": ""c"", ""col 2"": ""d""}]}'
+    """"""
+
+    if orient == ""table"" and dtype:
+        raise ValueError(""cannot pass both dtype and orient='table'"")
+    if orient == ""table"" and convert_axes:
+        raise ValueError(""cannot pass both convert_axes and orient='table'"")
+
+    if dtype is None and orient!= ""table"":
+        dtype = True
+    if convert_axes is None and orient!= ""table"":
+        convert_axes = True
+
+    compression = _infer_compression(path_or_buf, compression)
+    if encoding is None:
+        filepath_or_buffer, _, compression, should_close = get_filepath_or_buffer(
+            path_or_buf, encoding='utf-8', compression=compression
+        )
+    else:
+        filepath_or_buffer, _, compression, should_close = get_filepath_or_buffer(
+            path_or_buf, encoding=encoding, compression=compression
+        )
+
+    json_reader = JsonReader(
+        filepath_or_buffer,
+        orient=orient,
+        typ=typ,
+        dtype=dtype,
+        convert_axes=convert_axes,
+        convert_dates=convert_dates,
+        keep_default_dates=keep_default_dates,
+        numpy=numpy,
+        precise_float=precise_float,
+        date_unit=date_unit,
+        encoding=encoding if encoding else 'utf-8', # set default encoding
+        lines=lines,
+        chunksize=chunksize,
+        compression=compression,
+    )
+
+    if chunksize:
+        return json_reader
+
+    result = json_reader.read()
+    if should_close:
+        filepath_or_buffer.close()
+
+    return result
+```",
+pandas-128-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+def read_json(
+    path_or_buf=None,
+    orient=None,
+    typ=""frame"",
+    dtype=None,
+    convert_axes=None,
+    convert_dates=True,
+    keep_default_dates=True,
+    numpy=False,
+    precise_float=False,
+    date_unit=None,
+    encoding='utf-8', # Set default encoding to 'utf-8'
+    lines=False,
+    chunksize=None,
+    compression=""infer"",
+):
+    """"""
+    Convert a JSON string to pandas object.
+
+    Parameters
+    ----------
+    path_or_buf : a valid JSON str, path object or file-like object
+        Any valid string path is acceptable. The string could be a URL. Valid
+        URL schemes include http, ftp, s3, and file. For file URLs, a host is
+        expected. A local file could be:
+        ``file://localhost/path/to/table.json``.
+
+        If you want to pass in a path object, pandas accepts any
+        ``os.PathLike``.
+
+        By file-like object, we refer to objects with a ``read()`` method,
+        such as a file handler (e.g. via builtin ``open`` function)
+        or ``StringIO``.
+    orient : str
+        Indication of expected JSON string format.
+        Compatible JSON strings can be produced by ``to_json()`` with a
+        corresponding orient value.
+        The set of possible orients is:
+
+        - ``'split'`` : dict like
+          ``{index -> [index], columns -> [columns], data -> [values]}``
+        - ``'records'`` : list like
+          ``[{column -> value},..., {column -> value}]``
+        - ``'index'`` : dict like ``{index -> {column -> value}}``
+        - ``'columns'`` : dict like ``{column -> {index -> value}}``
+        - ``'values'`` : just the values array
+
+        The allowed and default values depend on the value
+        of the `typ` parameter.
+
+        * when ``typ == 'series'``,
+
+          - allowed orients are ``{'split','records','index'}``
+          - default is ``'index'``
+          - The Series index must be unique for orient ``'index'``.
+
+        * when ``typ == 'frame'``,
+
+          - allowed orients are ``{'split','records','index',
+            'columns','values', 'table'}``
+          - default is ``'columns'``
+          - The DataFrame index must be unique for orients ``'index'`` and
+            ``'columns'``.
+          - The DataFrame columns must be unique for orients ``'index'``,
+            ``'columns'``, and ``'records'``.
+
+       .. versionadded:: 0.23.0
+           'table' as an allowed value for the ``orient`` argument
+
+    typ : {'frame', 'series'}, default 'frame'
+        The type of object to recover.
+
+    dtype : bool or dict, default None
+        If True, infer dtypes; if a dict of column to dtype, then use those;
+        if False, then don't infer dtypes at all, applies only to the data.
+
+        For all ``orient`` values except ``'table'``, default is True.
+
+       .. versionchanged:: 0.25.0
+
+           Not applicable for ``orient='table'``.
+
+    convert_axes : bool, default None
+        Try to convert the axes to the proper dtypes.
+
+        For all ``orient`` values except ``'table'``, default is True.
+
+       .. versionchanged:: 0.25.0
+
+           Not applicable for ``orient='table'``.
+
+    convert_dates : bool or list of str, default True
+        List of columns to parse for dates. If True, then try to parse
+        datelike columns. A column label is datelike if
+
+        * it ends with ``'_at'``,
+
+        * it ends with ``'_time'``,
+
+        * it begins with ``'timestamp'``,
+
+        * it is ``'modified'``, or
+
+        * it is ``'date'``.
+
+    keep_default_dates : bool, default True
+        If parsing dates, then parse the default datelike columns.
+
+    numpy : bool, default False
+        Direct decoding to numpy arrays. Supports numeric data only, but
+        non-numeric column and index labels are supported. Note also that the
+        JSON ordering MUST be the same for each term if numpy=True.
+
+    precise_float : bool, default False
+        Set to enable usage of higher precision (strtod) function when
+        decoding string to double values. Default (False) is to use fast but
+        less precise builtin functionality.
+
+    date_unit : str, default None
+        The timestamp unit to detect if converting dates. The default behaviour
+        is to try and detect the correct precision, but if this is not desired
+        then pass one of 's', 'ms', 'us' or 'ns' to force parsing only seconds,
+        milliseconds, microseconds or nanoseconds respectively.
+
+    encoding : str, default is 'utf-8'
+        The encoding to use to decode py3 bytes.
+
+    lines : bool, default False
+        Read the file as a json object per line.
+
+    chunksize : int, optional
+        Return JsonReader object for iteration.
+        See the `line-delimited json docs
+        <http://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#line-delimited-json>`_
+        for more information on ``chunksize``.
+        This can only be passed if `lines=True`.
+        If this is None, the file will be read into memory all at once.
+
+       .. versionadded:: 0.21.0
+
+    compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}, default 'infer'
+        For on-the-fly decompression of on-disk data. If 'infer', then use
+        gzip, bz2, zip or xz if path_or_buf is a string ending in
+        '.gz', '.bz2', '.zip', or 'xz', respectively, and no decompression
+        otherwise. If using 'zip', the ZIP file must contain only one data
+        file to be read in. Set to None for no decompression.
+
+       .. versionadded:: 0.21.0
+
+    Returns
+    -------
+    Series or DataFrame
+        The type returned depends on the value of `typ`.
+
+    See Also
+    --------
+    DataFrame.to_json : Convert a DataFrame to a JSON string.
+    Series.to_json : Convert a Series to a JSON string.
+
+    Notes
+    -----
+    Specific to ``orient='table'``, if a :class:`DataFrame` with a literal
+    :class:`Index` name of `index` gets written with :func:`to_json`, the
+    subsequent read operation will incorrectly set the :class:`Index` name to
+    ``None``. This is because `index` is also used by :func:`DataFrame.to_json`
+    to denote a missing :class:`Index` name, and the subsequent
+    :func:`read_json` operation cannot distinguish between the two. The same
+    limitation is encountered with a :class:`MultiIndex` and any names
+    beginning with ``'level_'``.
+
+    Examples
+    --------
+    >>> import json
+    >>> df = pd.DataFrame([['a', 'b'], ['c', 'd']],
+   ...                   index=['row 1', 'row 2'],
+   ...                   columns=['col 1', 'col 2'])
+
+    Encoding/decoding a Dataframe using ``'split'`` formatted JSON:
+
+    >>> df.to_json(orient='split')
+    '{""columns"":[""col 1"",""col 2""],
+      ""index"":[""row 1"",""row 2""],
+      ""data"":[[""a"",""b""],[""c"",""d""]]}'
+    >>> pd.read_json(_, orient='split')
+          col 1 col 2
+    row 1     a     b
+    row 2     c     d
+
+    Encoding/decoding a Dataframe using ``'index'`` formatted JSON:
+
+    >>> df.to_json(orient='index')
+    '{""row 1"":{""col 1"":""a"",""col 2"":""b""},""row 2"":{""col 1"":""c"",""col 2"":""d""}}'
+    >>> pd.read_json(_, orient='index')
+          col 1 col 2
+    row 1     a     b
+    row 2     c     d
+
+    Encoding/decoding a Dataframe using ``'records'`` formatted JSON.
+    Note that index labels are not preserved with this encoding.
+
+    >>> df.to_json(orient='records')
+    '[{""col 1"":""a"",""col 2"":""b""},{""col 1"":""c"",""col 2"":""d""}]'
+    >>> pd.read_json(_, orient='records')
+      col 1 col 2
+    0     a     b
+    1     c     d
+
+    Encoding with Table Schema
+
+    >>> df.to_json(orient='table')
+    '{""schema"": {""fields"": [{""name"": ""index"", ""type"": ""string""},
+                            {""name"": ""col 1"", ""type"": ""string""},
+                            {""name"": ""col 2"", ""type"": ""string""}],
+                    ""primaryKey"": ""index"",
+                    ""pandas_version"": ""0.20.0""},
+        ""data"": [{""index"": ""row 1"", ""col 1"": ""a"", ""col 2"": ""b""},
+                {""index"": ""row 2"", ""col 1"": ""c"", ""col 2"": ""d""}]}'
+    """"""
+
+    if orient == ""table"" and dtype:
+        raise ValueError(""cannot pass both dtype and orient='table'"")
+    if orient == ""table"" and convert_axes:
+        raise ValueError(""cannot pass both convert_axes and orient='table'"")
+
+    if dtype is None and orient!= ""table"":
+        dtype = True
+    if convert_axes is None and orient!= ""table"":
+        convert_axes = True
+
+    compression = _infer_compression(path_or_buf, compression)
+    filepath_or_buffer, _, compression, should_close = get_filepath_or_buffer(
+        path_or_buf, encoding=encoding, compression=compression
+    )
+
+    json_reader = JsonReader(
+        filepath_or_buffer,
+        orient=orient,
+        typ=typ,
+        dtype=dtype,
+        convert_axes=convert_axes,
+        convert_dates=convert_dates,
+        keep_default_dates=keep_default_dates,
+        numpy=numpy,
+        precise_float=precise_float,
+        date_unit=date_unit,
+        encoding=encoding,
+        lines=lines,
+        chunksize=chunksize,
+        compression=compression,
+    )
+
+    if chunksize:
+        return json_reader
+
+    result = json_reader.read()
+    if should_close:
+        filepath_or_buffer.close()
+
+    return result
+```",

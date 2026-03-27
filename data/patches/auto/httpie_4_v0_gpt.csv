@@ -1,0 +1,308 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+httpie-4-v0_gpt-0,UNKNOWN,UNKNOWN,"```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    headers = dict(self._orig.headers)
+
+    # Ensure the appropriate Host header is set
+    if 'Host' not in headers:
+        headers['Host'] = url.netloc.split('@')[-1]
+
+    # Normalize the headers to ensure 'Host' is used with the correct casing
+    normalized_headers = {}
+    for name, value in headers.items():
+        normalized_name = name.lower()  # Use lowercase for normalization
+        if normalized_name == 'host':
+            # Only include the 'Host' header with the correct casing
+            normalized_headers['Host'] = value
+        else:
+            normalized_headers[name] = value
+
+    headers = ['%s: %s' % (name, value) for name, value in normalized_headers.items()]
+
+    headers.insert(0, request_line)
+    headers = '\r\n'.join(headers).strip()
+
+    if isinstance(headers, bytes):
+        # Python < 3
+        headers = headers.decode('utf8')
+    return headers
+```",
+httpie-4-v0_gpt-1,UNKNOWN,UNKNOWN,"```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    headers = dict(self._orig.headers)
+
+    # Allowing for the case-insensitive handling of Host header
+    if 'Host' not in headers and 'host' not in headers:
+        headers['Host'] = url.netloc.split('@')[-1]
+
+    headers = ['%s: %s' % (name, value)
+               for name, value in headers.items()]
+
+    headers.insert(0, request_line)
+    headers = '\r\n'.join(headers).strip()
+
+    if isinstance(headers, bytes):
+        # Python < 3
+        headers = headers.decode('utf8')
+    return headers
+```",
+httpie-4-v0_gpt-2,UNKNOWN,UNKNOWN,"```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    headers = dict(self._orig.headers)
+
+    # Correct usage of the Host header to avoid duplicate headers
+    if 'Host' not in headers and 'host' in headers:
+        del headers['host']
+    if 'Host' not in headers:
+        headers['Host'] = url.netloc.split('@')[-1]
+
+    headers = ['%s: %s' % (name, value) for name, value in headers.items()]
+
+    headers.insert(0, request_line)
+    headers = '\r\n'.join(headers).strip()
+
+    if isinstance(headers, bytes):
+        # Python < 3
+        headers = headers.decode('utf8')
+    return headers
+```",
+httpie-4-v0_gpt-3,UNKNOWN,UNKNOWN,"```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    headers = dict(self._orig.headers)
+
+    if 'Host' not in headers:
+        headers['Host'] = url.netloc.split('@')[-1]
+
+    # Always use a case-sensitive way to overwrite the Host header
+    # Ensure we only set it if it's capitalized correctly as 'Host'
+    host_header_key = 'Host' if 'Host' in headers else None
+    if host_header_key is not None:
+        headers[host_header_key] = headers.pop('host', headers.get('host'))
+
+    headers = ['%s: %s' % (name, value) for name, value in headers.items()]
+
+    headers.insert(0, request_line)
+    headers = '\r\n'.join(headers).strip()
+
+    if isinstance(headers, bytes):
+        # Python < 3
+        headers = headers.decode('utf8')
+    return headers
+```",
+httpie-4-v0_gpt-4,UNKNOWN,UNKNOWN,"```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    headers = dict(self._orig.headers)
+
+    if 'Host' not in headers:
+        headers['Host'] = url.netloc.split('@')[-1]
+
+    # Ensure 'Host' header is consistently cased and remove any duplicate casing
+    if 'host' in headers:
+        del headers['host']
+
+    headers = ['%s: %s' % (name, value) for name, value in headers.items()]
+
+    headers.insert(0, request_line)
+    headers = '\r\n'.join(headers).strip()
+
+    if isinstance(headers, bytes):
+        # Python < 3
+        headers = headers.decode('utf8')
+    return headers
+```",
+httpie-4-v0_gpt-5,UNKNOWN,UNKNOWN,"```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    headers = dict(self._orig.headers)
+
+    # Only set the Host header if it doesn't already exist, and ensure the header casing is correct
+    if 'Host' not in headers and 'host' not in headers:
+        headers['Host'] = url.netloc.split('@')[-1]
+
+    headers = ['%s: %s' % (name, value) for name, value in headers.items()]
+
+    headers.insert(0, request_line)
+    headers = '\r\n'.join(headers).strip()
+
+    if isinstance(headers, bytes):
+        # Python < 3
+        headers = headers.decode('utf8')
+    return headers
+```",
+httpie-4-v0_gpt-6,UNKNOWN,UNKNOWN,"```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    headers = dict(self._orig.headers)
+
+    # Set Host only if it is not already in headers (case-insensitive check)
+    if not any(key.lower() == 'host' for key in headers):
+        headers['Host'] = url.netloc.split('@')[-1]
+
+    headers = ['%s: %s' % (name, value) for name, value in headers.items()]
+
+    headers.insert(0, request_line)
+    headers = '\r\n'.join(headers).strip()
+
+    if isinstance(headers, bytes):
+        # Python < 3
+        headers = headers.decode('utf8')
+    return headers
+```",
+httpie-4-v0_gpt-7,UNKNOWN,UNKNOWN,"```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    headers = dict(self._orig.headers)
+
+    # Ensure the 'Host' header is set correctly without duplication
+    headers['Host'] = headers.get('Host', url.netloc.split('@')[-1])
+
+    headers = ['%s: %s' % (name, value) for name, value in headers.items()]
+
+    headers.insert(0, request_line)
+    headers = '\r\n'.join(headers).strip()
+
+    if isinstance(headers, bytes):
+        # Python < 3
+        headers = headers.decode('utf8')
+    return headers
+```",
+httpie-4-v0_gpt-8,UNKNOWN,UNKNOWN,"```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    headers = dict(self._orig.headers)
+
+    if 'Host' not in headers:
+        headers['Host'] = url.netloc.split('@')[-1]
+
+    # Normalize header keys to match the case of standard headers
+    normalized_headers = {}
+    for name, value in headers.items():
+        normalized_name = name.lower()  # Convert to lowercase
+        if normalized_name == 'host':
+            # If a 'host' header already exists, skip adding it again
+            continue
+        normalized_headers[name] = value
+
+    # Add the 'Host' header again with the correct case
+    normalized_headers['Host'] = headers.get('Host', url.netloc.split('@')[-1])
+
+    headers = ['%s: %s' % (name, value)
+               for name, value in normalized_headers.items()]
+
+    headers.insert(0, request_line)
+    headers = '\r\n'.join(headers).strip()
+
+    if isinstance(headers, bytes):
+        # Python < 3
+        headers = headers.decode('utf8')
+    return headers
+```",
+httpie-4-v0_gpt-9,UNKNOWN,UNKNOWN,"```python
+@property
+def headers(self):
+    url = urlsplit(self._orig.url)
+
+    request_line = '{method} {path}{query} HTTP/1.1'.format(
+        method=self._orig.method,
+        path=url.path or '/',
+        query='?' + url.query if url.query else ''
+    )
+
+    headers = dict(self._orig.headers)
+
+    # Remove duplicate Host headers if 'Host' is already in headers
+    if 'Host' not in headers:
+        headers['Host'] = url.netloc.split('@')[-1]
+
+    # The 'host' header should also be checked for its casing
+    if 'host' in headers:
+        del headers['host']
+
+    headers = ['%s: %s' % (name, value) for name, value in headers.items()]
+
+    headers.insert(0, request_line)
+    headers = '\r\n'.join(headers).strip()
+
+    if isinstance(headers, bytes):
+        # Python < 3
+        headers = headers.decode('utf8')
+    
+    return headers
+```",

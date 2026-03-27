@@ -1,0 +1,430 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-21-vall_gpt-0,UNKNOWN,UNKNOWN,"```python
+def _get_with(self, key):
+    # Handle slice indexing 
+    if isinstance(key, slice):
+        slobj = self.index._convert_slice_indexer(key, kind=""getitem"")
+        return self._slice(slobj)
+    
+    # Raise an error for indexing with DataFrame
+    elif isinstance(key, ABCDataFrame):
+        raise TypeError(
+            ""Indexing a Series with DataFrame is not ""
+            ""supported, use the appropriate DataFrame column""
+        )
+    
+    # Handle tuple indexing
+    elif isinstance(key, tuple):
+        return self._get_values_tuple(key)
+
+    # For non-list-like keys, fallback to loc
+    elif not is_list_like(key):
+        return self.loc[key]
+
+    # Convert key to list if not already recognized types
+    if not isinstance(key, (list, np.ndarray, ExtensionArray, Series, Index)):
+        key = list(key)
+
+    # Infer the type of the key to decide indexing mechanism
+    if isinstance(key, Index):
+        key_type = key.inferred_type
+    else:
+        key_type = lib.infer_dtype(key, skipna=False)
+
+    # Decide on integer indexing
+    if key_type == ""integer"":
+        if not self.index._should_fallback_to_positional():
+            return self.loc[key]
+        else:
+            return self.iloc[key]
+
+    # If key is a list, use loc
+    if isinstance(key, list):
+        return self.loc[key]
+
+    # Default to reindexing if no other conditions are met
+    return self.reindex(key)
+```",
+pandas-21-vall_gpt-1,UNKNOWN,UNKNOWN,"```python
+def _get_with(self, key):
+    # Handle slice objects
+    if isinstance(key, slice):
+        slobj = self.index._convert_slice_indexer(key, kind=""getitem"")
+        return self._slice(slobj)
+
+    # Handle DataFrame indexing
+    elif isinstance(key, ABCDataFrame):
+        raise TypeError(
+            ""Indexing a Series with DataFrame is not ""
+            ""supported, use the appropriate DataFrame column""
+        )
+
+    # Handle tuple indexing
+    elif isinstance(key, tuple):
+        return self._get_values_tuple(key)
+
+    # Handle scalar or unsupported types
+    elif not is_list_like(key):
+        return self.loc[key]
+
+    # Standardize the key to a list if necessary
+    if not isinstance(key, (list, np.ndarray, ExtensionArray, Series, Index)):
+        key = list(key)
+
+    # Determine the type of the key
+    if isinstance(key, Index):
+        key_type = key.inferred_type
+    else:
+        key_type = lib.infer_dtype(key, skipna=False)
+
+    # Decide on indexing method based on key type
+    if key_type == ""integer"":
+        if not self.index._should_fallback_to_positional():
+            return self.loc[key]
+        else:
+            return self.iloc[key]
+
+    # Handle list-like keys
+    if isinstance(key, list):
+        # Handle duplicate indexing case
+        return self.loc[key]
+
+    return self.reindex(key)
+```",
+pandas-21-vall_gpt-2,UNKNOWN,UNKNOWN,"```python
+def _get_with(self, key):
+    # Early extraction of array types
+    key_array = extract_array(key, extract_numpy=True)
+
+    if isinstance(key_array, slice):
+        slobj = self.index._convert_slice_indexer(key_array, kind=""getitem"")
+        return self._slice(slobj)
+    elif isinstance(key_array, ABCDataFrame):
+        raise TypeError(
+            ""Indexing a Series with DataFrame is not ""
+            ""supported, use the appropriate DataFrame column""
+        )
+    elif isinstance(key_array, tuple):
+        return self._get_values_tuple(key_array)
+
+    if not is_list_like(key_array):
+        # Check for scalar types or unsupported types
+        if isinstance(key_array, (np.datetime64, pd.Timestamp)):
+            raise TypeError(""Cannot use datetime64 or Timestamp for indexing"")
+        return self.loc[key_array]
+
+    if not isinstance(key_array, (list, np.ndarray, ExtensionArray, Series, Index)):
+        key_array = list(key_array)
+
+    if isinstance(key_array, Index):
+        key_type = key_array.inferred_type
+    else:
+        key_type = lib.infer_dtype(key_array, skipna=False)
+
+    if key_type == ""integer"":
+        if not self.index._should_fallback_to_positional():
+            return self.loc[key_array]
+        else:
+            return self.iloc[key_array]
+
+    if isinstance(key_array, list):
+        return self.loc[key_array]
+
+    return self.reindex(key_array)
+```",
+pandas-21-vall_gpt-3,UNKNOWN,UNKNOWN,"```python
+def _get_with(self, key):
+    # Check for slice
+    if isinstance(key, slice):
+        slobj = self.index._convert_slice_indexer(key, kind=""getitem"")
+        return self._slice(slobj)
+
+    # Raise error for DataFrame indexing
+    elif isinstance(key, ABCDataFrame):
+        raise TypeError(
+            ""Indexing a Series with DataFrame is not ""
+            ""supported, use the appropriate DataFrame column""
+        )
+
+    # Handle tuple indexing
+    elif isinstance(key, tuple):
+        return self._get_values_tuple(key)
+
+    # Handle non-list-like keys
+    elif not is_list_like(key):
+        return self.loc[key]
+
+    # Normalize key to be a list if not already
+    if not isinstance(key, (list, np.ndarray, ExtensionArray, Series, Index)):
+        key = list(key)
+
+    # Infer key type for appropriate handling
+    if isinstance(key, Index):
+        key_type = key.inferred_type
+    else:
+        key_type = lib.infer_dtype(key, skipna=False)
+
+    # Handling integer index types
+    if key_type == ""integer"":
+        if not self.index._should_fallback_to_positional():
+            return self.loc[key]
+        else:
+            return self.iloc[key]
+
+    # Handling list indexing, which includes duplicate indexing
+    if isinstance(key, list):
+        return self.loc[key]
+
+    # Fallback to reindexing for unsupported key types
+    return self.reindex(key)
+```",
+pandas-21-vall_gpt-4,UNKNOWN,UNKNOWN,"```python
+def _get_with(self, key):
+    # other: fancy integer or otherwise
+    if isinstance(key, slice):
+        # _convert_slice_indexer to determine if this slice is positional
+        # or label based, and if the latter, convert to positional
+        slobj = self.index._convert_slice_indexer(key, kind=""getitem"")
+        return self._slice(slobj)
+    elif isinstance(key, ABCDataFrame):
+        raise TypeError(
+            ""Indexing a Series with DataFrame is not ""
+            ""supported, use the appropriate DataFrame column""
+        )
+    elif isinstance(key, tuple):
+        return self._get_values_tuple(key)
+
+    elif not is_list_like(key):
+        # e.g. scalars that aren't recognized by lib.is_scalar, GH#32684
+        return self.loc[key]
+
+    if not isinstance(key, (list, np.ndarray, ExtensionArray, Series, Index)):
+        key = list(key)
+
+    if isinstance(key, Index):
+        key_type = key.inferred_type
+    else:
+        key_type = lib.infer_dtype(key, skipna=False)
+
+    # Note: The key_type == ""boolean"" case should be caught by the
+    #  com.is_bool_indexer check in __getitem__
+    if key_type == ""integer"":
+        if not self.index._should_fallback_to_positional():
+            return self.loc[key]
+        else:
+            return self.iloc[key]
+
+    # Handle list-like keys, ensuring to handle duplicates correctly
+    if isinstance(key, list):
+        # If the indexer is empty or only contains keys not in the index, raise KeyError
+        if all(val not in self.index for val in key):
+            raise KeyError(f""None of [{key}] are in the [{self.index}]"")
+        return self.loc[key]
+
+    # If all checks fail, reindex
+    return self.reindex(key)
+```",
+pandas-21-vall_gpt-5,UNKNOWN,UNKNOWN,"```python
+def _get_with(self, key):
+    if isinstance(key, slice):
+        slobj = self.index._convert_slice_indexer(key, kind=""getitem"")
+        return self._slice(slobj)
+    elif isinstance(key, ABCDataFrame):
+        raise TypeError(
+            ""Indexing a Series with DataFrame is not ""
+            ""supported, use the appropriate DataFrame column""
+        )
+    elif isinstance(key, tuple):
+        return self._get_values_tuple(key)
+
+    elif not is_list_like(key):
+        return self.loc[key]
+
+    if not isinstance(key, (list, np.ndarray, ExtensionArray, Series, Index)):
+        key = list(key)
+
+    if isinstance(key, Index):
+        key_type = key.inferred_type
+    else:
+        key_type = lib.infer_dtype(key, skipna=False)
+
+    if key_type == ""integer"":
+        if not self.index._should_fallback_to_positional():
+            return self.loc[key]
+        else:
+            return self.iloc[key]
+
+    if isinstance(key, list):
+        return self.loc[key]
+
+    if isinstance(key, Series) and key.dtype == 'object':
+        # Raise KeyError if any of the key values do not exist in the Series index
+        if not all(k in self.index for k in key):
+            raise KeyError(f""None of [{key}] are in the [{self.index.name}]"")
+
+    return self.reindex(key)
+```",
+pandas-21-vall_gpt-6,UNKNOWN,UNKNOWN,"```python
+def _get_with(self, key):
+    # Handle slice objects
+    if isinstance(key, slice):
+        slobj = self.index._convert_slice_indexer(key, kind=""getitem"")
+        return self._slice(slobj)
+
+    # Handle DataFrame indexing
+    elif isinstance(key, ABCDataFrame):
+        raise TypeError(""Indexing a Series with DataFrame is not supported, use the appropriate DataFrame column"")
+
+    # Handle tuple indexing
+    elif isinstance(key, tuple):
+        return self._get_values_tuple(key)
+
+    # If key is not list-like, handle it as a scalar
+    elif not is_list_like(key):
+        return self.loc[key]
+
+    # Convert key to a list if it is not already one of the recognized types
+    if not isinstance(key, (list, np.ndarray, ExtensionArray, Series, Index)):
+        key = list(key)
+
+    # Infer key type
+    if isinstance(key, Index):
+        key_type = key.inferred_type
+    else:
+        key_type = lib.infer_dtype(key, skipna=False)
+
+    # Handle integer type keys
+    if key_type == ""integer"":
+        if not self.index._should_fallback_to_positional():
+            return self.loc[key]
+        else:
+            return self.iloc[key]
+
+    # Handle the case for list keys
+    if isinstance(key, list):
+        return self.loc[key]
+
+    # Lastly, fall back to reindexing
+    return self.reindex(key)
+```",
+pandas-21-vall_gpt-7,UNKNOWN,UNKNOWN,"```python
+def _get_with(self, key):
+    # other: fancy integer or otherwise
+    if isinstance(key, slice):
+        slobj = self.index._convert_slice_indexer(key, kind=""getitem"")
+        return self._slice(slobj)
+    elif isinstance(key, ABCDataFrame):
+        raise TypeError(
+            ""Indexing a Series with DataFrame is not ""
+            ""supported, use the appropriate DataFrame column""
+        )
+    elif isinstance(key, tuple):
+        return self._get_values_tuple(key)
+
+    if not is_list_like(key):
+        return self.loc[key]
+
+    if isinstance(key, Index):
+        key_type = key.inferred_type
+    else:
+        key = list(key)
+        key_type = lib.infer_dtype(key, skipna=False)
+
+    # Properly handle integer indexing
+    if key_type == ""integer"":
+        if not self.index._should_fallback_to_positional():
+            return self.loc[key]
+        else:
+            return self.iloc[key]
+
+    if isinstance(key, list):
+        # handle the dup indexing case
+        return self.loc[key]
+
+    return self.reindex(key)
+```",
+pandas-21-vall_gpt-8,UNKNOWN,UNKNOWN,"```python
+def _get_with(self, key):
+    # Handle fancy integer or otherwise
+    if isinstance(key, slice):
+        # Convert slice indexer to determine if this slice is positional 
+        # or label based, and if label based, convert it to positional
+        slobj = self.index._convert_slice_indexer(key, kind=""getitem"")
+        return self._slice(slobj)
+    elif isinstance(key, ABCDataFrame):
+        raise TypeError(
+            ""Indexing a Series with DataFrame is not ""
+            ""supported, use the appropriate DataFrame column""
+        )
+    elif isinstance(key, tuple):
+        return self._get_values_tuple(key)
+
+    if not is_list_like(key):
+        return self.loc[key]
+
+    if not isinstance(key, (list, np.ndarray, ExtensionArray, Series, Index)):
+        key = list(key)
+
+    if isinstance(key, Index):
+        key_type = key.inferred_type
+    else:
+        key_type = lib.infer_dtype(key, skipna=False)
+
+    # Check if the key is an integer type and decide whether to fallback to positional
+    if key_type == ""integer"":
+        if not self.index._should_fallback_to_positional():
+            return self.loc[key]
+        else:
+            return self.iloc[key]
+
+    if isinstance(key, list):
+        return self.loc[key]
+
+    return self.reindex(key)
+```",
+pandas-21-vall_gpt-9,UNKNOWN,UNKNOWN,"```python
+def _get_with(self, key):
+    # Handle slice indexing
+    if isinstance(key, slice):
+        slobj = self.index._convert_slice_indexer(key, kind=""getitem"")
+        return self._slice(slobj)
+
+    # Handle DataFrame indexing
+    elif isinstance(key, ABCDataFrame):
+        raise TypeError(
+            ""Indexing a Series with DataFrame is not ""
+            ""supported, use the appropriate DataFrame column""
+        )
+
+    # Handle tuple indexing
+    elif isinstance(key, tuple):
+        return self._get_values_tuple(key)
+
+    # Handle scalar and unsupported types
+    elif not is_list_like(key):
+        return self.loc[key]
+
+    # Ensure the key is a list-like type for further operations
+    if not isinstance(key, (list, np.ndarray, ExtensionArray, Series, Index)):
+        key = list(key)
+
+    # Determine the key type
+    if isinstance(key, Index):
+        key_type = key.inferred_type
+    else:
+        key_type = lib.infer_dtype(key, skipna=False)
+
+    # Handle integer keys based on index properties
+    if key_type == ""integer"":
+        if not self.index._should_fallback_to_positional():
+            return self.loc[key]
+        else:
+            return self.iloc[key]
+
+    # Handle list key indexing
+    if isinstance(key, list):
+        return self.loc[key]
+
+    # Fallback to reindexing
+    return self.reindex(key)
+```",

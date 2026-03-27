@@ -1,0 +1,366 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+sanic-4-vall_llama-0,UNKNOWN,UNKNOWN,"```python
+def url_for(self, view_name, **kwargs):
+    """"""
+    Same as :func:`sanic.Sanic.url_for`, but automatically determine
+    `scheme` and `netloc` based on the request. Since this method is aiming
+    to generate correct schema & netloc, `_external` is implied.
+    
+    :param kwargs: takes same parameters as in :func:`sanic.Sanic.url_for`
+    :return: an absolute URL to the given view
+    :rtype: str
+    """"""
+    server_name = self.app.config.get(""SERVER_NAME"", None)
+    
+    if server_name and ""//"" in server_name:
+        return self.app.url_for(view_name, _external=True, **kwargs)
+
+    scheme = self.scheme
+    host = self.server_name
+    port = self.server_port
+
+    if (scheme.lower() in (""http"", ""ws"") and port == 80) or (
+        scheme.lower() in (""https"", ""wss"") and port == 443
+    ):
+        netloc = host
+    else:
+        netloc = ""{}:{}"".format(host, port)
+
+    return self.app.url_for(
+        view_name, _external=True, _scheme=scheme, _server=netloc, **kwargs
+    )
+```",
+sanic-4-vall_llama-1,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Identify the error:** The error encountered is a `KeyError` with the message `'SERVER_NAME'`, indicating that this key does not exist in the configuration.
+2. **Understand the context:** The `url_for` function is being used to generate a URL. It relies on the `SERVER_NAME` configuration to construct the URL correctly, especially when running behind a proxy.
+3. **Analyze the provided code:** The `url_for` function checks if `SERVER_NAME` contains `//`, in which case it delegates to `app.url_for`. Otherwise, it constructs the URL using the scheme, server name, and port from the request.
+4. **Identify the cause:** The cause of the error is the absence of the `SERVER_NAME` key in the configuration, which is required for the URL construction.
+
+### Fixed solution:
+```python
+def url_for(self, view_name, **kwargs):
+    """"""
+    Same as :func:`sanic.Sanic.url_for`, but automatically determine
+    `scheme` and `netloc` base on the request. Since this method is aiming
+    to generate correct schema & netloc, `_external` is implied.
+
+    :param kwargs: takes same parameters as in :func:`sanic.Sanic.url_for`
+    :return: an absolute url to the given view
+    :rtype: str
+    """"""
+    server_name = self.app.config.get(""SERVER_NAME"")  # Use get to avoid KeyError
+
+    if server_name and ""//"" in server_name:
+        return self.app.url_for(view_name, _external=True, **kwargs)
+
+    scheme = self.scheme
+    host = self.server_name
+    port = self.server_port
+
+    if (scheme.lower() in (""http"", ""ws"") and port == 80) or (
+        scheme.lower() in (""https"", ""wss"") and port == 443
+    ):
+        netloc = host
+    else:
+        netloc = ""{}:{}"".format(host, port)
+
+    return self.app.url_for(
+        view_name, _external=True, _scheme=scheme, _server=netloc, **kwargs
+    )
+```
+
+### Explanation of changes:
+* **Usage of `get` method:** Changed `self.app.config.SERVER_NAME` to `self.app.config.get(""SERVER_NAME"")` to safely retrieve the `SERVER_NAME` value without raising a `KeyError` if it's not set.
+* **Default value handling:** By using `get`, if `SERVER_NAME` is not defined, it will be `None`, and the function will proceed to construct the URL based on the request's scheme, server name, and port.
+
+### Tests and example uses:
+To test this function, you can use the provided test case or create additional ones to cover different scenarios, such as:
+```python
+def test_url_for_without_server_name(app):
+    @app.route(""/sample"")
+    def sample(request):
+        return json({""url"": request.url_for(""url_for"")})
+
+    @app.route(""/url-for"")
+    def url_for(request):
+        return text(""url-for"")
+
+    request, response = app.test_client.get(""/sample"")
+    assert (
+        response.json[""url""]
+        == f""http://127.0.0.1:{app.test_client.port}/url-for""
+    )
+```
+This test ensures that the `url_for` function generates the correct URL even when `SERVER_NAME` is not explicitly set in the configuration.",
+sanic-4-vall_llama-2,UNKNOWN,UNKNOWN,"### Corrected function
+```python
+def url_for(self, view_name, **kwargs):
+    """"""
+    Same as :func:`sanic.Sanic.url_for`, but automatically determine
+    `scheme` and `netloc` base on the request. Since this method is aiming
+    to generate correct schema & netloc, `_external` is implied.
+
+    :param kwargs: takes same parameters as in :func:`sanic.Sanic.url_for`
+    :return: an absolute url to the given view
+    :rtype: str
+    """"""
+    # Check if SERVER_NAME exists to avoid KeyError
+    server_name = getattr(self.app.config, 'SERVER_NAME', None)
+    
+    # If SERVER_NAME is set and has protocol
+    if server_name and ""//"" in server_name:
+        # Handle by calling app.url_for with _external=True
+        return self.app.url_for(view_name, _external=True, **kwargs)
+
+    # Determine scheme, host, and port dynamically
+    scheme = self.scheme
+    host = self.server_name
+    port = self.server_port
+
+    # Construct netloc considering default ports
+    if (scheme.lower() in (""http"", ""ws"") and port == 80) or (
+        scheme.lower() in (""https"", ""wss"") and port == 443
+    ):
+        netloc = host
+    else:
+        netloc = ""{}:{}"".format(host, port)
+
+    # Finally, return absolute URL
+    return self.app.url_for(
+        view_name, _external=True, _scheme=scheme, _server=netloc, **kwargs
+    )
+```",
+sanic-4-vall_llama-3,UNKNOWN,UNKNOWN,"```python
+def url_for(self, view_name, **kwargs):
+    """"""
+    Same as :func:`sanic.Sanic.url_for`, but automatically determine
+    `scheme` and `netloc` based on the request. Since this method is aiming
+    to generate correct schema & netloc, `_external` is implied.
+
+    :param kwargs: takes same parameters as in :func:`sanic.Sanic.url_for`
+    :return: an absolute url to the given view
+    :rtype: str
+    """"""
+    # Full URL SERVER_NAME can only be handled in app.url_for
+    server_name = self.app.config.get(""SERVER_NAME"", """")
+    
+    if ""//"" in server_name:
+        return self.app.url_for(view_name, _external=True, **kwargs)
+
+    scheme = self.scheme
+    host = self.server_name or """"
+    port = self.server_port
+
+    if (scheme.lower() in (""http"", ""ws"") and port == 80) or (
+        scheme.lower() in (""https"", ""wss"") and port == 443
+    ):
+        netloc = host
+    else:
+        netloc = ""{}:{}"".format(host, port)
+
+    return self.app.url_for(
+        view_name, _external=True, _scheme=scheme, _server=netloc, **kwargs
+    )
+```",
+sanic-4-vall_llama-4,UNKNOWN,UNKNOWN,"```python
+def url_for(self, view_name, **kwargs):
+    """"""
+    Same as :func:`sanic.Sanic.url_for`, but automatically determine
+    `scheme` and `netloc` based on the request. Since this method is aiming
+    to generate correct schema & netloc, `_external` is implied.
+
+    :param kwargs: takes same parameters as in :func:`sanic.Sanic.url_for`
+    :return: an absolute url to the given view
+    :rtype: str
+    """"""
+    server_name = self.app.config.get(""SERVER_NAME"")
+    if server_name and ""//"" in server_name:
+        return self.app.url_for(view_name, _external=True, **kwargs)
+
+    scheme = self.scheme
+    host = self.server_name
+    port = self.server_port
+
+    if (scheme.lower() in (""http"", ""ws"") and port == 80) or (
+        scheme.lower() in (""https"", ""wss"") and port == 443
+    ):
+        netloc = host
+    else:
+        netloc = ""{}:{}"".format(host, port)
+
+    return self.app.url_for(
+        view_name, _external=True, _scheme=scheme, _server=netloc, **kwargs
+    )
+```",
+sanic-4-vall_llama-5,UNKNOWN,UNKNOWN,"### Corrected function
+```python
+def url_for(self, view_name, **kwargs):
+    """"""
+    Same as :func:`sanic.Sanic.url_for`, but automatically determine
+    `scheme` and `netloc` base on the request. Since this method is aiming
+    to generate correct schema & netloc, `_external` is implied.
+
+    :param kwargs: takes same parameters as in :func:`sanic.Sanic.url_for`
+    :return: an absolute url to the given view
+    :rtype: str
+    """"""
+    # Full URL SERVER_NAME can only be handled in app.url_for
+    if hasattr(self.app.config, 'SERVER_NAME') and ""//"" in self.app.config.SERVER_NAME:
+        return self.app.url_for(view_name, _external=True, **kwargs)
+
+    scheme = self.scheme
+    host = self.server_name
+    port = self.server_port
+
+    if (scheme.lower() in (""http"", ""ws"") and port == 80) or (
+        scheme.lower() in (""https"", ""wss"") and port == 443
+    ):
+        netloc = host
+    else:
+        netloc = ""{}:{}"".format(host, port)
+
+    return self.app.url_for(
+        view_name, _external=True, _scheme=scheme, _server=netloc, **kwargs
+    )
+```",
+sanic-4-vall_llama-6,UNKNOWN,UNKNOWN,"```python
+def url_for(self, view_name, **kwargs):
+    """"""
+    Same as :func:`sanic.Sanic.url_for`, but automatically determine
+    `scheme` and `netloc` based on the request. Since this method is aiming
+    to generate correct schema & netloc, `_external` is implied.
+
+    :param kwargs: takes same parameters as in :func:`sanic.Sanic.url_for`
+    :return: an absolute url to the given view
+    :rtype: str
+    """"""
+    server_name = self.app.config.get(""SERVER_NAME"")
+    
+    if server_name and ""//"" in server_name:
+        return self.app.url_for(view_name, _external=True, **kwargs)
+
+    scheme = self.scheme
+    host = self.server_name
+    port = self.server_port
+
+    if (scheme.lower() in (""http"", ""ws"") and port == 80) or (
+        scheme.lower() in (""https"", ""wss"") and port == 443
+    ):
+        netloc = host
+    else:
+        netloc = f""{host}:{port}""
+
+    return self.app.url_for(
+        view_name, _external=True, _scheme=scheme, _server=netloc, **kwargs
+    )
+```",
+sanic-4-vall_llama-7,UNKNOWN,UNKNOWN,"```python
+def url_for(self, view_name, **kwargs):
+    """"""
+    Same as :func:`sanic.Sanic.url_for`, but automatically determine
+    `scheme` and `netloc` base on the request. Since this method is aiming
+    to generate correct schema & netloc, `_external` is implied.
+
+    :param kwargs: takes same parameters as in :func:`sanic.Sanic.url_for`
+    :return: an absolute url to the given view
+    :rtype: str
+    """"""
+    # Full URL SERVER_NAME can only be handled in app.url_for
+    if hasattr(self.app.config, 'SERVER_NAME') and ""//"" in self.app.config.SERVER_NAME:
+        return self.app.url_for(view_name, _external=True, **kwargs)
+
+    scheme = self.scheme
+    host = self.server_name
+    port = self.server_port
+
+    if (scheme.lower() in (""http"", ""ws"") and port == 80) or (
+        scheme.lower() in (""https"", ""wss"") and port == 443
+    ):
+        netloc = host
+    else:
+        netloc = ""{}:{}"".format(host, port)
+
+    return self.app.url_for(
+        view_name, _external=True, _scheme=scheme, _server=netloc, **kwargs
+    )
+```",
+sanic-4-vall_llama-8,UNKNOWN,UNKNOWN,"### Step 1: Analyze the Buggy Function and Its Relationship with Corresponding GitHub Issue's or Pull Request's Title and Description
+The buggy function `url_for` in the Sanic framework is used to generate an absolute URL for a given view name. However, it raises a `KeyError` when `SERVER_NAME` is not defined in the configuration. This issue was introduced in version 19.9.0 and did not exist in earlier versions like 19.6.3.
+
+### Step 2: Identify Potential Error Locations Within the Buggy Function
+The error occurs when accessing `self.app.config.SERVER_NAME`. If `SERVER_NAME` is not set, this raises a `KeyError`.
+
+### Step 3: Identify the Cause of the Bug
+The cause of the bug is the strict requirement for `SERVER_NAME` without properly handling cases where it is not defined, leading to a `KeyError`.
+
+### Step 4: Think of a Strategy for Fixing the Bug
+To fix the bug, we need to handle the case where `SERVER_NAME` is not defined. This can be done by using the `get` method, which allows us to specify a default value if the key does not exist.
+
+### Step 5: Edit the Content of the Function and Output the Corrected Version
+The corrected function should safely access `SERVER_NAME` and provide a default if it's not set. It should also consider the scenario where the server is running behind a proxy and adjust the URL generation accordingly.
+
+```python
+def url_for(self, view_name, **kwargs):
+    """"""
+    Same as :func:`sanic.Sanic.url_for`, but automatically determine
+    `scheme` and `netloc` base on the request. Since this method is aiming
+    to generate correct schema & netloc, `_external` is implied.
+
+    :param kwargs: takes same parameters as in :func:`sanic.Sanic.url_for`
+    :return: an absolute url to the given view
+    :rtype: str
+    """"""
+    # Safely access SERVER_NAME with a default value
+    server_name = self.app.config.get(""SERVER_NAME"", """")
+    
+    # Full URL SERVER_NAME can only be handled in app.url_for
+    if server_name and ""//"" in server_name:
+        return self.app.url_for(view_name, _external=True, **kwargs)
+
+    scheme = self.scheme
+    host = self.server_name
+    port = self.server_port
+
+    if (scheme.lower() in (""http"", ""ws"") and port == 80) or (
+        scheme.lower() in (""https"", ""wss"") and port == 443
+    ):
+        netloc = host
+    else:
+        netloc = ""{}:{}"".format(host, port)
+
+    return self.app.url_for(
+        view_name, _external=True, _scheme=scheme, _server=netloc, **kwargs
+    )
+```",
+sanic-4-vall_llama-9,UNKNOWN,UNKNOWN,"```python
+def url_for(self, view_name, **kwargs):
+    """"""
+    Same as :func:`sanic.Sanic.url_for`, but automatically determine
+    `scheme` and `netloc` based on the request. Since this method is aiming
+    to generate correct schema & netloc, `_external` is implied.
+    
+    :param kwargs: takes same parameters as in :func:`sanic.Sanic.url_for`
+    :return: an absolute url to the given view
+    :rtype: str
+    """"""
+    # Full URL SERVER_NAME can only be handled in app.url_for
+    server_name = getattr(self.app.config, 'SERVER_NAME', None)
+    
+    if server_name and ""//"" in server_name:
+        return self.app.url_for(view_name, _external=True, **kwargs)
+
+    scheme = self.scheme
+    host = self.server_name
+    port = self.server_port
+
+    if (scheme.lower() in (""http"", ""ws"") and port == 80) or (
+        scheme.lower() in (""https"", ""wss"") and port == 443
+    ):
+        netloc = host
+    else:
+        netloc = ""{}:{}"".format(host, port)
+
+    return self.app.url_for(
+        view_name, _external=True, _scheme=scheme, _server=netloc, **kwargs
+    )
+```",

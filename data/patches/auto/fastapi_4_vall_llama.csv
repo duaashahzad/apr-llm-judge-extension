@@ -1,0 +1,1272 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+fastapi-4-vall_llama-0,UNKNOWN,UNKNOWN,"```python
+def get_openapi_path(
+    *, route: routing.APIRoute, model_name_map: Dict[Type, str]
+) -> Tuple[Dict, Dict, Dict]:
+    path = {}
+    security_schemes: Dict[str, Any] = {}
+    definitions: Dict[str, Any] = {}
+    assert route.methods is not None, ""Methods must be a list""
+    assert route.response_class, ""A response class is needed to generate OpenAPI""
+    route_response_media_type: Optional[str] = route.response_class.media_type
+    if route.include_in_schema:
+        for method in route.methods:
+            operation = get_openapi_operation_metadata(route=route, method=method)
+            parameters: List[Dict] = []
+            flat_dependant = get_flat_dependant(route.dependant, skip_repeats=True)
+            security_definitions, operation_security = get_openapi_security_definitions(
+                flat_dependant=flat_dependant
+            )
+            if operation_security:
+                operation.setdefault(""security"", []).extend(operation_security)
+            if security_definitions:
+                security_schemes.update(security_definitions)
+            all_route_params = get_openapi_params(route.dependant)
+            operation_parameters = get_openapi_operation_parameters(all_route_params)
+            parameters = list(
+                {param[""name""]: param for param in operation_parameters}.values()
+            )
+            if parameters:
+                operation[""parameters""] = parameters
+            if method in METHODS_WITH_BODY:
+                request_body_oai = get_openapi_operation_request_body(
+                    body_field=route.body_field, model_name_map=model_name_map
+                )
+                if request_body_oai:
+                    operation[""requestBody""] = request_body_oai
+            if route.callbacks:
+                callbacks = {}
+                for callback in route.callbacks:
+                    cb_path, cb_security_schemes, cb_definitions, = get_openapi_path(
+                        route=callback, model_name_map=model_name_map
+                    )
+                    callbacks[callback.name] = {callback.path: cb_path}
+                operation[""callbacks""] = callbacks
+            if route.responses:
+                for (additional_status_code, response) in route.responses.items():
+                    assert isinstance(
+                        response, dict
+                    ), ""An additional response must be a dict""
+                    field = route.response_fields.get(additional_status_code)
+                    if field:
+                        response_schema, _, _ = field_schema(
+                            field, model_name_map=model_name_map, ref_prefix=REF_PREFIX
+                        )
+                        response.setdefault(""content"", {}).setdefault(
+                            route_response_media_type or ""application/json"", {}
+                        )[""schema""] = response_schema
+                    status_text: Optional[str] = status_code_ranges.get(
+                        str(additional_status_code).upper()
+                    ) or http.client.responses.get(int(additional_status_code))
+                    response.setdefault(
+                        ""description"", status_text or ""Additional Response""
+                    )
+                    status_code_key = str(additional_status_code).upper()
+                    if status_code_key == ""DEFAULT"":
+                        status_code_key = ""default""
+                    operation.setdefault(""responses"", {})[status_code_key] = response
+            status_code = str(route.status_code)
+            operation.setdefault(""responses"", {}).setdefault(status_code, {})[
+                ""description""
+            ] = route.response_description
+            if (
+                route_response_media_type
+                and route.status_code not in STATUS_CODES_WITH_NO_BODY
+            ):
+                response_schema = {""type"": ""string""}
+                if lenient_issubclass(route.response_class, JSONResponse):
+                    if route.response_field:
+                        response_schema, _, _ = field_schema(
+                            route.response_field,
+                            model_name_map=model_name_map,
+                            ref_prefix=REF_PREFIX,
+                        )
+                    else:
+                        response_schema = {}
+                operation.setdefault(""responses"", {}).setdefault(
+                    status_code, {}
+                ).setdefault(""content"", {}).setdefault(route_response_media_type, {})[
+                    ""schema""
+                ] = response_schema
+
+            http422 = str(HTTP_422_UNPROCESSABLE_ENTITY)
+            if (all_route_params or route.body_field) and not any(
+                [
+                    status in operation[""responses""]
+                    for status in [http422, ""4XX"", ""default""]
+                ]
+            ):
+                operation[""responses""][http422] = {
+                    ""description"": ""Validation Error"",
+                    ""content"": {
+                        ""application/json"": {
+                            ""schema"": {""$ref"": REF_PREFIX + ""HTTPValidationError""}
+                        }
+                    },
+                }
+                if ""ValidationError"" not in definitions:
+                    definitions.update(
+                        {
+                            ""ValidationError"": validation_error_definition,
+                            ""HTTPValidationError"": validation_error_response_definition,
+                        }
+                    )
+            path[method.lower()] = operation
+    return path, security_schemes, definitions
+```",
+fastapi-4-vall_llama-1,UNKNOWN,UNKNOWN,"```python
+def get_openapi_path(
+    *, route: routing.APIRoute, model_name_map: Dict[Type, str]
+) -> Tuple[Dict, Dict, Dict]:
+    path = {}
+    security_schemes: Dict[str, Any] = {}
+    definitions: Dict[str, Any] = {}
+    assert route.methods is not None, ""Methods must be a list""
+    assert route.response_class, ""A response class is needed to generate OpenAPI""
+    route_response_media_type: Optional[str] = route.response_class.media_type
+    if route.include_in_schema:
+        for method in route.methods:
+            operation = get_openapi_operation_metadata(route=route, method=method)
+            parameters: List[Dict] = []
+            flat_dependant = get_flat_dependant(route.dependant, skip_repeats=True)
+            security_definitions, operation_security = get_openapi_security_definitions(
+                flat_dependant=flat_dependant
+            )
+            if operation_security:
+                operation.setdefault(""security"", []).extend(operation_security)
+            if security_definitions:
+                security_schemes.update(security_definitions)
+            all_route_params = get_openapi_params(route.dependant)
+            operation_parameters = get_openapi_operation_parameters(all_route_params)
+            parameters.extend(operation_parameters)
+            if parameters:
+                # This line ensures that parameters with the same name are not duplicated
+                operation[""parameters""] = list(
+                    {param[""name""]: param for param in parameters}.values()
+                )
+            if method in METHODS_WITH_BODY:
+                request_body_oai = get_openapi_operation_request_body(
+                    body_field=route.body_field, model_name_map=model_name_map
+                )
+                if request_body_oai:
+                    operation[""requestBody""] = request_body_oai
+            if route.callbacks:
+                callbacks = {}
+                for callback in route.callbacks:
+                    cb_path, cb_security_schemes, cb_definitions, = get_openapi_path(
+                        route=callback, model_name_map=model_name_map
+                    )
+                    callbacks[callback.name] = {callback.path: cb_path}
+                operation[""callbacks""] = callbacks
+            if route.responses:
+                for (additional_status_code, response) in route.responses.items():
+                    assert isinstance(
+                        response, dict
+                    ), ""An additional response must be a dict""
+                    field = route.response_fields.get(additional_status_code)
+                    if field:
+                        response_schema, _, _ = field_schema(
+                            field, model_name_map=model_name_map, ref_prefix=REF_PREFIX
+                        )
+                        response.setdefault(""content"", {}).setdefault(
+                            route_response_media_type or ""application/json"", {}
+                        )[""schema""] = response_schema
+                    status_text: Optional[str] = status_code_ranges.get(
+                        str(additional_status_code).upper()
+                    ) or http.client.responses.get(int(additional_status_code))
+                    response.setdefault(
+                        ""description"", status_text or ""Additional Response""
+                    )
+                    status_code_key = str(additional_status_code).upper()
+                    if status_code_key == ""DEFAULT"":
+                        status_code_key = ""default""
+                    operation.setdefault(""responses"", {})[status_code_key] = response
+            status_code = str(route.status_code)
+            operation.setdefault(""responses"", {}).setdefault(status_code, {})[
+                ""description""
+            ] = route.response_description
+            if (
+                route_response_media_type
+                and route.status_code not in STATUS_CODES_WITH_NO_BODY
+            ):
+                response_schema = {""type"": ""string""}
+                if lenient_issubclass(route.response_class, JSONResponse):
+                    if route.response_field:
+                        response_schema, _, _ = field_schema(
+                            route.response_field,
+                            model_name_map=model_name_map,
+                            ref_prefix=REF_PREFIX,
+                        )
+                    else:
+                        response_schema = {}
+                operation.setdefault(""responses"", {}).setdefault(
+                    status_code, {}
+                ).setdefault(""content"", {}).setdefault(route_response_media_type, {})[
+                    ""schema""
+                ] = response_schema
+
+            http422 = str(HTTP_422_UNPROCESSABLE_ENTITY)
+            if (all_route_params or route.body_field) and not any(
+                [
+                    status in operation[""responses""]
+                    for status in [http422, ""4XX"", ""default""]
+                ]
+            ):
+                operation[""responses""][http422] = {
+                    ""description"": ""Validation Error"",
+                    ""content"": {
+                        ""application/json"": {
+                            ""schema"": {""$ref"": REF_PREFIX + ""HTTPValidationError""}
+                        }
+                    },
+                }
+                if ""ValidationError"" not in definitions:
+                    definitions.update(
+                        {
+                            ""ValidationError"": validation_error_definition,
+                            ""HTTPValidationError"": validation_error_response_definition,
+                        }
+                    )
+            path[method.lower()] = operation
+    return path, security_schemes, definitions
+```",
+fastapi-4-vall_llama-2,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Analysis of used functions and methods**: The function `get_openapi_path` utilizes several other functions to generate the OpenAPI path metadata for a given route. These include `get_openapi_operation_metadata`, `get_flat_dependant`, `get_openapi_security_definitions`, `get_openapi_params`, `get_openapi_operation_parameters`, `get_openapi_operation_request_body`, and others. Understanding the roles of these functions is crucial for identifying the source of the bug.
+
+2. **Identification of the bug source**: The provided test and error message suggest that the bug lies in the generation of the OpenAPI schema for a route, specifically in the handling of path parameters and dependencies. The issue arises when the `user_id` parameter is duplicated in the generated OpenAPI schema.
+
+3. **Impact of the bug**: The duplicated `user_id` parameter in the OpenAPI schema is incorrect according to the OpenAPI specification. This could lead to confusion when the API is consumed, as the client might not know which `user_id` parameter to use. Moreover, it could cause validation issues, as the OpenAPI schema does not accurately reflect the API's structure.
+
+4. **Bug fixing strategy**: To fix this bug, we need to ensure that the `get_openapi_path` function correctly handles path parameters and dependencies. Specifically, we should prevent the duplication of parameters in the OpenAPI schema. This might involve modifying the logic in `get_openapi_params` or `get_openapi_operation_parameters` to eliminate duplicate parameters.
+
+### Fixed solution:
+```python
+def get_openapi_path(
+    *, route: routing.APIRoute, model_name_map: Dict[Type, str]
+) -> Tuple[Dict, Dict, Dict]:
+    path = {}
+    security_schemes: Dict[str, Any] = {}
+    definitions: Dict[str, Any] = {}
+    assert route.methods is not None, ""Methods must be a list""
+    assert route.response_class, ""A response class is needed to generate OpenAPI""
+    route_response_media_type: Optional[str] = route.response_class.media_type
+    if route.include_in_schema:
+        for method in route.methods:
+            operation = get_openapi_operation_metadata(route=route, method=method)
+            parameters: List[Dict] = []
+            flat_dependant = get_flat_dependant(route.dependant, skip_repeats=True)
+            security_definitions, operation_security = get_openapi_security_definitions(
+                flat_dependant=flat_dependant
+            )
+            if operation_security:
+                operation.setdefault(""security"", []).extend(operation_security)
+            if security_definitions:
+                security_schemes.update(security_definitions)
+            all_route_params = get_openapi_params(route.dependant)
+            # Remove duplicate parameters based on name and 'in' location
+            seen_params = set()
+            operation_parameters = []
+            for param in all_route_params:
+                key = (param.name, param.in_)
+                if key not in seen_params:
+                    seen_params.add(key)
+                    field_info = get_field_info(param)
+                    field_info = cast(Param, field_info)
+                    parameter = {
+                        ""name"": param.alias,
+                        ""in"": field_info.in_.value,
+                        ""required"": param.required,
+                        ""schema"": field_schema(param, model_name_map={})[0],
+                    }
+                    if field_info.description:
+                        parameter[""description""] = field_info.description
+                    if field_info.deprecated:
+                        parameter[""deprecated""] = field_info.deprecated
+                    operation_parameters.append(parameter)
+            parameters.extend(operation_parameters)
+            if parameters:
+                operation[""parameters""] = parameters
+            if method in METHODS_WITH_BODY:
+                request_body_oai = get_openapi_operation_request_body(
+                    body_field=route.body_field, model_name_map=model_name_map
+                )
+                if request_body_oai:
+                    operation[""requestBody""] = request_body_oai
+            if route.callbacks:
+                callbacks = {}
+                for callback in route.callbacks:
+                    cb_path, cb_security_schemes, cb_definitions, = get_openapi_path(
+                        route=callback, model_name_map=model_name_map
+                    )
+                    callbacks[callback.name] = {callback.path: cb_path}
+                operation[""callbacks""] = callbacks
+            if route.responses:
+                for (additional_status_code, response) in route.responses.items():
+                    assert isinstance(
+                        response, dict
+                    ), ""An additional response must be a dict""
+                    field = route.response_fields.get(additional_status_code)
+                    if field:
+                        response_schema, _, _ = field_schema(
+                            field, model_name_map=model_name_map, ref_prefix=REF_PREFIX
+                        )
+                        response.setdefault(""content"", {}).setdefault(
+                            route_response_media_type or ""application/json"", {}
+                        )[""schema""] = response_schema
+                    status_text: Optional[str] = status_code_ranges.get(
+                        str(additional_status_code).upper()
+                    ) or http.client.responses.get(int(additional_status_code))
+                    response.setdefault(
+                        ""description"", status_text or ""Additional Response""
+                    )
+                    status_code_key = str(additional_status_code).upper()
+                    if status_code_key == ""DEFAULT"":
+                        status_code_key = ""default""
+                    operation.setdefault(""responses"", {})[status_code_key] = response
+            status_code = str(route.status_code)
+            operation.setdefault(""responses"", {}).setdefault(status_code, {})[
+                ""description""
+            ] = route.response_description
+            if (
+                route_response_media_type
+                and route.status_code not in STATUS_CODES_WITH_NO_BODY
+            ):
+                response_schema = {""type"": ""string""}
+                if lenient_issubclass(route.response_class, JSONResponse):
+                    if route.response_field:
+                        response_schema, _, _ = field_schema(
+                            route.response_field,
+                            model_name_map=model_name_map,
+                            ref_prefix=REF_PREFIX,
+                        )
+                    else:
+                        response_schema = {}
+                operation.setdefault(""responses"", {}).setdefault(
+                    status_code, {}
+                ).setdefault(""content"", {}).setdefault(route_response_media_type, {})[
+                    ""schema""
+                ] = response_schema
+
+            http422 = str(HTTP_422_UNPROCESSABLE_ENTITY)
+            if (all_route_params or route.body_field) and not any(
+                [
+                    status in operation[""responses""]
+                    for status in [http422, ""4XX"", ""default""]
+                ]
+            ):
+                operation[""responses""][http422] = {
+                    ""description"": ""Validation Error"",
+                    ""content"": {
+                        ""application/json"": {
+                            ""schema"": {""$ref"": REF_PREFIX + ""HTTPValidationError""}
+                        }
+                    },
+                }
+                if ""ValidationError"" not in definitions:
+                    definitions.update(
+                        {
+                            ""ValidationError"": validation_error_definition,
+                            ""HTTPValidationError"": validation_error_response_definition,
+                        }
+                    )
+            path[method.lower()] = operation
+    return path, security_schemes, definitions
+```
+### Explanation of changes:
+*   **Duplicate parameter removal**: We iterate over all route parameters and filter out duplicates based on their name and location ('in' field). This ensures that each parameter appears only once in the OpenAPI schema.
+*   **Updated parameter processing**: The logic for processing parameters has been modified to prevent duplication. We now use a set (`seen_params`) to keep track of parameters we've already seen, ensuring that each parameter is added to the `operation_parameters` list only once.
+*   **Removal of duplicate user_id parameter**: By removing duplicate parameters, we prevent the `user_id` parameter from being listed twice in the OpenAPI schema for the same route.
+
+### Tests and example uses:
+You can use the test function provided in the issue description to test the corrected `get_openapi_path` function:
+```python
+def test_reused_param():
+    response = client.get(""/openapi.json"")
+    data = response.json()
+    assert data == openapi_schema
+```
+Additionally, you can test the function with different routes, methods, and parameters to ensure it handles various scenarios correctly. For example:
+```python
+# Test with multiple parameters
+@app.get(""/items/{item_id}"")
+async def read_item(item_id: int, user_id: int):
+    return {""item_id"": item_id, ""user_id"": user_id}
+
+# Test with body parameters
+@app.post(""/items/"")
+async def create_item(item: Item):
+    return item
+
+# Test with query parameters
+@app.get(""/items/"")
+async def read_items(page: int = 1, size: int = 10):
+    return {""page"": page, ""size"": size}
+```
+These tests should help ensure that the corrected `get_openapi_path` function generates accurate OpenAPI schemas for different API endpoints.",
+fastapi-4-vall_llama-3,UNKNOWN,UNKNOWN,"```python
+def get_openapi_path(
+    *, route: routing.APIRoute, model_name_map: Dict[Type, str]
+) -> Tuple[Dict, Dict, Dict]:
+    path = {}
+    security_schemes: Dict[str, Any] = {}
+    definitions: Dict[str, Any] = {}
+    assert route.methods is not None, ""Methods must be a list""
+    assert route.response_class, ""A response class is needed to generate OpenAPI""
+    route_response_media_type: Optional[str] = route.response_class.media_type
+    if route.include_in_schema:
+        for method in route.methods:
+            operation = get_openapi_operation_metadata(route=route, method=method)
+            parameters: List[Dict] = []
+            flat_dependant = get_flat_dependant(route.dependant, skip_repeats=True)
+            security_definitions, operation_security = get_openapi_security_definitions(
+                flat_dependant=flat_dependant
+            )
+            if operation_security:
+                operation.setdefault(""security"", []).extend(operation_security)
+            if security_definitions:
+                security_schemes.update(security_definitions)
+            all_route_params = get_openapi_params(route.dependant)
+            operation_parameters = get_openapi_operation_parameters(all_route_params)
+            parameters.extend(operation_parameters)
+            if parameters:
+                operation[""parameters""] = list(
+                    {param[""name""]: param for param in parameters}.values()
+                )
+            if method in METHODS_WITH_BODY:
+                request_body_oai = get_openapi_operation_request_body(
+                    body_field=route.body_field, model_name_map=model_name_map
+                )
+                if request_body_oai:
+                    operation[""requestBody""] = request_body_oai
+            if route.callbacks:
+                callbacks = {}
+                for callback in route.callbacks:
+                    cb_path, cb_security_schemes, cb_definitions, = get_openapi_path(
+                        route=callback, model_name_map=model_name_map
+                    )
+                    callbacks[callback.name] = {callback.path: cb_path}
+                operation[""callbacks""] = callbacks
+            if route.responses:
+                for (additional_status_code, response) in route.responses.items():
+                    assert isinstance(
+                        response, dict
+                    ), ""An additional response must be a dict""
+                    field = route.response_fields.get(additional_status_code)
+                    if field:
+                        response_schema, _, _ = field_schema(
+                            field, model_name_map=model_name_map, ref_prefix=REF_PREFIX
+                        )
+                        response.setdefault(""content"", {}).setdefault(
+                            route_response_media_type or ""application/json"", {}
+                        )[""schema""] = response_schema
+                    status_text: Optional[str] = status_code_ranges.get(
+                        str(additional_status_code).upper()
+                    ) or http.client.responses.get(int(additional_status_code))
+                    response.setdefault(
+                        ""description"", status_text or ""Additional Response""
+                    )
+                    status_code_key = str(additional_status_code).upper()
+                    if status_code_key == ""DEFAULT"":
+                        status_code_key = ""default""
+                    operation.setdefault(""responses"", {})[status_code_key] = response
+            status_code = str(route.status_code)
+            operation.setdefault(""responses"", {}).setdefault(status_code, {})[
+                ""description""
+            ] = route.response_description
+            if (
+                route_response_media_type
+                and route.status_code not in STATUS_CODES_WITH_NO_BODY
+            ):
+                response_schema = {""type"": ""string""}
+                if lenient_issubclass(route.response_class, JSONResponse):
+                    if route.response_field:
+                        response_schema, _, _ = field_schema(
+                            route.response_field,
+                            model_name_map=model_name_map,
+                            ref_prefix=REF_PREFIX,
+                        )
+                    else:
+                        response_schema = {}
+                operation.setdefault(""responses"", {}).setdefault(
+                    status_code, {}
+                ).setdefault(""content"", {}).setdefault(route_response_media_type, {})[
+                    ""schema""
+                ] = response_schema
+
+            http422 = str(HTTP_422_UNPROCESSABLE_ENTITY)
+            if (all_route_params or route.body_field) and not any(
+                [
+                    status in operation[""responses""]
+                    for status in [http422, ""4XX"", ""default""]
+                ]
+            ):
+                operation[""responses""][http422] = {
+                    ""description"": ""Validation Error"",
+                    ""content"": {
+                        ""application/json"": {
+                            ""schema"": {""$ref"": REF_PREFIX + ""HTTPValidationError""}
+                        }
+                    },
+                }
+                if ""ValidationError"" not in definitions:
+                    definitions.update(
+                        {
+                            ""ValidationError"": validation_error_definition,
+                            ""HTTPValidationError"": validation_error_response_definition,
+                        }
+                    )
+            path[method.lower()] = operation
+    return path, security_schemes, definitions
+```",
+fastapi-4-vall_llama-4,UNKNOWN,UNKNOWN,"```python
+def get_openapi_path(
+    *, route: routing.APIRoute, model_name_map: Dict[Type, str]
+) -> Tuple[Dict, Dict, Dict]:
+    path = {}
+    security_schemes: Dict[str, Any] = {}
+    definitions: Dict[str, Any] = {}
+    assert route.methods is not None, ""Methods must be a list""
+    assert route.response_class, ""A response class is needed to generate OpenAPI""
+    route_response_media_type: Optional[str] = route.response_class.media_type
+    if route.include_in_schema:
+        for method in route.methods:
+            operation = get_openapi_operation_metadata(route=route, method=method)
+            parameters: List[Dict] = []
+            flat_dependant = get_flat_dependant(route.dependant, skip_repeats=True)
+            security_definitions, operation_security = get_openapi_security_definitions(
+                flat_dependant=flat_dependant
+            )
+            if operation_security:
+                operation.setdefault(""security"", []).extend(operation_security)
+            if security_definitions:
+                security_schemes.update(security_definitions)
+            all_route_params = get_openapi_params(route.dependant)
+            operation_parameters = get_openapi_operation_parameters(all_route_params)
+            parameters.extend(operation_parameters)
+            if parameters:
+                # Remove duplicate parameters by name
+                unique_parameters = []
+                seen_names = set()
+                for param in parameters:
+                    if param['name'] not in seen_names:
+                        unique_parameters.append(param)
+                        seen_names.add(param['name'])
+                operation[""parameters""] = unique_parameters
+            if method in METHODS_WITH_BODY:
+                request_body_oai = get_openapi_operation_request_body(
+                    body_field=route.body_field, model_name_map=model_name_map
+                )
+                if request_body_oai:
+                    operation[""requestBody""] = request_body_oai
+            if route.callbacks:
+                callbacks = {}
+                for callback in route.callbacks:
+                    cb_path, cb_security_schemes, cb_definitions, = get_openapi_path(
+                        route=callback, model_name_map=model_name_map
+                    )
+                    callbacks[callback.name] = {callback.path: cb_path}
+                operation[""callbacks""] = callbacks
+            if route.responses:
+                for (additional_status_code, response) in route.responses.items():
+                    assert isinstance(
+                        response, dict
+                    ), ""An additional response must be a dict""
+                    field = route.response_fields.get(additional_status_code)
+                    if field:
+                        response_schema, _, _ = field_schema(
+                            field, model_name_map=model_name_map, ref_prefix=REF_PREFIX
+                        )
+                        response.setdefault(""content"", {}).setdefault(
+                            route_response_media_type or ""application/json"", {}
+                        )[""schema""] = response_schema
+                    status_text: Optional[str] = status_code_ranges.get(
+                        str(additional_status_code).upper()
+                    ) or http.client.responses.get(int(additional_status_code))
+                    response.setdefault(
+                        ""description"", status_text or ""Additional Response""
+                    )
+                    status_code_key = str(additional_status_code).upper()
+                    if status_code_key == ""DEFAULT"":
+                        status_code_key = ""default""
+                    operation.setdefault(""responses"", {})[status_code_key] = response
+            status_code = str(route.status_code)
+            operation.setdefault(""responses"", {}).setdefault(status_code, {})[
+                ""description""
+            ] = route.response_description
+            if (
+                route_response_media_type
+                and route.status_code not in STATUS_CODES_WITH_NO_BODY
+            ):
+                response_schema = {""type"": ""string""}
+                if lenient_issubclass(route.response_class, JSONResponse):
+                    if route.response_field:
+                        response_schema, _, _ = field_schema(
+                            route.response_field,
+                            model_name_map=model_name_map,
+                            ref_prefix=REF_PREFIX,
+                        )
+                    else:
+                        response_schema = {}
+                operation.setdefault(""responses"", {}).setdefault(
+                    status_code, {}
+                ).setdefault(""content"", {}).setdefault(route_response_media_type, {})[
+                    ""schema""
+                ] = response_schema
+
+            http422 = str(HTTP_422_UNPROCESSABLE_ENTITY)
+            if (all_route_params or route.body_field) and not any(
+                [
+                    status in operation[""responses""]
+                    for status in [http422, ""4XX"", ""default""]
+                ]
+            ):
+                operation[""responses""][http422] = {
+                    ""description"": ""Validation Error"",
+                    ""content"": {
+                        ""application/json"": {
+                            ""schema"": {""$ref"": REF_PREFIX + ""HTTPValidationError""}
+                        }
+                    },
+                }
+                if ""ValidationError"" not in definitions:
+                    definitions.update(
+                        {
+                            ""ValidationError"": validation_error_definition,
+                            ""HTTPValidationError"": validation_error_response_definition,
+                        }
+                    )
+            path[method.lower()] = operation
+    return path, security_schemes, definitions
+```",
+fastapi-4-vall_llama-5,UNKNOWN,UNKNOWN,"```python
+def get_openapi_path(
+    *, route: routing.APIRoute, model_name_map: Dict[Type, str]
+) -> Tuple[Dict, Dict, Dict]:
+    path = {}
+    security_schemes: Dict[str, Any] = {}
+    definitions: Dict[str, Any] = {}
+    assert route.methods is not None, ""Methods must be a list""
+    assert route.response_class, ""A response class is needed to generate OpenAPI""
+    route_response_media_type: Optional[str] = route.response_class.media_type
+    if route.include_in_schema:
+        for method in route.methods:
+            operation = get_openapi_operation_metadata(route=route, method=method)
+            parameters: List[Dict] = []
+            flat_dependant = get_flat_dependant(route.dependant, skip_repeats=True)
+            security_definitions, operation_security = get_openapi_security_definitions(
+                flat_dependant=flat_dependant
+            )
+            if operation_security:
+                operation.setdefault(""security"", []).extend(operation_security)
+            if security_definitions:
+                security_schemes.update(security_definitions)
+            all_route_params = get_openapi_params(route.dependant)
+            operation_parameters = get_openapi_operation_parameters(all_route_params)
+            # Remove duplicate parameters
+            unique_parameters = []
+            for param in operation_parameters:
+                if param not in unique_parameters:
+                    unique_parameters.append(param)
+            parameters.extend(unique_parameters)
+            if parameters:
+                operation[""parameters""] = parameters
+            if method in METHODS_WITH_BODY:
+                request_body_oai = get_openapi_operation_request_body(
+                    body_field=route.body_field, model_name_map=model_name_map
+                )
+                if request_body_oai:
+                    operation[""requestBody""] = request_body_oai
+            if route.callbacks:
+                callbacks = {}
+                for callback in route.callbacks:
+                    cb_path, cb_security_schemes, cb_definitions, = get_openapi_path(
+                        route=callback, model_name_map=model_name_map
+                    )
+                    callbacks[callback.name] = {callback.path: cb_path}
+                operation[""callbacks""] = callbacks
+            if route.responses:
+                for (additional_status_code, response) in route.responses.items():
+                    assert isinstance(
+                        response, dict
+                    ), ""An additional response must be a dict""
+                    field = route.response_fields.get(additional_status_code)
+                    if field:
+                        response_schema, _, _ = field_schema(
+                            field, model_name_map=model_name_map, ref_prefix=REF_PREFIX
+                        )
+                        response.setdefault(""content"", {}).setdefault(
+                            route_response_media_type or ""application/json"", {}
+                        )[""schema""] = response_schema
+                    status_text: Optional[str] = status_code_ranges.get(
+                        str(additional_status_code).upper()
+                    ) or http.client.responses.get(int(additional_status_code))
+                    response.setdefault(
+                        ""description"", status_text or ""Additional Response""
+                    )
+                    status_code_key = str(additional_status_code).upper()
+                    if status_code_key == ""DEFAULT"":
+                        status_code_key = ""default""
+                    operation.setdefault(""responses"", {})[status_code_key] = response
+            status_code = str(route.status_code)
+            operation.setdefault(""responses"", {}).setdefault(status_code, {})[
+                ""description""
+            ] = route.response_description
+            if (
+                route_response_media_type
+                and route.status_code not in STATUS_CODES_WITH_NO_BODY
+            ):
+                response_schema = {""type"": ""string""}
+                if lenient_issubclass(route.response_class, JSONResponse):
+                    if route.response_field:
+                        response_schema, _, _ = field_schema(
+                            route.response_field,
+                            model_name_map=model_name_map,
+                            ref_prefix=REF_PREFIX,
+                        )
+                    else:
+                        response_schema = {}
+                operation.setdefault(""responses"", {}).setdefault(
+                    status_code, {}
+                ).setdefault(""content"", {}).setdefault(route_response_media_type, {})[
+                    ""schema""
+                ] = response_schema
+
+            http422 = str(HTTP_422_UNPROCESSABLE_ENTITY)
+            if (all_route_params or route.body_field) and not any(
+                [
+                    status in operation[""responses""]
+                    for status in [http422, ""4XX"", ""default""]
+                ]
+            ):
+                operation[""responses""][http422] = {
+                    ""description"": ""Validation Error"",
+                    ""content"": {
+                        ""application/json"": {
+                            ""schema"": {""$ref"": REF_PREFIX + ""HTTPValidationError""}
+                        }
+                    },
+                }
+                if ""ValidationError"" not in definitions:
+                    definitions.update(
+                        {
+                            ""ValidationError"": validation_error_definition,
+                            ""HTTPValidationError"": validation_error_response_definition,
+                        }
+                    )
+            path[method.lower()] = operation
+    return path, security_schemes, definitions
+```",
+fastapi-4-vall_llama-6,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+
+The bug arises from the duplication of parameter IDs when generating OpenAPI schema for routes with dependencies. This issue occurs because the function `get_openapi_path` currently does not handle parameters from dependencies correctly, leading to duplicated parameters in the OpenAPI schema.
+
+To fix this, we need to ensure that parameters from the route itself and its dependencies are handled distinctively, avoiding any duplication. The function `get_openapi_params` returns all parameters, including those from dependencies, which then get directly added to the operation's parameters. This direct addition without any filtering or handling for duplicates results in the observed bug.
+
+### Fixed solution:
+```python
+def get_openapi_path(
+    *, route: routing.APIRoute, model_name_map: Dict[Type, str]
+) -> Tuple[Dict, Dict, Dict]:
+    path = {}
+    security_schemes: Dict[str, Any] = {}
+    definitions: Dict[str, Any] = {}
+    assert route.methods is not None, ""Methods must be a list""
+    assert route.response_class, ""A response class is needed to generate OpenAPI""
+    route_response_media_type: Optional[str] = route.response_class.media_type
+    if route.include_in_schema:
+        for method in route.methods:
+            operation = get_openapi_operation_metadata(route=route, method=method)
+            parameters: List[Dict] = []
+            flat_dependant = get_flat_dependant(route.dependant, skip_repeats=True)
+            security_definitions, operation_security = get_openapi_security_definitions(
+                flat_dependant=flat_dependant
+            )
+            if operation_security:
+                operation.setdefault(""security"", []).extend(operation_security)
+            if security_definitions:
+                security_schemes.update(security_definitions)
+            all_route_params = get_openapi_params(route.dependant)
+            # Filter out duplicate parameters by name
+            seen_params = set()
+            operation_parameters = [
+                param
+                for param in get_openapi_operation_parameters(all_route_params)
+                if not (param[""name""] in seen_params or seen_params.add(param[""name""]))
+            ]
+            parameters.extend(operation_parameters)
+            if parameters:
+                operation[""parameters""] = parameters
+            if method in METHODS_WITH_BODY:
+                request_body_oai = get_openapi_operation_request_body(
+                    body_field=route.body_field, model_name_map=model_name_map
+                )
+                if request_body_oai:
+                    operation[""requestBody""] = request_body_oai
+            if route.callbacks:
+                callbacks = {}
+                for callback in route.callbacks:
+                    cb_path, cb_security_schemes, cb_definitions, = get_openapi_path(
+                        route=callback, model_name_map=model_name_map
+                    )
+                    callbacks[callback.name] = {callback.path: cb_path}
+                operation[""callbacks""] = callbacks
+            if route.responses:
+                for (additional_status_code, response) in route.responses.items():
+                    assert isinstance(
+                        response, dict
+                    ), ""An additional response must be a dict""
+                    field = route.response_fields.get(additional_status_code)
+                    if field:
+                        response_schema, _, _ = field_schema(
+                            field, model_name_map=model_name_map, ref_prefix=REF_PREFIX
+                        )
+                        response.setdefault(""content"", {}).setdefault(
+                            route_response_media_type or ""application/json"", {}
+                        )[""schema""] = response_schema
+                    status_text: Optional[str] = status_code_ranges.get(
+                        str(additional_status_code).upper()
+                    ) or http.client.responses.get(int(additional_status_code))
+                    response.setdefault(
+                        ""description"", status_text or ""Additional Response""
+                    )
+                    status_code_key = str(additional_status_code).upper()
+                    if status_code_key == ""DEFAULT"":
+                        status_code_key = ""default""
+                    operation.setdefault(""responses"", {})[status_code_key] = response
+            status_code = str(route.status_code)
+            operation.setdefault(""responses"", {}).setdefault(status_code, {})[
+                ""description""
+            ] = route.response_description
+            if (
+                route_response_media_type
+                and route.status_code not in STATUS_CODES_WITH_NO_BODY
+            ):
+                response_schema = {""type"": ""string""}
+                if lenient_issubclass(route.response_class, JSONResponse):
+                    if route.response_field:
+                        response_schema, _, _ = field_schema(
+                            route.response_field,
+                            model_name_map=model_name_map,
+                            ref_prefix=REF_PREFIX,
+                        )
+                    else:
+                        response_schema = {}
+                operation.setdefault(""responses"", {}).setdefault(
+                    status_code, {}
+                ).setdefault(""content"", {}).setdefault(route_response_media_type, {})[
+                    ""schema""
+                ] = response_schema
+
+            http422 = str(HTTP_422_UNPROCESSABLE_ENTITY)
+            if (all_route_params or route.body_field) and not any(
+                [
+                    status in operation[""responses""]
+                    for status in [http422, ""4XX"", ""default""]
+                ]
+            ):
+                operation[""responses""][http422] = {
+                    ""description"": ""Validation Error"",
+                    ""content"": {
+                        ""application/json"": {
+                            ""schema"": {""$ref"": REF_PREFIX + ""HTTPValidationError""}
+                        }
+                    },
+                }
+                if ""ValidationError"" not in definitions:
+                    definitions.update(
+                        {
+                            ""ValidationError"": validation_error_definition,
+                            ""HTTPValidationError"": validation_error_response_definition,
+                        }
+                    )
+            path[method.lower()] = operation
+    return path, security_schemes, definitions
+```
+
+### Explanation of changes:
+* The code now filters out duplicate parameters by keeping track of the names of parameters already seen (`seen_params = set()`). This prevents duplicate parameters from being added to the operation's parameters.
+* The parameters are filtered using a list comprehension that checks if the parameter's name is in the `seen_params` set. If it is, the parameter is skipped; otherwise, its name is added to the set, preventing future duplicates.
+
+### Tests and example uses:
+The provided test function `test_reused_param` can be used to verify that the corrected function works as expected. The test should pass without any assertions failing, indicating that the OpenAPI schema generated by the corrected function does not contain duplicate parameter IDs.",
+fastapi-4-vall_llama-7,UNKNOWN,UNKNOWN,"```python
+def get_openapi_path(
+    *, route: routing.APIRoute, model_name_map: Dict[Type, str]
+) -> Tuple[Dict, Dict, Dict]:
+    path = {}
+    security_schemes: Dict[str, Any] = {}
+    definitions: Dict[str, Any] = {}
+    assert route.methods is not None, ""Methods must be a list""
+    assert route.response_class, ""A response class is needed to generate OpenAPI""
+    route_response_media_type: Optional[str] = route.response_class.media_type
+    if route.include_in_schema:
+        for method in route.methods:
+            operation = get_openapi_operation_metadata(route=route, method=method)
+            parameters: List[Dict] = []
+            flat_dependant = get_flat_dependant(route.dependant, skip_repeats=True)
+            security_definitions, operation_security = get_openapi_security_definitions(
+                flat_dependant=flat_dependant
+            )
+            if operation_security:
+                operation.setdefault(""security"", []).extend(operation_security)
+            if security_definitions:
+                security_schemes.update(security_definitions)
+            all_route_params = get_openapi_params(route.dependant)
+            operation_parameters = get_openapi_operation_parameters(all_route_params)
+            # Remove duplicate parameters
+            unique_parameters = []
+            seen_parameter_names = set()
+            for param in operation_parameters:
+                if param['name'] not in seen_parameter_names:
+                    unique_parameters.append(param)
+                    seen_parameter_names.add(param['name'])
+            parameters.extend(unique_parameters)
+            if parameters:
+                operation[""parameters""] = parameters
+            if method in METHODS_WITH_BODY:
+                request_body_oai = get_openapi_operation_request_body(
+                    body_field=route.body_field, model_name_map=model_name_map
+                )
+                if request_body_oai:
+                    operation[""requestBody""] = request_body_oai
+            if route.callbacks:
+                callbacks = {}
+                for callback in route.callbacks:
+                    cb_path, cb_security_schemes, cb_definitions, = get_openapi_path(
+                        route=callback, model_name_map=model_name_map
+                    )
+                    callbacks[callback.name] = {callback.path: cb_path}
+                operation[""callbacks""] = callbacks
+            if route.responses:
+                for (additional_status_code, response) in route.responses.items():
+                    assert isinstance(
+                        response, dict
+                    ), ""An additional response must be a dict""
+                    field = route.response_fields.get(additional_status_code)
+                    if field:
+                        response_schema, _, _ = field_schema(
+                            field, model_name_map=model_name_map, ref_prefix=REF_PREFIX
+                        )
+                        response.setdefault(""content"", {}).setdefault(
+                            route_response_media_type or ""application/json"", {}
+                        )[""schema""] = response_schema
+                    status_text: Optional[str] = status_code_ranges.get(
+                        str(additional_status_code).upper()
+                    ) or http.client.responses.get(int(additional_status_code))
+                    response.setdefault(
+                        ""description"", status_text or ""Additional Response""
+                    )
+                    status_code_key = str(additional_status_code).upper()
+                    if status_code_key == ""DEFAULT"":
+                        status_code_key = ""default""
+                    operation.setdefault(""responses"", {})[status_code_key] = response
+            status_code = str(route.status_code)
+            operation.setdefault(""responses"", {}).setdefault(status_code, {})[
+                ""description""
+            ] = route.response_description
+            if (
+                route_response_media_type
+                and route.status_code not in STATUS_CODES_WITH_NO_BODY
+            ):
+                response_schema = {""type"": ""string""}
+                if lenient_issubclass(route.response_class, JSONResponse):
+                    if route.response_field:
+                        response_schema, _, _ = field_schema(
+                            route.response_field,
+                            model_name_map=model_name_map,
+                            ref_prefix=REF_PREFIX,
+                        )
+                    else:
+                        response_schema = {}
+                operation.setdefault(""responses"", {}).setdefault(
+                    status_code, {}
+                ).setdefault(""content"", {}).setdefault(route_response_media_type, {})[
+                    ""schema""
+                ] = response_schema
+
+            http422 = str(HTTP_422_UNPROCESSABLE_ENTITY)
+            if (all_route_params or route.body_field) and not any(
+                [
+                    status in operation[""responses""]
+                    for status in [http422, ""4XX"", ""default""]
+                ]
+            ):
+                operation[""responses""][http422] = {
+                    ""description"": ""Validation Error"",
+                    ""content"": {
+                        ""application/json"": {
+                            ""schema"": {""$ref"": REF_PREFIX + ""HTTPValidationError""}
+                        }
+                    },
+                }
+                if ""ValidationError"" not in definitions:
+                    definitions.update(
+                        {
+                            ""ValidationError"": validation_error_definition,
+                            ""HTTPValidationError"": validation_error_response_definition,
+                        }
+                    )
+            path[method.lower()] = operation
+    return path, security_schemes, definitions
+```",
+fastapi-4-vall_llama-8,UNKNOWN,UNKNOWN,"### Fixed solution
+```python
+def get_openapi_path(
+    *, route: routing.APIRoute, model_name_map: Dict[Type, str]
+) -> Tuple[Dict, Dict, Dict]:
+    path = {}
+    security_schemes: Dict[str, Any] = {}
+    definitions: Dict[str, Any] = {}
+    assert route.methods is not None, ""Methods must be a list""
+    assert route.response_class, ""A response class is needed to generate OpenAPI""
+    route_response_media_type: Optional[str] = route.response_class.media_type
+    if route.include_in_schema:
+        for method in route.methods:
+            operation = get_openapi_operation_metadata(route=route, method=method)
+            parameters: List[Dict] = []
+            flat_dependant = get_flat_dependant(route.dependant, skip_repeats=True)
+            security_definitions, operation_security = get_openapi_security_definitions(
+                flat_dependant=flat_dependant
+            )
+            if operation_security:
+                operation.setdefault(""security"", []).extend(operation_security)
+            if security_definitions:
+                security_schemes.update(security_definitions)
+            all_route_params = get_openapi_params(route.dependant)
+            operation_parameters = get_openapi_operation_parameters(all_route_params)
+            parameters.extend(operation_parameters)
+            # To prevent duplicate parameters
+            unique_parameters = []
+            seen_parameter_names = set()
+            for parameter in parameters:
+                if parameter[""name""] not in seen_parameter_names:
+                    unique_parameters.append(parameter)
+                    seen_parameter_names.add(parameter[""name""])
+            if unique_parameters:
+                operation[""parameters""] = unique_parameters
+            if method in METHODS_WITH_BODY:
+                request_body_oai = get_openapi_operation_request_body(
+                    body_field=route.body_field, model_name_map=model_name_map
+                )
+                if request_body_oai:
+                    operation[""requestBody""] = request_body_oai
+            if route.callbacks:
+                callbacks = {}
+                for callback in route.callbacks:
+                    cb_path, cb_security_schemes, cb_definitions, = get_openapi_path(
+                        route=callback, model_name_map=model_name_map
+                    )
+                    callbacks[callback.name] = {callback.path: cb_path}
+                operation[""callbacks""] = callbacks
+            if route.responses:
+                for (additional_status_code, response) in route.responses.items():
+                    assert isinstance(
+                        response, dict
+                    ), ""An additional response must be a dict""
+                    field = route.response_fields.get(additional_status_code)
+                    if field:
+                        response_schema, _, _ = field_schema(
+                            field, model_name_map=model_name_map, ref_prefix=REF_PREFIX
+                        )
+                        response.setdefault(""content"", {}).setdefault(
+                            route_response_media_type or ""application/json"", {}
+                        )[""schema""] = response_schema
+                    status_text: Optional[str] = status_code_ranges.get(
+                        str(additional_status_code).upper()
+                    ) or http.client.responses.get(int(additional_status_code))
+                    response.setdefault(
+                        ""description"", status_text or ""Additional Response""
+                    )
+                    status_code_key = str(additional_status_code).upper()
+                    if status_code_key == ""DEFAULT"":
+                        status_code_key = ""default""
+                    operation.setdefault(""responses"", {})[status_code_key] = response
+            status_code = str(route.status_code)
+            operation.setdefault(""responses"", {}).setdefault(status_code, {})[
+                ""description""
+            ] = route.response_description
+            if (
+                route_response_media_type
+                and route.status_code not in STATUS_CODES_WITH_NO_BODY
+            ):
+                response_schema = {""type"": ""string""}
+                if lenient_issubclass(route.response_class, JSONResponse):
+                    if route.response_field:
+                        response_schema, _, _ = field_schema(
+                            route.response_field,
+                            model_name_map=model_name_map,
+                            ref_prefix=REF_PREFIX,
+                        )
+                    else:
+                        response_schema = {}
+                operation.setdefault(""responses"", {}).setdefault(
+                    status_code, {}
+                ).setdefault(""content"", {}).setdefault(route_response_media_type, {})[
+                    ""schema""
+                ] = response_schema
+
+            http422 = str(HTTP_422_UNPROCESSABLE_ENTITY)
+            if (all_route_params or route.body_field) and not any(
+                [
+                    status in operation[""responses""]
+                    for status in [http422, ""4XX"", ""default""]
+                ]
+            ):
+                operation[""responses""][http422] = {
+                    ""description"": ""Validation Error"",
+                    ""content"": {
+                        ""application/json"": {
+                            ""schema"": {""$ref"": REF_PREFIX + ""HTTPValidationError""}
+                        }
+                    },
+                }
+                if ""ValidationError"" not in definitions:
+                    definitions.update(
+                        {
+                            ""ValidationError"": validation_error_definition,
+                            ""HTTPValidationError"": validation_error_response_definition,
+                        }
+                    )
+            path[method.lower()] = operation
+    return path, security_schemes, definitions
+
+```
+### Explanation of changes
+
+To fix the bug, the following changes were made:
+
+1. I added code to remove duplicate parameters before assigning them to the `operation[""parameters""]`. This ensures that the generated OpenAPI schema does not contain duplicate parameter IDs.
+
+2. I used a `unique_parameters` list to store the unique parameters and a `seen_parameter_names` set to keep track of the names of parameters that have already been added to the list.
+
+### Tests and example uses:
+
+```python
+def test_reused_param():
+    response = client.get(""/openapi.json"")
+    data = response.json()
+    assert data == openapi_schema
+```
+
+After applying the changes, the test should pass. You can use this example to verify that the fixed solution works as expected.",
+fastapi-4-vall_llama-9,UNKNOWN,UNKNOWN,"### Corrected Function
+```python
+def get_openapi_path(
+    *, route: routing.APIRoute, model_name_map: Dict[Type, str]
+) -> Tuple[Dict, Dict, Dict]:
+    path = {}
+    security_schemes: Dict[str, Any] = {}
+    definitions: Dict[str, Any] = {}
+    assert route.methods is not None, ""Methods must be a list""
+    assert route.response_class, ""A response class is needed to generate OpenAPI""
+    route_response_media_type: Optional[str] = route.response_class.media_type
+    if route.include_in_schema:
+        for method in route.methods:
+            operation = get_openapi_operation_metadata(route=route, method=method)
+            parameters: List[Dict] = []
+            flat_dependant = get_flat_dependant(route.dependant, skip_repeats=True)
+            security_definitions, operation_security = get_openapi_security_definitions(
+                flat_dependant=flat_dependant
+            )
+            if operation_security:
+                operation.setdefault(""security"", []).extend(operation_security)
+            if security_definitions:
+                security_schemes.update(security_definitions)
+            all_route_params = get_openapi_params(route.dependant)
+            operation_parameters = get_openapi_operation_parameters(all_route_params)
+            # Ensure parameters are unique by name to avoid duplication
+            unique_parameters = []
+            parameter_names = set()
+            for param in operation_parameters:
+                if param[""name""] not in parameter_names:
+                    unique_parameters.append(param)
+                    parameter_names.add(param[""name""])
+            parameters.extend(unique_parameters)
+            if parameters:
+                operation[""parameters""] = parameters
+            if method in METHODS_WITH_BODY:
+                request_body_oai = get_openapi_operation_request_body(
+                    body_field=route.body_field, model_name_map=model_name_map
+                )
+                if request_body_oai:
+                    operation[""requestBody""] = request_body_oai
+            if route.callbacks:
+                callbacks = {}
+                for callback in route.callbacks:
+                    cb_path, cb_security_schemes, cb_definitions, = get_openapi_path(
+                        route=callback, model_name_map=model_name_map
+                    )
+                    callbacks[callback.name] = {callback.path: cb_path}
+                operation[""callbacks""] = callbacks
+            if route.responses:
+                for (additional_status_code, response) in route.responses.items():
+                    assert isinstance(
+                        response, dict
+                    ), ""An additional response must be a dict""
+                    field = route.response_fields.get(additional_status_code)
+                    if field:
+                        response_schema, _, _ = field_schema(
+                            field, model_name_map=model_name_map, ref_prefix=REF_PREFIX
+                        )
+                        response.setdefault(""content"", {}).setdefault(
+                            route_response_media_type or ""application/json"", {}
+                        )[""schema""] = response_schema
+                    status_text: Optional[str] = status_code_ranges.get(
+                        str(additional_status_code).upper()
+                    ) or http.client.responses.get(int(additional_status_code))
+                    response.setdefault(
+                        ""description"", status_text or ""Additional Response""
+                    )
+                    status_code_key = str(additional_status_code).upper()
+                    if status_code_key == ""DEFAULT"":
+                        status_code_key = ""default""
+                    operation.setdefault(""responses"", {})[status_code_key] = response
+            status_code = str(route.status_code)
+            operation.setdefault(""responses"", {}).setdefault(status_code, {})[
+                ""description""
+            ] = route.response_description
+            if (
+                route_response_media_type
+                and route.status_code not in STATUS_CODES_WITH_NO_BODY
+            ):
+                response_schema = {""type"": ""string""}
+                if lenient_issubclass(route.response_class, JSONResponse):
+                    if route.response_field:
+                        response_schema, _, _ = field_schema(
+                            route.response_field,
+                            model_name_map=model_name_map,
+                            ref_prefix=REF_PREFIX,
+                        )
+                    else:
+                        response_schema = {}
+                operation.setdefault(""responses"", {}).setdefault(
+                    status_code, {}
+                ).setdefault(""content"", {}).setdefault(route_response_media_type, {})[
+                    ""schema""
+                ] = response_schema
+
+            http422 = str(HTTP_422_UNPROCESSABLE_ENTITY)
+            if (all_route_params or route.body_field) and not any(
+                [
+                    status in operation[""responses""]
+                    for status in [http422, ""4XX"", ""default""]
+                ]
+            ):
+                operation[""responses""][http422] = {
+                    ""description"": ""Validation Error"",
+                    ""content"": {
+                        ""application/json"": {
+                            ""schema"": {""$ref"": REF_PREFIX + ""HTTPValidationError""}
+                        }
+                    },
+                }
+                if ""ValidationError"" not in definitions:
+                    definitions.update(
+                        {
+                            ""ValidationError"": validation_error_definition,
+                            ""HTTPValidationError"": validation_error_response_definition,
+                        }
+                    )
+            path[method.lower()] = operation
+    return path, security_schemes, definitions
+```",

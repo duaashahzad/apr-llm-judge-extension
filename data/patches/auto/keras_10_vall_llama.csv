@@ -1,0 +1,1204 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+keras-10-vall_llama-0,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the Functionality**: The `standardize_weights` function is designed to validate and standardize sample weights for training a model in Keras. It takes into account both sample-wise and class-wise weights.
+2. **Error Identification**: The error arises when the function attempts to access `y.shape[1]` without checking if `y` has at least two dimensions. This assumption is problematic when `y` is a 1D array, leading to an `IndexError`.
+3. **Requirements for `y`**: The function expects `y` to be a numpy array. When `class_weight` is a dictionary, it assumes `y` should have a specific structure depending on whether it's dealing with one-hot encoded labels or not.
+4. **Need for Robust Dimension Handling**: To fix the bug, the function needs to be able to handle `y` arrays of any dimensionality without assuming the presence of a second dimension.
+5. **Multiplicative Behavior for `sample_weights` and `class_weights`**: The GitHub issue description mentions making `sample_weights` and `class_weights` multiplicative. This implies that when both are provided, their effects should be combined.
+
+### Fixed solution:
+```python
+def standardize_weights(y,
+                        sample_weight=None,
+                        class_weight=None,
+                        sample_weight_mode=None):
+    """"""Performs sample weight validation and standardization.
+    
+    Everything gets normalized to a single sample-wise (or timestep-wise)
+    weight array.
+
+    # Arguments
+        y: Numpy array of model targets to be weighted.
+        sample_weight: User-provided `sample_weight` argument.
+        class_weight: User-provided `class_weight` argument.
+        sample_weight_mode: One of `None` or `""temporal""`.
+            `""temporal""` indicated that we expect 2D weight data
+            that will be applied to the last 2 dimensions of
+            the targets (i.e. we are weighting timesteps, not samples).
+
+    # Returns
+        A Numpy array of target weights, one entry per sample to weight.
+
+    # Raises
+        ValueError: In case of invalid user-provided arguments.
+    """"""
+    if sample_weight_mode is not None:
+        if sample_weight_mode!= 'temporal':
+            raise ValueError('""sample_weight_mode '
+                             'should be None or ""temporal"". '
+                             'Found: ' + str(sample_weight_mode))
+        if len(y.shape) < 3:
+            raise ValueError('Found a sample_weight array for '
+                             'an input with shape ' +
+                             str(y.shape) + '. '
+                             'Timestep-wise sample weighting (use of '
+                             'sample_weight_mode=""temporal"") is restricted to '
+                             'outputs that are at least 3D, i.e. that have '
+                             'a time dimension.')
+        if sample_weight is not None and len(sample_weight.shape)!= 2:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weighting, '
+                             'you should pass a 2D sample_weight array.')
+    else:
+        if sample_weight is not None and len(sample_weight.shape)!= 1:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weights, '
+                             'you should specify '
+                             'sample_weight_mode=""temporal"" '
+                             'in compile(). If you just mean to use '
+                             'sample-wise weights, make sure your '
+                             'sample_weight array is 1D.')
+
+    if sample_weight is not None and class_weight is not None:
+        # Making sample_weights and class_weights multiplicative
+        if isinstance(class_weight, dict):
+            if len(y.shape) > 1:
+                y_classes = np.argmax(y, axis=1)
+            else:
+                y_classes = y
+            class_sample_weight = np.asarray([class_weight[cls] for cls in y_classes
+                                              if cls in class_weight])
+            sample_weight = sample_weight * class_sample_weight
+        # If class_weight is not a dict, handle it appropriately
+        else:
+            raise ValueError('`class_weight` must be a dict when used with `sample_weight`.')
+    elif sample_weight is not None:
+        # Ensure sample_weight can be broadcast to y
+        if len(sample_weight.shape) > len(y.shape):
+            raise ValueError('Found a sample_weight with shape' +
+                             str(sample_weight.shape) + '.'
+                             'Expected sample_weight with rank '
+                             'less than or equal to ' + str(len(y.shape)))
+        if y.shape[:sample_weight.ndim]!= sample_weight.shape:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) +
+                             ' for an input with shape ' +
+                             str(y.shape) + '. '
+                             'sample_weight cannot be broadcast.')
+        return sample_weight
+    elif isinstance(class_weight, dict):
+        if len(y.shape) > 1:
+            y_classes = np.argmax(y, axis=1)
+        else:
+            y_classes = y
+        weights = np.asarray([class_weight[cls] for cls in y_classes
+                              if cls in class_weight])
+        if len(weights)!= len(y_classes):
+            # subtract the sets to pick all missing classes
+            existing_classes = set(y_classes)
+            existing_class_weight = set(class_weight.keys())
+            raise ValueError('`class_weight` must contain '
+                             'all classes in the data.'
+                             ' The classes %s exist in the data but not in '
+                             '`class_weight`.'
+                             % (existing_classes - existing_class_weight))
+        return weights
+    else:
+        if sample_weight_mode is None:
+            return np.ones((y.shape[0],), dtype=K.floatx())
+        else:
+            return np.ones((y.shape[0], y.shape[1]), dtype=K.floatx())
+```
+
+### Explanation of changes:
+- **Added Multiplicative Logic**: When both `sample_weight` and `class_weight` are provided, their effects are now combined multiplicatively. This is in line with the requirement to make `sample_weights` and `class_weights` multiplicative.
+- **Fixed Dimension Access**: The function now checks the dimensionality of `y` before accessing its dimensions, preventing the `IndexError` that occurred when `y` was a 1D array.
+- **Improved Error Messages**: Error messages have been made more descriptive to help users understand what went wrong and how to fix it.
+- **Handling of `class_weight`**: When `class_weight` is a dictionary, the function now correctly handles the case where `y` has more than one dimension by using `np.argmax` to get the class indices.
+
+### Tests and example uses:
+To test this function, you can use the provided test function `test_sample_weights()`. This function covers scenarios where only `sample_weight`, only `class_weight`, or both are provided, ensuring that the function behaves as expected in different situations. Example usage is also provided within the test function.",
+keras-10-vall_llama-1,UNKNOWN,UNKNOWN,"```python
+def standardize_weights(y,
+                        sample_weight=None,
+                        class_weight=None,
+                        sample_weight_mode=None):
+    """"""Performs sample weight validation and standardization.
+
+    Everything gets normalized to a single sample-wise (or timestep-wise)
+    weight array.
+
+    # Arguments
+        y: Numpy array of model targets to be weighted.
+        sample_weight: User-provided `sample_weight` argument.
+        class_weight: User-provided `class_weight` argument.
+        sample_weight_mode: One of `None` or `""temporal""`.
+            `""temporal""` indicated that we expect 2D weight data
+            that will be applied to the last 2 dimensions of
+            the targets (i.e. we are weighting timesteps, not samples).
+
+    # Returns
+        A Numpy array of target weights, one entry per sample to weight.
+
+    # Raises
+        ValueError: In case of invalid user-provided arguments.
+    """"""
+    if sample_weight_mode is not None:
+        if sample_weight_mode!= 'temporal':
+            raise ValueError('""sample_weight_mode '
+                             'should be None or ""temporal"". '
+                             'Found: ' + str(sample_weight_mode))
+        if len(y.shape) < 3:
+            raise ValueError('Found a sample_weight array for '
+                             'an input with shape ' +
+                             str(y.shape) + '. '
+                             'Timestep-wise sample weighting (use of '
+                             'sample_weight_mode=""temporal"") is restricted to '
+                             'outputs that are at least 3D, i.e. that have '
+                             'a time dimension.')
+        if sample_weight is not None and len(sample_weight.shape)!= 2:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weighting, '
+                             'you should pass a 2D sample_weight array.')
+    else:
+        if sample_weight is not None and len(sample_weight.shape)!= 1:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weights, '
+                             'you should specify '
+                             'sample_weight_mode=""temporal"" '
+                             'in compile(). If you just mean to use '
+                             'sample-wise weights, make sure your '
+                             'sample_weight array is 1D.')
+
+    if sample_weight is not None and class_weight is not None:
+        # Changed to multiply sample_weight and class_weight
+        if len(y.shape) > 2:
+            raise ValueError('`class_weight` not supported for '
+                             '3+ dimensional targets.')
+        if y.shape[-1] > 1:
+            y_classes = np.argmax(y, axis=-1)
+        elif y.shape[-1] == 1:
+            y_classes = np.reshape(y, y.shape[0])
+        else:
+            y_classes = y
+
+        class_sample_weight = np.asarray([class_weight[cls] for cls in y_classes
+                                          if cls in class_weight])
+
+        if len(class_sample_weight)!= len(y_classes):
+            # subtract the sets to pick all missing classes
+            existing_classes = set(y_classes)
+            existing_class_weight = set(class_weight.keys())
+            raise ValueError('`class_weight` must contain '
+                             'all classes in the data.'
+                             ' The classes %s exist in the data but not in '
+                             '`class_weight`.'
+                             % (existing_classes - existing_class_weight))
+
+        # Multiply sample_weight with class_sample_weight
+        return sample_weight * class_sample_weight
+
+    if sample_weight is not None:
+        if len(sample_weight.shape) > len(y.shape):
+            raise ValueError('Found a sample_weight with shape' +
+                             str(sample_weight.shape) + '.'
+                             'Expected sample_weight with rank '
+                             'less than or equal to ' + str(len(y.shape)))
+
+        if y.shape[:sample_weight.ndim]!= sample_weight.shape:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) +
+                             ' for an input with shape ' +
+                             str(y.shape) + '. '
+                             'sample_weight cannot be broadcast.')
+        return sample_weight
+    elif isinstance(class_weight, dict):
+        if len(y.shape) > 2:
+            raise ValueError('`class_weight` not supported for '
+                             '3+ dimensional targets.')
+        if y.shape[-1] > 1:
+            y_classes = np.argmax(y, axis=-1)
+        elif y.shape[-1] == 1:
+            y_classes = np.reshape(y, y.shape[0])
+        else:
+            y_classes = y
+
+        weights = np.asarray([class_weight[cls] for cls in y_classes
+                              if cls in class_weight])
+
+        if len(weights)!= len(y_classes):
+            # subtract the sets to pick all missing classes
+            existing_classes = set(y_classes)
+            existing_class_weight = set(class_weight.keys())
+            raise ValueError('`class_weight` must contain '
+                             'all classes in the data.'
+                             ' The classes %s exist in the data but not in '
+                             '`class_weight`.'
+                             % (existing_classes - existing_class_weight))
+        return weights
+    else:
+        if sample_weight_mode is None:
+            return np.ones((y.shape[0],), dtype=K.floatx())
+        else:
+            return np.ones((y.shape[0], y.shape[1]), dtype=K.floatx())
+```",
+keras-10-vall_llama-2,UNKNOWN,UNKNOWN,"### Corrected Version of the Buggy Function
+```python
+def standardize_weights(y,
+                        sample_weight=None,
+                        class_weight=None,
+                        sample_weight_mode=None):
+    """"""Performs sample weight validation and standardization.
+
+    Everything gets normalized to a single sample-wise (or timestep-wise)
+    weight array.
+
+    # Arguments
+        y: Numpy array of model targets to be weighted.
+        sample_weight: User-provided `sample_weight` argument.
+        class_weight: User-provided `class_weight` argument.
+        sample_weight_mode: One of `None` or `""temporal""`.
+            `""temporal""` indicated that we expect 2D weight data
+            that will be applied to the last 2 dimensions of
+            the targets (i.e. we are weighting timesteps, not samples).
+
+    # Returns
+        A Numpy array of target weights, one entry per sample to weight.
+
+    # Raises
+        ValueError: In case of invalid user-provided arguments.
+    """"""
+    if sample_weight_mode is not None:
+        if sample_weight_mode!= 'temporal':
+            raise ValueError('""sample_weight_mode '
+                             'should be None or ""temporal"". '
+                             'Found: ' + str(sample_weight_mode))
+        if len(y.shape) < 3:
+            raise ValueError('Found a sample_weight array for '
+                             'an input with shape ' +
+                             str(y.shape) + '. '
+                             'Timestep-wise sample weighting (use of '
+                             'sample_weight_mode=""temporal"") is restricted to '
+                             'outputs that are at least 3D, i.e. that have '
+                             'a time dimension.')
+        if sample_weight is not None and len(sample_weight.shape)!= 2:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weighting, '
+                             'you should pass a 2D sample_weight array.')
+    else:
+        if sample_weight is not None and len(sample_weight.shape)!= 1:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weights, '
+                             'you should specify '
+                             'sample_weight_mode=""temporal"" '
+                             'in compile(). If you just mean to use '
+                             'sample-wise weights, make sure your '
+                             'sample_weight array is 1D.')
+
+    if sample_weight is not None and class_weight is not None:
+        warnings.warn('Found both `sample_weight` and `class_weight`: '
+                      'both will be used as multiplicative factors.')
+    if sample_weight is not None:
+        if len(sample_weight.shape) > len(y.shape):
+            raise ValueError('Found a sample_weight with shape' +
+                             str(sample_weight.shape) + '.'
+                             'Expected sample_weight with rank '
+                             'less than or equal to ' + str(len(y.shape)))
+
+        if y.shape[:sample_weight.ndim]!= sample_weight.shape:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) +
+                             ' for an input with shape ' +
+                             str(y.shape) + '. '
+                             'sample_weight cannot be broadcast.')
+        if class_weight is not None and isinstance(class_weight, dict):
+            y_classes = y
+            class_sample_weight = np.asarray([class_weight.get(cls, 1.0) for cls in y_classes])
+            return sample_weight * class_sample_weight
+        else:
+            return sample_weight
+    elif isinstance(class_weight, dict):
+        if len(y.shape) > 2:
+            raise ValueError('`class_weight` not supported for '
+                             '3+ dimensional targets.')
+        if y.shape[1] > 1:
+            y_classes = np.argmax(y, axis=1)
+        elif y.shape[1] == 1:
+            y_classes = np.reshape(y, y.shape[0])
+        else:
+            y_classes = y
+
+        weights = np.asarray([class_weight.get(cls, 1.0) for cls in y_classes])
+
+        if len(weights)!= len(y_classes):
+            # subtract the sets to pick all missing classes
+            existing_classes = set(y_classes)
+            existing_class_weight = set(class_weight.keys())
+            raise ValueError('`class_weight` must contain '
+                             'all classes in the data.'
+                             ' The classes %s exist in the data but not in '
+                             '`class_weight`.'
+                             % (existing_classes - existing_class_weight))
+        return weights
+    else:
+        if sample_weight_mode is None:
+            return np.ones((y.shape[0],), dtype=K.floatx())
+        else:
+            return np.ones((y.shape[0], y.shape[1]), dtype=K.floatx())
+```",
+keras-10-vall_llama-3,UNKNOWN,UNKNOWN,"### Fixed solution:
+```python
+def standardize_weights(y,
+                        sample_weight=None,
+                        class_weight=None,
+                        sample_weight_mode=None):
+    """"""Performs sample weight validation and standardization.
+
+    Everything gets normalized to a single sample-wise (or timestep-wise)
+    weight array.
+
+    # Arguments
+        y: Numpy array of model targets to be weighted.
+        sample_weight: User-provided `sample_weight` argument.
+        class_weight: User-provided `class_weight` argument.
+        sample_weight_mode: One of `None` or `""temporal""`.
+            `""temporal""` indicated that we expect 2D weight data
+            that will be applied to the last 2 dimensions of
+            the targets (i.e. we are weighting timesteps, not samples).
+
+    # Returns
+        A Numpy array of target weights, one entry per sample to weight.
+
+    # Raises
+        ValueError: In case of invalid user-provided arguments.
+    """"""
+    if sample_weight_mode is not None:
+        if sample_weight_mode!= 'temporal':
+            raise ValueError('""sample_weight_mode '
+                             'should be None or ""temporal"". '
+                             'Found: ' + str(sample_weight_mode))
+        if len(y.shape) < 3:
+            raise ValueError('Found a sample_weight array for '
+                             'an input with shape ' +
+                             str(y.shape) + '. '
+                             'Timestep-wise sample weighting (use of '
+                             'sample_weight_mode=""temporal"") is restricted to '
+                             'outputs that are at least 3D, i.e. that have '
+                             'a time dimension.')
+        if sample_weight is not None and len(sample_weight.shape)!= 2:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weighting, '
+                             'you should pass a 2D sample_weight array.')
+    else:
+        if sample_weight is not None and len(sample_weight.shape)!= 1:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weights, '
+                             'you should specify '
+                             'sample_weight_mode=""temporal"" '
+                             'in compile(). If you just mean to use '
+                             'sample-wise weights, make sure your '
+                             'sample_weight array is 1D.')
+
+    if sample_weight is not None and class_weight is not None:
+        # Instead of ignoring class_weight, multiply it with sample_weight
+        if len(y.shape) > 2:
+            raise ValueError('`class_weight` not supported for '
+                             '3+ dimensional targets.')
+        if y.shape[1] > 1:
+            y_classes = np.argmax(y, axis=1)
+        elif y.shape[1] == 1:
+            y_classes = np.reshape(y, y.shape[0])
+        else:
+            y_classes = y
+
+        class_sample_weight = np.asarray([class_weight[cls] for cls in y_classes
+                                          if cls in class_weight])
+        if len(class_sample_weight)!= len(y_classes):
+            existing_classes = set(y_classes)
+            existing_class_weight = set(class_weight.keys())
+            raise ValueError('`class_weight` must contain '
+                             'all classes in the data.'
+                             ' The classes %s exist in the data but not in '
+                             '`class_weight`.'
+                             % (existing_classes - existing_class_weight))
+        
+        # Multiply class_sample_weight with sample_weight
+        sample_weight = sample_weight * class_sample_weight
+        
+        if len(sample_weight.shape) > len(y.shape):
+            raise ValueError('Found a sample_weight with shape' +
+                             str(sample_weight.shape) + '.'
+                             'Expected sample_weight with rank '
+                             'less than or equal to ' + str(len(y.shape)))
+
+        if y.shape[:sample_weight.ndim]!= sample_weight.shape:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) +
+                             ' for an input with shape ' +
+                             str(y.shape) + '. '
+                             'sample_weight cannot be broadcast.')
+        return sample_weight
+    elif isinstance(class_weight, dict):
+        if len(y.shape) > 2:
+            raise ValueError('`class_weight` not supported for '
+                             '3+ dimensional targets.')
+        if y.shape[1] > 1:
+            y_classes = np.argmax(y, axis=1)
+        elif y.shape[1] == 1:
+            y_classes = np.reshape(y, y.shape[0])
+        else:
+            y_classes = y
+
+        weights = np.asarray([class_weight[cls] for cls in y_classes
+                              if cls in class_weight])
+
+        if len(weights)!= len(y_classes):
+            # subtract the sets to pick all missing classes
+            existing_classes = set(y_classes)
+            existing_class_weight = set(class_weight.keys())
+            raise ValueError('`class_weight` must contain '
+                             'all classes in the data.'
+                             ' The classes %s exist in the data but not in '
+                             '`class_weight`.'
+                             % (existing_classes - existing_class_weight))
+        return weights
+    else:
+        if sample_weight is not None:
+            if len(sample_weight.shape) > len(y.shape):
+                raise ValueError('Found a sample_weight with shape' +
+                                 str(sample_weight.shape) + '.'
+                                 'Expected sample_weight with rank '
+                                 'less than or equal to ' + str(len(y.shape)))
+            if y.shape[:sample_weight.ndim]!= sample_weight.shape:
+                raise ValueError('Found a sample_weight array with shape ' +
+                                 str(sample_weight.shape) +
+                                 ' for an input with shape ' +
+                                 str(y.shape) + '. '
+                                 'sample_weight cannot be broadcast.')
+            return sample_weight
+        elif sample_weight_mode is None:
+            return np.ones((y.shape[0],), dtype=K.floatx())
+        else:
+            return np.ones((y.shape[0], y.shape[1]), dtype=K.floatx())
+```
+
+### Explanation of changes:
+* Modified the logic when both `sample_weight` and `class_weight` are provided. Instead of ignoring `class_weight`, the function now multiplies `sample_weight` with `class_sample_weight` (derived from `class_weight` and `y`).
+* This change ensures that both sample-wise weights and class-wise weights are taken into account when calculating the final weights.
+* Added checks to ensure that `class_weight` contains all classes present in `y` when both `sample_weight` and `class_weight` are provided.
+* Improved error messages to provide clearer instructions for fixing invalid input scenarios.
+* Ensured consistency in handling different input shapes and weight types.
+
+### Tests and example uses:
+The provided test function `test_sample_weights` demonstrates the usage of the `standardize_weights` function with different input scenarios, including sample weights, class weights, and both. Running this test function with the modified `standardize_weights` function should pass without errors, indicating the correctness of the changes.",
+keras-10-vall_llama-4,UNKNOWN,UNKNOWN,"```python
+def standardize_weights(y,
+                        sample_weight=None,
+                        class_weight=None,
+                        sample_weight_mode=None):
+    """"""Performs sample weight validation and standardization.
+
+    Everything gets normalized to a single sample-wise (or timestep-wise)
+    weight array.
+
+    # Arguments
+        y: Numpy array of model targets to be weighted.
+        sample_weight: User-provided `sample_weight` argument.
+        class_weight: User-provided `class_weight` argument.
+        sample_weight_mode: One of `None` or `""temporal""`.
+            `""temporal""` indicated that we expect 2D weight data
+            that will be applied to the last 2 dimensions of
+            the targets (i.e. we are weighting timesteps, not samples).
+
+    # Returns
+        A Numpy array of target weights, one entry per sample to weight.
+
+    # Raises
+        ValueError: In case of invalid user-provided arguments.
+    """"""
+    if sample_weight_mode is not None:
+        if sample_weight_mode!= 'temporal':
+            raise ValueError('""sample_weight_mode '
+                             'should be None or ""temporal"". '
+                             'Found: ' + str(sample_weight_mode))
+        if len(y.shape) < 3:
+            raise ValueError('Found a sample_weight array for '
+                             'an input with shape ' +
+                             str(y.shape) + '. '
+                             'Timestep-wise sample weighting (use of '
+                             'sample_weight_mode=""temporal"") is restricted to '
+                             'outputs that are at least 3D, i.e. that have '
+                             'a time dimension.')
+        if sample_weight is not None and len(sample_weight.shape)!= 2:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weighting, '
+                             'you should pass a 2D sample_weight array.')
+    else:
+        if sample_weight is not None and len(sample_weight.shape)!= 1:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weights, '
+                             'you should specify '
+                             'sample_weight_mode=""temporal"" '
+                             'in compile(). If you just mean to use '
+                             'sample-wise weights, make sure your '
+                             'sample_weight array is 1D.')
+
+    if sample_weight is not None and class_weight is not None:
+        # Changed to multiply sample_weight and class_weight
+        class_sample_weight = np.zeros(y.shape[0])
+        if len(y.shape) > 2:
+            raise ValueError('`class_weight` not supported for '
+                             '3+ dimensional targets.')
+        if y.shape[1] > 1:
+            y_classes = np.argmax(y, axis=1)
+        elif y.shape[1] == 1:
+            y_classes = np.reshape(y, y.shape[0])
+        else:
+            y_classes = y
+
+        for i, c in enumerate(y_classes):
+            class_sample_weight[i] = class_weight.get(c, 1.0)
+
+        weights = sample_weight * class_sample_weight
+        return weights
+    elif sample_weight is not None:
+        if len(sample_weight.shape) > len(y.shape):
+            raise ValueError('Found a sample_weight with shape' +
+                             str(sample_weight.shape) + '.'
+                             'Expected sample_weight with rank '
+                             'less than or equal to ' + str(len(y.shape)))
+
+        if y.shape[:sample_weight.ndim]!= sample_weight.shape:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) +
+                             ' for an input with shape ' +
+                             str(y.shape) + '. '
+                             'sample_weight cannot be broadcast.')
+        return sample_weight
+    elif isinstance(class_weight, dict):
+        class_sample_weight = np.zeros(y.shape[0])
+        if len(y.shape) > 2:
+            raise ValueError('`class_weight` not supported for '
+                             '3+ dimensional targets.')
+        if y.shape[1] > 1:
+            y_classes = np.argmax(y, axis=1)
+        elif y.shape[1] == 1:
+            y_classes = np.reshape(y, y.shape[0])
+        else:
+            y_classes = y
+
+        for i, c in enumerate(y_classes):
+            class_sample_weight[i] = class_weight.get(c, 1.0)
+
+        return class_sample_weight
+    else:
+        if sample_weight_mode is None:
+            return np.ones((y.shape[0],), dtype=K.floatx())
+        else:
+            return np.ones((y.shape[0], y.shape[1]), dtype=K.floatx())
+```",
+keras-10-vall_llama-5,UNKNOWN,UNKNOWN,"```python
+def standardize_weights(y,
+                        sample_weight=None,
+                        class_weight=None,
+                        sample_weight_mode=None):
+    """"""Performs sample weight validation and standardization.
+
+    Everything gets normalized to a single sample-wise (or timestep-wise)
+    weight array.
+
+    # Arguments
+        y: Numpy array of model targets to be weighted.
+        sample_weight: User-provided `sample_weight` argument.
+        class_weight: User-provided `class_weight` argument.
+        sample_weight_mode: One of `None` or `""temporal""`.
+            `""temporal""` indicated that we expect 2D weight data
+            that will be applied to the last 2 dimensions of
+            the targets (i.e. we are weighting timesteps, not samples).
+
+    # Returns
+        A Numpy array of target weights, one entry per sample to weight.
+
+    # Raises
+        ValueError: In case of invalid user-provided arguments.
+    """"""
+    if sample_weight_mode is not None:
+        if sample_weight_mode!= 'temporal':
+            raise ValueError('""sample_weight_mode '
+                             'should be None or ""temporal"". '
+                             'Found: ' + str(sample_weight_mode))
+        if len(y.shape) < 3:
+            raise ValueError('Found a sample_weight array for '
+                             'an input with shape ' +
+                             str(y.shape) + '. '
+                             'Timestep-wise sample weighting (use of '
+                             'sample_weight_mode=""temporal"") is restricted to '
+                             'outputs that are at least 3D, i.e. that have '
+                             'a time dimension.')
+        if sample_weight is not None and len(sample_weight.shape)!= 2:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weighting, '
+                             'you should pass a 2D sample_weight array.')
+    else:
+        if sample_weight is not None and len(sample_weight.shape)!= 1:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weights, '
+                             'you should specify '
+                             'sample_weight_mode=""temporal"" '
+                             'in compile(). If you just mean to use '
+                             'sample-wise weights, make sure your '
+                             'sample_weight array is 1D.')
+
+    if sample_weight is not None and class_weight is not None:
+        # Here, we multiply sample_weight and class_weight
+        if len(y.shape) > 2:
+            raise ValueError('`class_weight` not supported for '
+                             '3+ dimensional targets.')
+        if y.shape[0] > 1:
+            y_classes = np.argmax(y, axis=1) if len(y.shape) > 1 else y
+        else:
+            y_classes = y
+
+        class_sample_weight = np.asarray([class_weight.get(cls, 1.0) for cls in y_classes])
+        sample_weight = sample_weight * class_sample_weight
+        return sample_weight
+    elif sample_weight is not None:
+        if len(sample_weight.shape) > len(y.shape):
+            raise ValueError('Found a sample_weight with shape' +
+                             str(sample_weight.shape) + '.'
+                             'Expected sample_weight with rank '
+                             'less than or equal to ' + str(len(y.shape)))
+
+        if y.shape[:sample_weight.ndim]!= sample_weight.shape:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) +
+                             ' for an input with shape ' +
+                             str(y.shape) + '. '
+                             'sample_weight cannot be broadcast.')
+        return sample_weight
+    elif isinstance(class_weight, dict):
+        if len(y.shape) > 2:
+            raise ValueError('`class_weight` not supported for '
+                             '3+ dimensional targets.')
+        if len(y.shape) == 2 and y.shape[1] > 1:
+            y_classes = np.argmax(y, axis=1)
+        elif len(y.shape) == 2 and y.shape[1] == 1:
+            y_classes = np.reshape(y, y.shape[0])
+        else:
+            y_classes = y
+
+        weights = np.asarray([class_weight.get(cls, 1.0) for cls in y_classes])
+
+        if len(weights)!= len(y_classes):
+            # subtract the sets to pick all missing classes
+            existing_classes = set(y_classes)
+            existing_class_weight = set(class_weight.keys())
+            raise ValueError('`class_weight` must contain '
+                             'all classes in the data.'
+                             ' The classes %s exist in the data but not in '
+                             '`class_weight`.'
+                             % (existing_classes - existing_class_weight))
+        return weights
+    else:
+        if sample_weight_mode is None:
+            return np.ones((y.shape[0],), dtype=K.floatx())
+        else:
+            return np.ones((y.shape[0], y.shape[1]), dtype=K.floatx())
+```",
+keras-10-vall_llama-6,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the task**: The `standardize_weights` function is used to validate and standardize sample weights and class weights for model targets in Keras. The goal is to ensure everything gets normalized to a single sample-wise (or timestep-wise) weight array.
+
+2. **Identifying the bug**: The current implementation warns and ignores `class_weight` when both `sample_weight` and `class_weight` are provided. However, the expected behavior is to make `sample_weights` and `class_weights` multiplicative.
+
+3. **Cause of the bug**: The function currently raises a warning when both `sample_weight` and `class_weight` are provided and then ignores `class_weight`. This is not the desired behavior as it should combine these weights multiplicatively.
+
+4. **Fix strategy**: To fix this bug, we need to modify the function to multiply `sample_weight` and `class_weight` when both are provided, instead of ignoring `class_weight`.
+
+### Fixed solution:
+```python
+def standardize_weights(y,
+                        sample_weight=None,
+                        class_weight=None,
+                        sample_weight_mode=None):
+    """"""Performs sample weight validation and standardization.
+
+    Everything gets normalized to a single sample-wise (or timestep-wise)
+    weight array.
+
+    # Arguments
+        y: Numpy array of model targets to be weighted.
+        sample_weight: User-provided `sample_weight` argument.
+        class_weight: User-provided `class_weight` argument.
+        sample_weight_mode: One of `None` or `""temporal""`.
+            `""temporal""` indicated that we expect 2D weight data
+            that will be applied to the last 2 dimensions of
+            the targets (i.e. we are weighting timesteps, not samples).
+
+    # Returns
+        A Numpy array of target weights, one entry per sample to weight.
+
+    # Raises
+        ValueError: In case of invalid user-provided arguments.
+    """"""
+    if sample_weight_mode is not None:
+        if sample_weight_mode!= 'temporal':
+            raise ValueError('""sample_weight_mode '
+                             'should be None or ""temporal"". '
+                             'Found: ' + str(sample_weight_mode))
+        if len(y.shape) < 3:
+            raise ValueError('Found a sample_weight array for '
+                             'an input with shape ' +
+                             str(y.shape) + '. '
+                             'Timestep-wise sample weighting (use of '
+                             'sample_weight_mode=""temporal"") is restricted to '
+                             'outputs that are at least 3D, i.e. that have '
+                             'a time dimension.')
+        if sample_weight is not None and len(sample_weight.shape)!= 2:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weighting, '
+                             'you should pass a 2D sample_weight array.')
+    else:
+        if sample_weight is not None and len(sample_weight.shape)!= 1:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weights, '
+                             'you should specify '
+                             'sample_weight_mode=""temporal"" '
+                             'in compile(). If you just mean to use '
+                             'sample-wise weights, make sure your '
+                             'sample_weight array is 1D.')
+
+    if sample_weight is not None:
+        if len(sample_weight.shape) > len(y.shape):
+            raise ValueError('Found a sample_weight with shape' +
+                             str(sample_weight.shape) + '.'
+                             'Expected sample_weight with rank '
+                             'less than or equal to ' + str(len(y.shape)))
+
+        if y.shape[:sample_weight.ndim]!= sample_weight.shape:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) +
+                             ' for an input with shape ' +
+                             str(y.shape) + '. '
+                             'sample_weight cannot be broadcast.')
+        
+        # Combine sample_weight and class_weight multiplicatively if both are provided
+        if class_weight is not None:
+            y_classes = y
+            if y.shape[1] > 1:
+                y_classes = np.argmax(y, axis=1)
+            elif y.shape[1] == 1:
+                y_classes = np.reshape(y, y.shape[0])
+            class_sample_weight = np.asarray([class_weight.get(cls, 1.0) for cls in y_classes])
+            sample_weight = sample_weight * class_sample_weight
+        return sample_weight
+    elif isinstance(class_weight, dict):
+        if len(y.shape) > 2:
+            raise ValueError('`class_weight` not supported for '
+                             '3+ dimensional targets.')
+        if y.shape[1] > 1:
+            y_classes = np.argmax(y, axis=1)
+        elif y.shape[1] == 1:
+            y_classes = np.reshape(y, y.shape[0])
+        else:
+            y_classes = y
+
+        weights = np.asarray([class_weight.get(cls, 1.0) for cls in y_classes])
+
+        if len(weights)!= len(y_classes):
+            # subtract the sets to pick all missing classes
+            existing_classes = set(y_classes)
+            existing_class_weight = set(class_weight.keys())
+            raise ValueError('`class_weight` must contain '
+                             'all classes in the data.'
+                             ' The classes %s exist in the data but not in '
+                             '`class_weight`.'
+                             % (existing_classes - existing_class_weight))
+        return weights
+    else:
+        if sample_weight_mode is None:
+            return np.ones((y.shape[0],), dtype=K.floatx())
+        else:
+            return np.ones((y.shape[0], y.shape[1]), dtype=K.floatx())
+```
+
+### Explanation of changes:
+* **Multiplication of sample_weight and class_weight**: When both `sample_weight` and `class_weight` are provided, the function now multiplies them element-wise instead of ignoring `class_weight`.
+* **Get class weight safely**: When creating `class_sample_weight`, the function now uses `class_weight.get(cls, 1.0)` to safely retrieve the class weight. If a class is not present in `class_weight`, it defaults to 1.0.
+* **No significant changes in error handling and validation**: The function still performs the same input validation and error handling as before. The primary change is in how `sample_weight` and `class_weight` are combined when both are provided.
+
+### Tests and example uses:
+To test the corrected function, you can use the provided test case:
+```python
+def test_sample_weights():
+    y = np.array([0, 1, 0, 0, 2])
+    sample_weights = np.array([0.5, 1., 1., 0., 2.])
+    class_weights = {0: 0.5, 1: 1., 2: 1.5}
+
+    # Only `sample_weights`.
+    weights = standardize_weights(y, sample_weights)
+    assert np.allclose(weights, sample_weights)
+
+    # Only `class_weights`.
+    weights = standardize_weights(y, class_weight=class_weights)
+    assert np.allclose(weights, np.array([0.5, 1., 0.5, 0.5, 1.5]))
+
+    # Both 'sample_weights` and 'class_weights`.
+    weights = standardize_weights(y, sample_weights, class_weights)
+    expected = sample_weights * np.array([0.5, 1., 0.5, 0.5, 1.5])
+    assert np.allclose(weights, expected)
+```",
+keras-10-vall_llama-7,UNKNOWN,UNKNOWN,"### Corrected Version of the Buggy Function
+
+
+```python
+def standardize_weights(y,
+                        sample_weight=None,
+                        class_weight=None,
+                        sample_weight_mode=None):
+    """"""Performs sample weight validation and standardization.
+
+    Everything gets normalized to a single sample-wise (or timestep-wise)
+    weight array.
+
+    # Arguments
+        y: Numpy array of model targets to be weighted.
+        sample_weight: User-provided `sample_weight` argument.
+        class_weight: User-provided `class_weight` argument.
+        sample_weight_mode: One of `None` or `""temporal""`.
+            `""temporal""` indicated that we expect 2D weight data
+            that will be applied to the last 2 dimensions of
+            the targets (i.e. we are weighting timesteps, not samples).
+
+    # Returns
+        A Numpy array of target weights, one entry per sample to weight.
+
+    # Raises
+        ValueError: In case of invalid user-provided arguments.
+    """"""
+    if sample_weight_mode is not None:
+        if sample_weight_mode!= 'temporal':
+            raise ValueError('""sample_weight_mode '
+                             'should be None or ""temporal"". '
+                             'Found: ' + str(sample_weight_mode))
+        if len(y.shape) < 3:
+            raise ValueError('Found a sample_weight array for '
+                             'an input with shape ' +
+                             str(y.shape) + '. '
+                             'Timestep-wise sample weighting (use of '
+                             'sample_weight_mode=""temporal"") is restricted to '
+                             'outputs that are at least 3D, i.e. that have '
+                             'a time dimension.')
+        if sample_weight is not None and len(sample_weight.shape)!= 2:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weighting, '
+                             'you should pass a 2D sample_weight array.')
+    else:
+        if sample_weight is not None and len(sample_weight.shape)!= 1:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weights, '
+                             'you should specify '
+                             'sample_weight_mode=""temporal"" '
+                             'in compile(). If you just mean to use '
+                             'sample-wise weights, make sure your '
+                             'sample_weight array is 1D.')
+
+    if sample_weight is not None:
+        if len(sample_weight.shape) > len(y.shape):
+            raise ValueError('Found a sample_weight with shape' +
+                             str(sample_weight.shape) + '.'
+                             'Expected sample_weight with rank '
+                             'less than or equal to ' + str(len(y.shape)))
+
+        if y.shape[:sample_weight.ndim]!= sample_weight.shape:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) +
+                             ' for an input with shape ' +
+                             str(y.shape) + '. '
+                             'sample_weight cannot be broadcast.')
+    elif isinstance(class_weight, dict):
+        if len(y.shape) > 2:
+            raise ValueError('`class_weight` not supported for '
+                             '3+ dimensional targets.')
+        if y.shape[1] > 1:
+            y_classes = np.argmax(y, axis=1)
+        elif y.shape[1] == 1:
+            y_classes = np.reshape(y, y.shape[0])
+        else:
+            y_classes = y
+        weights = np.asarray([class_weight.get(cls, 1.0) for cls in y_classes
+                              if cls in class_weight or cls == 0])
+        return weights
+    else:
+        if sample_weight_mode is None:
+            return np.ones((y.shape[0],), dtype=K.floatx())
+        else:
+            return np.ones((y.shape[0], y.shape[1]), dtype=K.floatx())
+
+    if sample_weight is not None and class_weight is not None:
+        if len(y.shape) > 2:
+            raise ValueError('`class_weight` not supported for '
+                             '3+ dimensional targets.')
+        if y.shape[1] > 1:
+            y_classes = np.argmax(y, axis=1)
+        elif y.shape[1] == 1:
+            y_classes = np.reshape(y, y.shape[0])
+        else:
+            y_classes = y
+        class_sample_weight = np.asarray([class_weight.get(cls, 1.0) for cls in y_classes
+                                          if cls in class_weight or cls == 0])
+        return sample_weight * class_sample_weight
+
+    if sample_weight is not None:
+        return sample_weight
+```",
+keras-10-vall_llama-8,UNKNOWN,UNKNOWN,"```python
+def standardize_weights(y,
+                        sample_weight=None,
+                        class_weight=None,
+                        sample_weight_mode=None):
+    """"""Performs sample weight validation and standardization.
+
+    Everything gets normalized to a single sample-wise (or timestep-wise)
+    weight array.
+
+    # Arguments
+        y: Numpy array of model targets to be weighted.
+        sample_weight: User-provided `sample_weight` argument.
+        class_weight: User-provided `class_weight` argument.
+        sample_weight_mode: One of `None` or `""temporal""`.
+            `""temporal""` indicated that we expect 2D weight data
+            that will be applied to the last 2 dimensions of
+            the targets (i.e. we are weighting timesteps, not samples).
+
+    # Returns
+        A Numpy array of target weights, one entry per sample to weight.
+
+    # Raises
+        ValueError: In case of invalid user-provided arguments.
+    """"""
+    if sample_weight_mode is not None:
+        if sample_weight_mode!= 'temporal':
+            raise ValueError('""sample_weight_mode '
+                             'should be None or ""temporal"". '
+                             'Found: ' + str(sample_weight_mode))
+        if len(y.shape) < 3:
+            raise ValueError('Found a sample_weight array for '
+                             'an input with shape ' +
+                             str(y.shape) + '. '
+                             'Timestep-wise sample weighting (use of '
+                             'sample_weight_mode=""temporal"") is restricted to '
+                             'outputs that are at least 3D, i.e. that have '
+                             'a time dimension.')
+        if sample_weight is not None and len(sample_weight.shape)!= 2:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weighting, '
+                             'you should pass a 2D sample_weight array.')
+    else:
+        if sample_weight is not None and len(sample_weight.shape)!= 1:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weights, '
+                             'you should specify '
+                             'sample_weight_mode=""temporal"" '
+                             'in compile(). If you just mean to use '
+                             'sample-wise weights, make sure your '
+                             'sample_weight array is 1D.')
+
+    if sample_weight is not None and class_weight is not None:
+        # Instead of ignoring class_weight, let's multiply the sample weights
+        # by the class weights.
+        if y.shape[1] > 1:
+            y_classes = np.argmax(y, axis=1)
+        elif y.shape[1] == 1:
+            y_classes = np.reshape(y, y.shape[0])
+        else:
+            y_classes = y
+
+        class_sample_weight = np.asarray([class_weight[cls] for cls in y_classes
+                                          if cls in class_weight])
+        if len(class_sample_weight)!= len(y_classes):
+            # Subtract the sets to pick all missing classes
+            existing_classes = set(y_classes)
+            existing_class_weight = set(class_weight.keys())
+            raise ValueError('`class_weight` must contain '
+                             'all classes in the data.'
+                             ' The classes %s exist in the data but not in '
+                             '`class_weight`.'
+                             % (existing_classes - existing_class_weight))
+
+        sample_weight = sample_weight * class_sample_weight
+
+    if sample_weight is not None:
+        if len(sample_weight.shape) > len(y.shape):
+            raise ValueError('Found a sample_weight with shape' +
+                             str(sample_weight.shape) + '.'
+                             'Expected sample_weight with rank '
+                             'less than or equal to ' + str(len(y.shape)))
+
+        if y.shape[:sample_weight.ndim]!= sample_weight.shape:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) +
+                             ' for an input with shape ' +
+                             str(y.shape) + '. '
+                             'sample_weight cannot be broadcast.')
+        return sample_weight
+    elif isinstance(class_weight, dict):
+        if len(y.shape) > 2:
+            raise ValueError('`class_weight` not supported for '
+                             '3+ dimensional targets.')
+        if y.shape[1] > 1:
+            y_classes = np.argmax(y, axis=1)
+        elif y.shape[1] == 1:
+            y_classes = np.reshape(y, y.shape[0])
+        else:
+            y_classes = y
+
+        weights = np.asarray([class_weight[cls] for cls in y_classes
+                              if cls in class_weight])
+
+        if len(weights)!= len(y_classes):
+            # Subtract the sets to pick all missing classes
+            existing_classes = set(y_classes)
+            existing_class_weight = set(class_weight.keys())
+            raise ValueError('`class_weight` must contain '
+                             'all classes in the data.'
+                             ' The classes %s exist in the data but not in '
+                             '`class_weight`.'
+                             % (existing_classes - existing_class_weight))
+        return weights
+    else:
+        if sample_weight_mode is None:
+            return np.ones((y.shape[0],), dtype=K.floatx())
+        else:
+            return np.ones((y.shape[0], y.shape[1]), dtype=K.floatx())
+```",
+keras-10-vall_llama-9,UNKNOWN,UNKNOWN,"```python
+def standardize_weights(y,
+                        sample_weight=None,
+                        class_weight=None,
+                        sample_weight_mode=None):
+    """"""Performs sample weight validation and standardization.
+
+    Everything gets normalized to a single sample-wise (or timestep-wise)
+    weight array.
+
+    # Arguments
+        y: Numpy array of model targets to be weighted.
+        sample_weight: User-provided `sample_weight` argument.
+        class_weight: User-provided `class_weight` argument.
+        sample_weight_mode: One of `None` or `""temporal""`.
+            `""temporal""` indicated that we expect 2D weight data
+            that will be applied to the last 2 dimensions of
+            the targets (i.e. we are weighting timesteps, not samples).
+
+    # Returns
+        A Numpy array of target weights, one entry per sample to weight.
+
+    # Raises
+        ValueError: In case of invalid user-provided arguments.
+    """"""
+    if sample_weight_mode is not None:
+        if sample_weight_mode!= 'temporal':
+            raise ValueError('""sample_weight_mode '
+                             'should be None or ""temporal"". '
+                             'Found: ' + str(sample_weight_mode))
+        if len(y.shape) < 3:
+            raise ValueError('Found a sample_weight array for '
+                             'an input with shape ' +
+                             str(y.shape) + '. '
+                             'Timestep-wise sample weighting (use of '
+                             'sample_weight_mode=""temporal"") is restricted to '
+                             'outputs that are at least 3D, i.e. that have '
+                             'a time dimension.')
+        if sample_weight is not None and len(sample_weight.shape)!= 2:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weighting, '
+                             'you should pass a 2D sample_weight array.')
+    else:
+        if sample_weight is not None and len(sample_weight.shape)!= 1:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) + '. '
+                             'In order to use timestep-wise sample weights, '
+                             'you should specify '
+                             'sample_weight_mode=""temporal"" '
+                             'in compile(). If you just mean to use '
+                             'sample-wise weights, make sure your '
+                             'sample_weight array is 1D.')
+
+    if sample_weight is not None and class_weight is not None:
+        # Combine sample_weight and class_weight
+        if isinstance(class_weight, dict):
+            if len(y.shape) > 2:
+                raise ValueError('`class_weight` not supported for '
+                                 '3+ dimensional targets.')
+            if y.shape[1] > 1:
+                y_classes = np.argmax(y, axis=1)
+            elif y.shape[1] == 1:
+                y_classes = np.reshape(y, y.shape[0])
+            else:
+                y_classes = y
+
+            class_sample_weight = np.asarray([class_weight.get(cls, 1.0) for cls in y_classes])
+            sample_weight = sample_weight * class_sample_weight
+        return sample_weight
+    elif sample_weight is not None:
+        if len(sample_weight.shape) > len(y.shape):
+            raise ValueError('Found a sample_weight with shape' +
+                             str(sample_weight.shape) + '.'
+                             'Expected sample_weight with rank '
+                             'less than or equal to ' + str(len(y.shape)))
+
+        if y.shape[:sample_weight.ndim]!= sample_weight.shape:
+            raise ValueError('Found a sample_weight array with shape ' +
+                             str(sample_weight.shape) +
+                             ' for an input with shape ' +
+                             str(y.shape) + '. '
+                             'sample_weight cannot be broadcast.')
+        return sample_weight
+    elif isinstance(class_weight, dict):
+        if len(y.shape) > 2:
+            raise ValueError('`class_weight` not supported for '
+                             '3+ dimensional targets.')
+        if y.shape[1] > 1:
+            y_classes = np.argmax(y, axis=1)
+        elif y.shape[1] == 1:
+            y_classes = np.reshape(y, y.shape[0])
+        else:
+            y_classes = y
+
+        weights = np.asarray([class_weight.get(cls, 1.0) for cls in y_classes])
+
+        if len(weights)!= len(y_classes):
+            # subtract the sets to pick all missing classes
+            existing_classes = set(y_classes)
+            existing_class_weight = set(class_weight.keys())
+            raise ValueError('`class_weight` must contain '
+                             'all classes in the data.'
+                             ' The classes %s exist in the data but not in '
+                             '`class_weight`.'
+                             % (existing_classes - existing_class_weight))
+        return weights
+    else:
+        if sample_weight_mode is None:
+            return np.ones((y.shape[0],), dtype=K.floatx())
+        else:
+            return np.ones((y.shape[0], y.shape[1]), dtype=K.floatx())
+```",

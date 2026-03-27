@@ -1,0 +1,456 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-29-vall_gpt-0,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    # Check for NA values and handle them based on dtype
+    needs_float_conversion = False
+    if is_scalar(value) and isna(value):
+        if is_integer_dtype(self.dtype.subtype):
+            # can't set NaN on a numpy integer array
+            needs_float_conversion = True
+        elif is_datetime64_any_dtype(self.dtype.subtype):
+            # need proper NaT to set directly on the numpy datetime array
+            value = np.datetime64(""NaT"")
+        elif is_timedelta64_dtype(self.dtype.subtype):
+            # need proper NaT to set directly on the numpy timedelta array
+            value = np.timedelta64(""NaT"")
+        
+        value_left, value_right = value, value
+
+    # If the value is an interval
+    elif is_interval_dtype(value) or isinstance(value, Interval):
+        self._check_closed_matches(value, name=""value"")
+        value_left, value_right = value.left, value.right
+
+    else:
+        # Attempt to create an IntervalArray from list-like of intervals
+        try:
+            array = IntervalArray(value)
+            value_left, value_right = array.left, array.right
+        except TypeError as err:
+            # Wrong type: not interval or NA
+            msg = f""'value' should be an interval type, got {type(value)} instead.""
+            raise TypeError(msg) from err
+
+    key = check_array_indexer(self, key)
+
+    # Ensure atomic updates
+    left = self.left.copy(deep=True)
+    if needs_float_conversion:
+        left = left.astype(""float"")
+    left.values[key] = value_left
+    self._left = left
+
+    right = self.right.copy(deep=True)
+    if needs_float_conversion:
+        right = right.astype(""float"")
+    right.values[key] = value_right
+    self._right = right
+```",
+pandas-29-vall_gpt-1,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    # Check for special cases for na values: need handling on numpy arrays
+    needs_float_conversion = False
+    if is_scalar(value) and isna(value):
+        if is_integer_dtype(self.dtype.subtype):
+            # can't set NaN on a numpy integer array
+            raise TypeError(""Cannot assign NaN to integer array"")
+        elif is_datetime64_any_dtype(self.dtype.subtype):
+            # need proper NaT to set directly on the numpy array
+            value = np.datetime64(""NaT"")
+        elif is_timedelta64_dtype(self.dtype.subtype):
+            # need proper NaT to set directly on the numpy array
+            value = np.timedelta64(""NaT"")
+
+    # scalar interval
+    elif is_interval_dtype(value) or isinstance(value, Interval):
+        self._check_closed_matches(value, name=""value"")
+        value_left, value_right = value.left, value.right
+    else:
+        # list-like of intervals
+        try:
+            array = IntervalArray(value)
+            value_left, value_right = array.left, array.right
+        except TypeError as err:
+            msg = f""'value' should be an interval type, got {type(value)} instead.""
+            raise TypeError(msg) from err
+
+    # Validate the index
+    key = check_array_indexer(self, key)
+    
+    left = self.left.copy(deep=True)
+    right = self.right.copy(deep=True)
+    
+    # Ensure atomic updates
+    if is_integer_dtype(self.dtype.subtype) and isna(value):
+        raise TypeError(""Cannot assign NaN to integer array"")
+    
+    left.values[key] = value_left
+    right.values[key] = value_right
+    
+    self._left = left
+    self._right = right
+```",
+pandas-29-vall_gpt-2,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    # na value: need special casing to set directly on numpy arrays
+    needs_float_conversion = False
+    if is_scalar(value) and isna(value):
+        if is_integer_dtype(self.dtype.subtype):
+            # can't set NaN on a numpy integer array
+            needs_float_conversion = True
+        elif is_datetime64_any_dtype(self.dtype.subtype):
+            # cannot set NaT on a datetime array
+            raise TypeError(""Cannot assign NaT to datetime dtype"")
+        elif is_timedelta64_dtype(self.dtype.subtype):
+            # cannot set NaT on a timedelta array
+            raise TypeError(""Cannot assign NaT to timedelta dtype"")
+        value_left, value_right = value, value
+
+    # scalar interval
+    elif is_interval_dtype(value) or isinstance(value, Interval):
+        self._check_closed_matches(value, name=""value"")
+        value_left, value_right = value.left, value.right
+
+    else:
+        # list-like of intervals
+        try:
+            array = IntervalArray(value)
+            value_left, value_right = array.left, array.right
+        except TypeError as err:
+            # wrong type: not interval or NA
+            msg = f""'value' should be an interval type, got {type(value)} instead.""
+            raise TypeError(msg) from err
+
+    key = check_array_indexer(self, key)
+    
+    # Need to ensure that left and right are updated atomically, so we're
+    # forced to copy, update the copy, and swap in the new values.
+    left = self.left.copy(deep=True)
+    if needs_float_conversion:
+        left = left.astype(""float"")
+    # Assigning left value
+    left.values[key] = value_left
+    self._left = left
+
+    right = self.right.copy(deep=True)
+    if needs_float_conversion:
+        right = right.astype(""float"")
+    # Assigning right value
+    right.values[key] = value_right
+    self._right = right
+```",
+pandas-29-vall_gpt-3,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    # na value: need special casing to set directly on numpy arrays
+    needs_float_conversion = False
+    
+    if is_scalar(value) and isna(value):
+        if is_integer_dtype(self.dtype.subtype):
+            # can't set NaN on a numpy integer array
+            needs_float_conversion = True
+        elif is_datetime64_any_dtype(self.dtype.subtype):
+            # raise error if assigning NaT to a datetime array
+            raise TypeError(""Cannot assign NaT to datetime array"")
+        elif is_timedelta64_dtype(self.dtype.subtype):
+            # raise error if assigning NaT to a timedelta array
+            raise TypeError(""Cannot assign NaT to timedelta array"")
+        value_left, value_right = value, value
+
+    # scalar interval
+    elif is_interval_dtype(value) or isinstance(value, Interval):
+        self._check_closed_matches(value, name=""value"")
+        value_left, value_right = value.left, value.right
+
+    else:
+        # list-like of intervals
+        try:
+            array = IntervalArray(value)
+            value_left, value_right = array.left, array.right
+        except TypeError as err:
+            # wrong type: not interval or NA
+            msg = f""'value' should be an interval type, got {type(value)} instead.""
+            raise TypeError(msg) from err
+
+    key = check_array_indexer(self, key)
+    # Need to ensure that left and right are updated atomically, so we're
+    # forced to copy, update the copy, and swap in the new values.
+    left = self.left.copy(deep=True)
+    if needs_float_conversion:
+        left = left.astype(""float"")
+    left.values[key] = value_left
+    self._left = left
+
+    right = self.right.copy(deep=True)
+    if needs_float_conversion:
+        right = right.astype(""float"")
+    right.values[key] = value_right
+    self._right = right
+```",
+pandas-29-vall_gpt-4,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    needs_float_conversion = False
+    if is_scalar(value) and isna(value):
+        if is_integer_dtype(self.dtype.subtype):
+            # Can't set NaN on a numpy integer array
+            raise TypeError(""Cannot assign NaN to an integer-backed IntervalArray"")
+        elif is_datetime64_any_dtype(self.dtype.subtype):
+            # Need proper NaT to set directly on the numpy array
+            value = np.datetime64(""NaT"")
+        elif is_timedelta64_dtype(self.dtype.subtype):
+            # Need proper NaT to set directly on the numpy array
+            value = np.timedelta64(""NaT"")
+    
+        value_left, value_right = value, value
+
+    elif is_interval_dtype(value) or isinstance(value, Interval):
+        self._check_closed_matches(value, name=""value"")
+        value_left, value_right = value.left, value.right
+
+    else:
+        # List-like of intervals
+        try:
+            array = IntervalArray(value)
+            value_left, value_right = array.left, array.right
+        except TypeError as err:
+            # Wrong type: not interval or NA
+            msg = f""'value' should be an interval type, got {type(value)} instead.""
+            raise TypeError(msg) from err
+
+    key = check_array_indexer(self, key)
+    
+    left = self.left.copy(deep=True)
+    right = self.right.copy(deep=True)
+
+    # Handle NaN conversion for integer types
+    if needs_float_conversion:
+        left = left.astype(""float"")
+        right = right.astype(""float"")
+        
+    left.values[key] = value_left
+    self._left = left
+
+    right.values[key] = value_right
+    self._right = right
+```",
+pandas-29-vall_gpt-5,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    # na value: need special casing to set directly on numpy arrays
+    needs_float_conversion = False
+    
+    if is_scalar(value) and isna(value):
+        if is_integer_dtype(self.dtype.subtype):
+            # cannot assign NaN to numpy integer array
+            raise TypeError(""Cannot assign NaN to integer array"")
+        elif is_datetime64_any_dtype(self.dtype.subtype):
+            # need proper NaT to set directly on numpy arrays
+            value = np.datetime64(""NaT"")
+        elif is_timedelta64_dtype(self.dtype.subtype):
+            # need proper NaT to set directly on numpy arrays
+            value = np.timedelta64(""NaT"")
+        else:
+            value_left, value_right = value, value
+
+    elif is_interval_dtype(value) or isinstance(value, Interval):
+        self._check_closed_matches(value, name=""value"")
+        value_left, value_right = value.left, value.right
+
+    else:
+        # list-like of intervals
+        try:
+            array = IntervalArray(value)
+            value_left, value_right = array.left, array.right
+        except TypeError as err:
+            # wrong type: not interval or NA
+            msg = f""'value' should be an interval type, got {type(value)} instead.""
+            raise TypeError(msg) from err
+
+    # Validate indexer
+    key = check_array_indexer(self, key)
+    
+    # Ensure that left and right are updated atomically
+    left = self.left.copy(deep=True)
+    right = self.right.copy(deep=True)
+
+    left.values[key] = value_left
+    self._left = left
+
+    right.values[key] = value_right
+    self._right = right
+```",
+pandas-29-vall_gpt-6,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    # na value: need special casing to set directly on numpy arrays
+    needs_float_conversion = False
+    if is_scalar(value) and isna(value):
+        if is_integer_dtype(self.dtype.subtype):
+            # can't set NaN on a numpy integer array
+            needs_float_conversion = True
+        elif is_datetime64_any_dtype(self.dtype.subtype):
+            raise TypeError(""Cannot assign NaT to datetime array"")
+        elif is_timedelta64_dtype(self.dtype.subtype):
+            raise TypeError(""Cannot assign NaT to timedelta array"")
+        value_left, value_right = value, value
+
+    # scalar interval
+    elif is_interval_dtype(value) or isinstance(value, Interval):
+        self._check_closed_matches(value, name=""value"")
+        value_left, value_right = value.left, value.right
+
+    else:
+        # list-like of intervals
+        try:
+            array = IntervalArray(value)
+            value_left, value_right = array.left, array.right
+        except TypeError as err:
+            # wrong type: not interval or NA
+            msg = f""'value' should be an interval type, got {type(value)} instead.""
+            raise TypeError(msg) from err
+
+    key = check_array_indexer(self, key)
+    # Need to ensure that left and right are updated atomically, so we're
+    # forced to copy, update the copy, and swap in the new values.
+    left = self.left.copy(deep=True)
+    if needs_float_conversion:
+        left = left.astype(""float"")
+    left.values[key] = value_left
+    self._left = left
+
+    right = self.right.copy(deep=True)
+    if needs_float_conversion:
+        right = right.astype(""float"")
+    right.values[key] = value_right
+    self._right = right
+```",
+pandas-29-vall_gpt-7,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    # Handle NA values: check if value is scalar and NA
+    needs_float_conversion = False
+    if is_scalar(value) and isna(value):
+        if is_integer_dtype(self.dtype.subtype):
+            # Can't set NaN on a numpy integer array
+            needs_float_conversion = True
+        elif is_datetime64_any_dtype(self.dtype.subtype):
+            # Need proper NaT to set directly on the numpy array
+            raise TypeError(""Cannot assign NaT to a datetime64 array"")
+        elif is_timedelta64_dtype(self.dtype.subtype):
+            # Need proper NaT to set directly on the numpy array
+            raise TypeError(""Cannot assign NaT to a timedelta64 array"")
+        value_left, value_right = value, value
+
+    # Check for scalar interval
+    elif is_interval_dtype(value) or isinstance(value, Interval):
+        self._check_closed_matches(value, name=""value"")
+        value_left, value_right = value.left, value.right
+
+    else:
+        # Handle a list-like of intervals
+        try:
+            array = IntervalArray(value)
+            value_left, value_right = array.left, array.right
+        except TypeError as err:
+            msg = f""'value' should be an interval type, got {type(value)} instead.""
+            raise TypeError(msg) from err
+
+    key = check_array_indexer(self, key)
+    # Ensure left and right are updated atomically
+    left = self.left.copy(deep=True)
+    if needs_float_conversion:
+        left = left.astype(""float"")
+    left.values[key] = value_left
+    self._left = left
+
+    right = self.right.copy(deep=True)
+    if needs_float_conversion:
+        right = right.astype(""float"")
+    right.values[key] = value_right
+    self._right = right
+```",
+pandas-29-vall_gpt-8,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    # Check for NaT to handle cases of scalar NA values
+    needs_float_conversion = False
+    if is_scalar(value) and isna(value):
+        if is_integer_dtype(self.dtype.subtype):
+            # can't set NaN on a numpy integer array
+            raise TypeError(""Cannot assign NaN to integer array"")
+        elif is_datetime64_any_dtype(self.dtype.subtype):
+            # need proper NaT to set directly on the numpy array
+            value = np.datetime64(""NaT"")
+        elif is_timedelta64_dtype(self.dtype.subtype):
+            # need proper NaT to set directly on the numpy array
+            value = np.timedelta64(""NaT"")
+    
+    # scalar interval
+    elif is_interval_dtype(value) or isinstance(value, Interval):
+        self._check_closed_matches(value, name=""value"")
+        value_left, value_right = value.left, value.right
+    else:
+        # list-like of intervals
+        try:
+            array = IntervalArray(value)
+            value_left, value_right = array.left, array.right
+        except TypeError as err:
+            # wrong type: not interval or NA
+            msg = f""'value' should be an interval type, got {type(value)} instead.""
+            raise TypeError(msg) from err
+
+    key = check_array_indexer(self, key)
+    
+    # Need to ensure atomic updates for left and right
+    left = self.left.copy(deep=True)
+    right = self.right.copy(deep=True)
+
+    if is_scalar(value_left) and isna(value_left):
+        if is_integer_dtype(self.dtype.subtype):
+            raise TypeError(""Cannot assign NaN to integer array"")
+    
+    left.values[key] = value_left
+    right.values[key] = value_right
+    self._left = left
+    self._right = right
+```",
+pandas-29-vall_gpt-9,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    # Handling NA values
+    needs_float_conversion = False
+    if is_scalar(value) and isna(value):
+        if is_integer_dtype(self.dtype.subtype):
+            # can't set NaN on a numpy integer array
+            needs_float_conversion = True
+        elif is_datetime64_any_dtype(self.dtype.subtype):
+            raise TypeError(""Cannot assign NaT to datetime array"")
+        elif is_timedelta64_dtype(self.dtype.subtype):
+            raise TypeError(""Cannot assign NaT to timedelta array"")
+        value_left, value_right = value, value
+
+    # Handling scalar interval
+    elif is_interval_dtype(value) or isinstance(value, Interval):
+        self._check_closed_matches(value, name=""value"")
+        value_left, value_right = value.left, value.right
+
+    # Handling list-like of intervals
+    else:
+        try:
+            array = IntervalArray(value)
+            value_left, value_right = array.left, array.right
+        except TypeError as err:
+            # Raise error if wrong type
+            msg = f""'value' should be an interval type, got {type(value)} instead.""
+            raise TypeError(msg) from err
+
+    # Validate key
+    key = check_array_indexer(self, key)
+
+    # Atomically update left and right while handling float conversion
+    left = self.left.copy(deep=True)
+    if needs_float_conversion:
+        left = left.astype(""float"")
+    left.values[key] = value_left
+    self._left = left
+
+    right = self.right.copy(deep=True)
+    if needs_float_conversion:
+        right = right.astype(""float"")
+    right.values[key] = value_right
+    self._right = right
+```",

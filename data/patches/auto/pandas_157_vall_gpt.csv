@@ -1,0 +1,691 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-157-vall_gpt-0,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+    # note this function has side effects
+    (left_join_keys, right_join_keys, join_names) = super()._get_merge_keys()
+
+    # validate index types are the same
+    for i, (lk, rk) in enumerate(zip(left_join_keys, right_join_keys)):
+        if not is_dtype_equal(lk.dtype, rk.dtype):
+            if is_categorical_dtype(lk.dtype) and is_categorical_dtype(rk.dtype):
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, both sides category, but not equal ones"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            else:
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, must be the same type"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            raise MergeError(msg)
+
+    # validate tolerance; must be a Timedelta if we have a DTI
+    if self.tolerance is not None:
+        if self.left_index:
+            lt = self.left.index 
+        else:
+            lt = left_join_keys[-1]
+
+        msg = (
+            ""incompatible tolerance {tolerance}, must be compat ""
+            ""with type {lkdtype}"".format(
+                tolerance=type(self.tolerance), lkdtype=repr(lt.dtype)
+            )
+        )
+
+        if is_datetime64_dtype(lt) or is_datetime64tz_dtype(lt):
+            if not isinstance(self.tolerance, Timedelta):
+                raise MergeError(msg)
+            if self.tolerance < Timedelta(0):
+                raise MergeError(""tolerance must be positive"")
+        elif is_int64_dtype(lt):
+            if not is_integer(self.tolerance):
+                raise MergeError(msg)
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+        elif is_float_dtype(lt):
+            if not is_number(self.tolerance):
+                raise MergeError(msg)
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+        elif is_timedelta64_dtype(lt):
+            if not isinstance(self.tolerance, Timedelta):
+                raise MergeError(msg)
+        else:
+            raise MergeError(""key must be integer, timestamp or float"")
+
+    # validate allow_exact_matches
+    if not is_bool(self.allow_exact_matches):
+        msg = ""allow_exact_matches must be boolean, passed {passed}""
+        raise MergeError(msg.format(passed=self.allow_exact_matches))
+
+    return left_join_keys, right_join_keys, join_names
+```",
+pandas-157-vall_gpt-1,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+
+    # note this function has side effects
+    (left_join_keys, right_join_keys, join_names) = super()._get_merge_keys()
+
+    # validate index types are the same
+    for i, (lk, rk) in enumerate(zip(left_join_keys, right_join_keys)):
+        if not is_dtype_equal(lk.dtype, rk.dtype):
+            if is_categorical_dtype(lk.dtype) and is_categorical_dtype(rk.dtype):
+                # The generic error message is confusing for categoricals.
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, both sides category, but not equal ones"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            else:
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, must be the same type"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            raise MergeError(msg)
+
+    # validate tolerance; must be a Timedelta if we have a DTI
+    if self.tolerance is not None:
+        if self.left_index:
+            lt = self.left.index
+        else:
+            lt = left_join_keys[-1]
+
+        msg = (
+            ""incompatible tolerance {tolerance}, must be compat ""
+            ""with type {lkdtype}"".format(
+                tolerance=type(self.tolerance), lkdtype=repr(lt.dtype)
+            )
+        )
+
+        if is_datetime64_dtype(lt) or is_datetime64tz_dtype(lt):
+            if not isinstance(self.tolerance, Timedelta):
+                raise MergeError(msg)
+            if self.tolerance < Timedelta(0):
+                raise MergeError(""tolerance must be positive"")
+
+        elif is_int64_dtype(lt):
+            if not is_integer(self.tolerance):
+                raise MergeError(msg)
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+
+        elif is_float_dtype(lt):
+            if not is_number(self.tolerance):
+                raise MergeError(msg)
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+
+        else:
+            # Allow for TimedeltaIndex for compatibility with pd.merge_asof()
+            if not (is_timedelta64_dtype(lt) and isinstance(self.tolerance, Timedelta)):
+                raise MergeError(""key must be integer, timestamp, or float"")
+
+    # validate allow_exact_matches
+    if not is_bool(self.allow_exact_matches):
+        msg = ""allow_exact_matches must be boolean, passed {passed}""
+        raise MergeError(msg.format(passed=self.allow_exact_matches))
+
+    return left_join_keys, right_join_keys, join_names
+```",
+pandas-157-vall_gpt-2,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+    # note this function has side effects
+    (left_join_keys, right_join_keys, join_names) = super()._get_merge_keys()
+
+    # validate index types are the same
+    for i, (lk, rk) in enumerate(zip(left_join_keys, right_join_keys)):
+        if not is_dtype_equal(lk.dtype, rk.dtype):
+            if is_categorical_dtype(lk.dtype) and is_categorical_dtype(rk.dtype):
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, both sides category, but not equal ones"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            else:
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, must be the same type"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            raise MergeError(msg)
+
+    # validate tolerance; must be a Timedelta if we have a DTI
+    if self.tolerance is not None:
+        if self.left_index:
+            lt = self.left.index
+        else:
+            lt = left_join_keys[-1]
+
+        msg = (
+            ""incompatible tolerance {tolerance}, must be compat ""
+            ""with type {lkdtype}"".format(
+                tolerance=type(self.tolerance), lkdtype=repr(lt.dtype)
+            )
+        )
+
+        if is_datetime64_dtype(lt) or is_datetime64tz_dtype(lt):
+            if not isinstance(self.tolerance, Timedelta):
+                raise MergeError(msg)
+            if self.tolerance < Timedelta(0):
+                raise MergeError(""tolerance must be positive"")
+
+        elif is_int64_dtype(lt):
+            if not is_integer(self.tolerance):
+                raise MergeError(msg)
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+
+        elif is_float_dtype(lt):
+            if not is_number(self.tolerance):
+                raise MergeError(msg)
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+
+        else:
+            if not (is_timedelta64_dtype(lt) or is_int64_dtype(lt) or is_float_dtype(lt)):
+                raise MergeError(""key must be integer, timestamp or float"")
+
+    # validate allow_exact_matches
+    if not is_bool(self.allow_exact_matches):
+        msg = ""allow_exact_matches must be boolean, passed {passed}""
+        raise MergeError(msg.format(passed=self.allow_exact_matches))
+
+    return left_join_keys, right_join_keys, join_names
+```",
+pandas-157-vall_gpt-3,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+    # note this function has side effects
+    (left_join_keys, right_join_keys, join_names) = super()._get_merge_keys()
+
+    # validate index types are the same
+    for i, (lk, rk) in enumerate(zip(left_join_keys, right_join_keys)):
+        if not is_dtype_equal(lk.dtype, rk.dtype):
+            if is_categorical_dtype(lk.dtype) and is_categorical_dtype(rk.dtype):
+                # The generic error message is confusing for categoricals.
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, both sides category, but not equal ones"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            else:
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, must be the same type"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            raise MergeError(msg)
+
+    # validate tolerance; must be a Timedelta for DTI
+    if self.tolerance is not None:
+        if self.left_index:
+            lt = self.left.index
+        else:
+            lt = left_join_keys[-1]
+
+        msg = (
+            ""incompatible tolerance {tolerance}, must be compat ""
+            ""with type {lkdtype}"".format(
+                tolerance=type(self.tolerance), lkdtype=repr(lt.dtype)
+            )
+        )
+
+        if is_datetime64_dtype(lt) or is_datetime64tz_dtype(lt):
+            if not isinstance(self.tolerance, Timedelta):
+                raise MergeError(msg)
+            if self.tolerance < Timedelta(0):
+                raise MergeError(""tolerance must be positive"")
+
+        elif is_int64_dtype(lt):
+            if not is_integer(self.tolerance):
+                raise MergeError(msg)
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+
+        elif is_float_dtype(lt):
+            if not is_number(self.tolerance):
+                raise MergeError(msg)
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+
+        else:
+            raise MergeError(""key must be integer, timestamp or float"")
+
+    # validate allow_exact_matches
+    if not is_bool(self.allow_exact_matches):
+        msg = ""allow_exact_matches must be boolean, passed {passed}""
+        raise MergeError(msg.format(passed=self.allow_exact_matches))
+
+    return left_join_keys, right_join_keys, join_names
+```",
+pandas-157-vall_gpt-4,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+    # note this function has side effects
+    (left_join_keys, right_join_keys, join_names) = super()._get_merge_keys()
+
+    # validate index types are the same
+    for i, (lk, rk) in enumerate(zip(left_join_keys, right_join_keys)):
+        if not is_dtype_equal(lk.dtype, rk.dtype):
+            if is_categorical_dtype(lk.dtype) and is_categorical_dtype(rk.dtype):
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, both sides category, but not equal ones"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            else:
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, must be the same type"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            raise MergeError(msg)
+
+    # validate tolerance; must be a Timedelta if we have a DTI
+    if self.tolerance is not None:
+        if self.left_index:
+            lt = self.left.index
+        else:
+            lt = left_join_keys[-1]
+
+        msg = (
+            ""incompatible tolerance {tolerance}, must be compat ""
+            ""with type {lkdtype}"".format(
+                tolerance=type(self.tolerance), lkdtype=repr(lt.dtype)
+            )
+        )
+
+        if is_datetime64_dtype(lt) or is_datetime64tz_dtype(lt):
+            if not isinstance(self.tolerance, Timedelta):
+                raise MergeError(msg)
+            if self.tolerance < Timedelta(0):
+                raise MergeError(""tolerance must be positive"")
+
+        elif is_int64_dtype(lt):
+            if not is_integer(self.tolerance):
+                raise MergeError(msg)
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+
+        elif is_float_dtype(lt):
+            if not is_number(self.tolerance):
+                raise MergeError(msg)
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+
+        else:  # Handling TimedeltaIndex case
+            raise MergeError(""key must be integer, timestamp or float"")
+
+    # validate allow_exact_matches
+    if not is_bool(self.allow_exact_matches):
+        msg = ""allow_exact_matches must be boolean, passed {passed}""
+        raise MergeError(msg.format(passed=self.allow_exact_matches))
+
+    return left_join_keys, right_join_keys, join_names
+```",
+pandas-157-vall_gpt-5,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+    # note this function has side effects
+    (left_join_keys, right_join_keys, join_names) = super()._get_merge_keys()
+
+    # validate index types are the same
+    for i, (lk, rk) in enumerate(zip(left_join_keys, right_join_keys)):
+        if not is_dtype_equal(lk.dtype, rk.dtype):
+            if is_categorical_dtype(lk.dtype) and is_categorical_dtype(rk.dtype):
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, both sides category, but not equal ones"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            else:
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, must be the same type"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            raise MergeError(msg)
+
+    # validate tolerance; must be a Timedelta if we have a DTI
+    if self.tolerance is not None:
+        if self.left_index:
+            lt = self.left.index
+        else:
+            lt = left_join_keys[-1]
+
+        msg = (
+            ""incompatible tolerance {tolerance}, must be compat ""
+            ""with type {lkdtype}"".format(
+                tolerance=type(self.tolerance), lkdtype=repr(lt.dtype)
+            )
+        )
+
+        # Check for cases with TimedeltaIndex
+        if is_datetime64_dtype(lt) or is_datetime64tz_dtype(lt):
+            if not isinstance(self.tolerance, Timedelta):
+                raise MergeError(msg)
+            if self.tolerance < Timedelta(0):
+                raise MergeError(""tolerance must be positive"")
+
+        # Check for numeric types
+        elif is_int64_dtype(lt):
+            if not is_integer(self.tolerance):
+                raise MergeError(msg)
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+
+        elif is_float_dtype(lt):
+            if not is_number(self.tolerance):
+                raise MergeError(msg)
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+
+        # For other dtypes, raise an error for incompatible merging
+        else:
+            raise MergeError(""key must be integer, timestamp or float"")
+
+    # validate allow_exact_matches
+    if not is_bool(self.allow_exact_matches):
+        msg = ""allow_exact_matches must be boolean, passed {passed}""
+        raise MergeError(msg.format(passed=self.allow_exact_matches))
+
+    return left_join_keys, right_join_keys, join_names
+```",
+pandas-157-vall_gpt-6,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+    # note this function has side effects
+    (left_join_keys, right_join_keys, join_names) = super()._get_merge_keys()
+
+    # validate index types are the same
+    for i, (lk, rk) in enumerate(zip(left_join_keys, right_join_keys)):
+        if not is_dtype_equal(lk.dtype, rk.dtype):
+            if is_categorical_dtype(lk.dtype) and is_categorical_dtype(rk.dtype):
+                # The generic error message is confusing for categoricals.
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, both sides category, but not equal ones"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            else:
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, must be the same type"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            raise MergeError(msg)
+
+    # validate tolerance; must be a Timedelta if we have a DTI
+    if self.tolerance is not None:
+        if self.left_index:
+            lt = self.left.index
+        else:
+            lt = left_join_keys[-1]
+
+        msg = (
+            ""incompatible tolerance {tolerance}, must be compat ""
+            ""with type {lkdtype}"".format(
+                tolerance=type(self.tolerance), lkdtype=repr(lt.dtype)
+            )
+        )
+
+        # Check if lt is datetime or timedelta
+        if is_datetimelike(lt):
+            if not isinstance(self.tolerance, Timedelta):
+                raise MergeError(msg)
+            if self.tolerance < Timedelta(0):
+                raise MergeError(""tolerance must be positive"")
+
+        elif is_int64_dtype(lt):
+            if not is_integer(self.tolerance):
+                raise MergeError(msg)
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+
+        elif is_float_dtype(lt):
+            if not is_number(self.tolerance):
+                raise MergeError(msg)
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+
+        else:
+            raise MergeError(""key must be integer or timestamp or float"")
+
+    # validate allow_exact_matches
+    if not is_bool(self.allow_exact_matches):
+        msg = ""allow_exact_matches must be boolean, passed {passed}""
+        raise MergeError(msg.format(passed=self.allow_exact_matches))
+
+    return left_join_keys, right_join_keys, join_names
+```",
+pandas-157-vall_gpt-7,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+    # note this function has side effects
+    (left_join_keys, right_join_keys, join_names) = super()._get_merge_keys()
+
+    # validate index types are the same
+    for i, (lk, rk) in enumerate(zip(left_join_keys, right_join_keys)):
+        if not is_dtype_equal(lk.dtype, rk.dtype):
+            if is_categorical_dtype(lk.dtype) and is_categorical_dtype(rk.dtype):
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, both sides category, but not equal ones"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            else:
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, must be the same type"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            raise MergeError(msg)
+
+    # validate tolerance; must be a Timedelta if we have a DTI
+    if self.tolerance is not None:
+        if self.left_index:
+            lt = self.left.index
+        else:
+            lt = left_join_keys[-1]
+
+        msg = (
+            ""incompatible tolerance {tolerance}, must be compat ""
+            ""with type {lkdtype}"".format(
+                tolerance=type(self.tolerance), lkdtype=repr(lt.dtype)
+            )
+        )
+
+        if is_datetime64_dtype(lt) or is_datetime64tz_dtype(lt):
+            if not isinstance(self.tolerance, Timedelta):
+                raise MergeError(msg)
+            if self.tolerance < Timedelta(0):
+                raise MergeError(""tolerance must be positive"")
+
+        elif is_int64_dtype(lt):
+            if not is_integer(self.tolerance):
+                raise MergeError(msg)
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+
+        elif is_float_dtype(lt):
+            if not is_number(self.tolerance):
+                raise MergeError(msg)
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+
+        elif is_timedelta64_dtype(lt):
+            if not isinstance(self.tolerance, Timedelta):
+                raise MergeError(msg)
+            if self.tolerance < Timedelta(0):
+                raise MergeError(""tolerance must be positive"")
+
+        else:
+            raise MergeError(""key must be integer, timestamp or float"")
+
+    # validate allow_exact_matches
+    if not is_bool(self.allow_exact_matches):
+        msg = ""allow_exact_matches must be boolean, passed {passed}""
+        raise MergeError(msg.format(passed=self.allow_exact_matches))
+
+    return left_join_keys, right_join_keys, join_names
+```",
+pandas-157-vall_gpt-8,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+    # note this function has side effects
+    (left_join_keys, right_join_keys, join_names) = super()._get_merge_keys()
+
+    # validate index types are the same
+    for i, (lk, rk) in enumerate(zip(left_join_keys, right_join_keys)):
+        if not is_dtype_equal(lk.dtype, rk.dtype):
+            if is_categorical_dtype(lk.dtype) and is_categorical_dtype(rk.dtype):
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, both sides category, but not equal ones"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            else:
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, must be the same type"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            raise MergeError(msg)
+
+    # validate tolerance; must be a Timedelta if we have a DTI
+    if self.tolerance is not None:
+        if self.left_index:
+            lt = self.left.index
+        else:
+            lt = left_join_keys[-1]
+
+        # Compatibility check for tolerance
+        if not (is_datetime64_dtype(lt) or is_datetime64tz_dtype(lt)):
+            raise MergeError(""key must be integer, timestamp or float"")
+
+        if is_datetime64_dtype(lt) or is_datetime64tz_dtype(lt):
+            if not isinstance(self.tolerance, Timedelta):
+                raise MergeError(
+                    ""incompatible tolerance {tolerance}, must be compat ""
+                    ""with type {lkdtype}"".format(
+                        tolerance=type(self.tolerance), lkdtype=repr(lt.dtype)
+                    )
+                )
+            if self.tolerance < Timedelta(0):
+                raise MergeError(""tolerance must be positive"")
+
+        elif is_int64_dtype(lt):
+            if not is_integer(self.tolerance):
+                raise MergeError(
+                    ""incompatible tolerance {tolerance}, must be compat ""
+                    ""with type {lkdtype}"".format(
+                        tolerance=type(self.tolerance), lkdtype=repr(lt.dtype)
+                    )
+                )
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+
+        elif is_float_dtype(lt):
+            if not is_number(self.tolerance):
+                raise MergeError(
+                    ""incompatible tolerance {tolerance}, must be compat ""
+                    ""with type {lkdtype}"".format(
+                        tolerance=type(self.tolerance), lkdtype=repr(lt.dtype)
+                    )
+                )
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+
+    # validate allow_exact_matches
+    if not is_bool(self.allow_exact_matches):
+        msg = ""allow_exact_matches must be boolean, passed {passed}""
+        raise MergeError(msg.format(passed=self.allow_exact_matches))
+
+    return left_join_keys, right_join_keys, join_names
+```",
+pandas-157-vall_gpt-9,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+    # note this function has side effects
+    (left_join_keys, right_join_keys, join_names) = super()._get_merge_keys()
+
+    # validate index types are the same
+    for i, (lk, rk) in enumerate(zip(left_join_keys, right_join_keys)):
+        if not is_dtype_equal(lk.dtype, rk.dtype):
+            if is_categorical_dtype(lk.dtype) and is_categorical_dtype(rk.dtype):
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, both sides category, but not equal ones"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            else:
+                msg = (
+                    ""incompatible merge keys [{i}] {lkdtype} and ""
+                    ""{rkdtype}, must be the same type"".format(
+                        i=i, lkdtype=repr(lk.dtype), rkdtype=repr(rk.dtype)
+                    )
+                )
+            raise MergeError(msg)
+
+    # validate tolerance; must be a Timedelta if we have a DTI
+    if self.tolerance is not None:
+        if self.left_index:
+            lt = self.left.index
+        else:
+            lt = left_join_keys[-1]
+
+        msg = (
+            ""incompatible tolerance {tolerance}, must be compat ""
+            ""with type {lkdtype}"".format(
+                tolerance=type(self.tolerance), lkdtype=repr(lt.dtype)
+            )
+        )
+
+        # Check if lt is a timedelta type
+        if is_datetime64_dtype(lt) or is_datetime64tz_dtype(lt):
+            if not isinstance(self.tolerance, Timedelta):
+                raise MergeError(msg)
+            if self.tolerance < Timedelta(0):
+                raise MergeError(""tolerance must be positive"")
+
+        # Check if lt is an integer type
+        elif is_int64_dtype(lt):
+            if not is_integer(self.tolerance):
+                raise MergeError(msg)
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+
+        # Check if lt is a float type
+        elif is_float_dtype(lt):
+            if not is_number(self.tolerance):
+                raise MergeError(msg)
+            if self.tolerance < 0:
+                raise MergeError(""tolerance must be positive"")
+
+        else:
+            if not is_timedelta64_dtype(lt):
+                raise MergeError(""key must be integer, timestamp, or float"")
+
+    # validate allow_exact_matches
+    if not is_bool(self.allow_exact_matches):
+        msg = ""allow_exact_matches must be boolean, passed {passed}""
+        raise MergeError(msg.format(passed=self.allow_exact_matches))
+
+    return left_join_keys, right_join_keys, join_names
+```",

@@ -1,0 +1,779 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+keras-22-vall_llama-0,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Checking the error message and understanding the context**: The error indicates that a layer does not support masking but was passed an input mask. This suggests the issue is with how masking is handled in the `InputLayer` or its subsequent layers.
+2. **Reviewing the provided test case**: The test case involves creating an `InputLayer`, applying a `Masking` layer, followed by a `Sequential` layer with a `TimeDistributed` wrapper around a dense layer, and finally an LSTM layer. The error occurs when the masked input is passed through the `TimeDistributed` layer.
+3. **Analyzing the `InputLayer` class**: The `InputLayer` class is responsible for initializing the input of a model. It does not directly handle masking but sets up the input tensor and its properties.
+4. **Understanding the role of `compute_mask` in layers**: The `compute_mask` method in Keras layers determines whether the layer can handle masking and what the output mask should be. For layers that do not support masking, this method should return `None`.
+5. **Identifying the bug**: The bug arises because the `InputLayer` does not inherently support masking. When a masked input is passed to a layer (like `TimeDistributed`) that does not support masking, it raises an error. The `InputLayer` needs to be modified to handle or propagate masking information correctly.
+
+### Fixed solution:
+```python
+@interfaces.legacy_input_support
+def __init__(self, input_shape=None, batch_size=None,
+             batch_input_shape=None,
+             dtype=None, input_tensor=None, sparse=False, name=None):
+    if not name:
+        prefix = 'input'
+        name = prefix + '_' + str(K.get_uid(prefix))
+    super(InputLayer, self).__init__(dtype=dtype, name=name)
+
+    self.trainable = False
+    self.built = True
+    self.sparse = sparse
+    self.supports_masking = True  # Adding support for masking
+
+    if input_shape and batch_input_shape:
+        raise ValueError('Only provide the input_shape OR '
+                         'batch_input_shape argument to '
+                         'InputLayer, not both at the same time.')
+    if input_tensor is not None and batch_input_shape is None:
+        # If input_tensor is set, and batch_input_shape is not set:
+        # Attempt automatic input shape inference.
+        try:
+            batch_input_shape = K.int_shape(input_tensor)
+        except TypeError:
+            if not input_shape and not batch_input_shape:
+                raise ValueError('InputLayer was provided '
+                                 'an input_tensor argument, '
+                                 'but its input shape cannot be '
+                                 'automatically inferred. '
+                                 'You should pass an input_shape or '
+                                 'batch_input_shape argument.')
+    if not batch_input_shape:
+        if not input_shape:
+            raise ValueError('An Input layer should be passed either '
+                             'a `batch_input_shape` or an `input_shape`.')
+        else:
+            batch_input_shape = (batch_size,) + tuple(input_shape)
+    else:
+        batch_input_shape = tuple(batch_input_shape)
+
+    if not dtype:
+        if input_tensor is None:
+            dtype = K.floatx()
+        else:
+            dtype = K.dtype(input_tensor)
+
+    self.batch_input_shape = batch_input_shape
+    self.dtype = dtype
+
+    if input_tensor is None:
+        self.is_placeholder = True
+        input_tensor = K.placeholder(shape=batch_input_shape,
+                                     dtype=dtype,
+                                     sparse=self.sparse,
+                                     name=self.name)
+    else:
+        self.is_placeholder = False
+        input_tensor._keras_shape = batch_input_shape
+    # Create an input node to add to self.outbound_node
+    # and set output_tensors' _keras_history.
+    input_tensor._uses_learning_phase = False
+    input_tensor._keras_history = (self, 0, 0)
+    Node(self,
+         inbound_layers=[],
+         node_indices=[],
+         tensor_indices=[],
+         input_tensors=[input_tensor],
+         output_tensors=[input_tensor],
+         input_masks=[None],
+         output_masks=[None],
+         input_shapes=[batch_input_shape],
+         output_shapes=[batch_input_shape])
+```
+
+### Explanation of changes:
+- **Added `self.supports_masking = True`**: This line has been added to the `__init__` method of the `InputLayer` class to indicate that this layer supports masking. This change allows the layer to propagate mask information correctly.
+
+### Tests and example uses:
+To test the modified `InputLayer`, one can create a model similar to the one described in the test case and verify that it compiles and runs without raising a `TypeError` related to masking. For example:
+```python
+input = Input(shape=(3,2))
+hidden = Masking(mask_value=-100)(input)
+s = Sequential()
+s.add(Dense(5, input_shape=(2,)))
+s.add(Activation('elu'))
+hidden = TimeDistributed(s)(hidden)
+hidden = LSTM(10)(hidden)
+m = Model(inputs=input, outputs=hidden)
+m.compile(optimizer='rmsprop', loss='mse')
+```
+This test model should now compile without errors related to masking.",
+keras-22-vall_llama-1,UNKNOWN,UNKNOWN,"```python
+@interfaces.legacy_input_support
+def __init__(self, input_shape=None, batch_size=None,
+             batch_input_shape=None,
+             dtype=None, input_tensor=None, sparse=False, name=None):
+    if not name:
+        prefix = 'input'
+        name = prefix + '_' + str(K.get_uid(prefix))
+    super(InputLayer, self).__init__(dtype=dtype, name=name)
+
+    self.trainable = False
+    self.built = True
+    self.sparse = sparse
+    self.supports_masking = True
+
+    if input_shape and batch_input_shape:
+        raise ValueError('Only provide the input_shape OR '
+                         'batch_input_shape argument to '
+                         'InputLayer, not both at the same time.')
+    if input_tensor is not None and batch_input_shape is None:
+        # If input_tensor is set, and batch_input_shape is not set:
+        # Attempt automatic input shape inference.
+        try:
+            batch_input_shape = K.int_shape(input_tensor)
+        except TypeError:
+            if not input_shape and not batch_input_shape:
+                raise ValueError('InputLayer was provided '
+                                 'an input_tensor argument, '
+                                 'but its input shape cannot be '
+                                 'automatically inferred. '
+                                 'You should pass an input_shape or '
+                                 'batch_input_shape argument.')
+    if not batch_input_shape:
+        if not input_shape:
+            raise ValueError('An Input layer should be passed either '
+                             'a `batch_input_shape` or an `input_shape`.')
+        else:
+            batch_input_shape = (batch_size,) + tuple(input_shape)
+    else:
+        batch_input_shape = tuple(batch_input_shape)
+
+    if not dtype:
+        if input_tensor is None:
+            dtype = K.floatx()
+        else:
+            dtype = K.dtype(input_tensor)
+
+    self.batch_input_shape = batch_input_shape
+    self.dtype = dtype
+
+    if input_tensor is None:
+        self.is_placeholder = True
+        input_tensor = K.placeholder(shape=batch_input_shape,
+                                     dtype=dtype,
+                                     sparse=self.sparse,
+                                     name=self.name)
+    else:
+        self.is_placeholder = False
+        input_tensor._keras_shape = batch_input_shape
+    # Create an input node to add to self.outbound_node
+    # and set output_tensors' _keras_history.
+    input_tensor._uses_learning_phase = False
+    input_tensor._keras_history = (self, 0, 0)
+    Node(self,
+         inbound_layers=[],
+         node_indices=[],
+         tensor_indices=[],
+         input_tensors=[input_tensor],
+         output_tensors=[input_tensor],
+         input_masks=[None],
+         output_masks=[None],
+         input_shapes=[batch_input_shape],
+         output_shapes=[batch_input_shape])
+```",
+keras-22-vall_llama-2,UNKNOWN,UNKNOWN,"```python
+@interfaces.legacy_input_support
+def __init__(self, input_shape=None, batch_size=None,
+             batch_input_shape=None,
+             dtype=None, input_tensor=None, sparse=False, name=None):
+    if not name:
+        prefix = 'input'
+        name = prefix + '_' + str(K.get_uid(prefix))
+    super(InputLayer, self).__init__(dtype=dtype, name=name)
+
+    self.trainable = False
+    self.built = True
+    self.sparse = sparse
+    self.supports_masking = True  # Added this line to enable masking support
+
+    if input_shape and batch_input_shape:
+        raise ValueError('Only provide the input_shape OR '
+                         'batch_input_shape argument to '
+                         'InputLayer, not both at the same time.')
+    if input_tensor is not None and batch_input_shape is None:
+        # If input_tensor is set, and batch_input_shape is not set:
+        # Attempt automatic input shape inference.
+        try:
+            batch_input_shape = K.int_shape(input_tensor)
+        except TypeError:
+            if not input_shape and not batch_input_shape:
+                raise ValueError('InputLayer was provided '
+                                 'an input_tensor argument, '
+                                 'but its input shape cannot be '
+                                 'automatically inferred. '
+                                 'You should pass an input_shape or '
+                                 'batch_input_shape argument.')
+    if not batch_input_shape:
+        if not input_shape:
+            raise ValueError('An Input layer should be passed either '
+                             'a `batch_input_shape` or an `input_shape`.')
+        else:
+            batch_input_shape = (batch_size,) + tuple(input_shape)
+    else:
+        batch_input_shape = tuple(batch_input_shape)
+
+    if not dtype:
+        if input_tensor is None:
+            dtype = K.floatx()
+        else:
+            dtype = K.dtype(input_tensor)
+
+    self.batch_input_shape = batch_input_shape
+    self.dtype = dtype
+
+    if input_tensor is None:
+        self.is_placeholder = True
+        input_tensor = K.placeholder(shape=batch_input_shape,
+                                     dtype=dtype,
+                                     sparse=self.sparse,
+                                     name=self.name)
+    else:
+        self.is_placeholder = False
+        input_tensor._keras_shape = batch_input_shape
+    # Create an input node to add to self.outbound_node
+    # and set output_tensors' _keras_history.
+    input_tensor._uses_learning_phase = False
+    input_tensor._keras_history = (self, 0, 0)
+    Node(self,
+         inbound_layers=[],
+         node_indices=[],
+         tensor_indices=[],
+         input_tensors=[input_tensor],
+         output_tensors=[input_tensor],
+         input_masks=[None],
+         output_masks=[None],
+         input_shapes=[batch_input_shape],
+         output_shapes=[batch_input_shape])
+```",
+keras-22-vall_llama-3,UNKNOWN,UNKNOWN,"```python
+@interfaces.legacy_input_support
+def __init__(self, input_shape=None, batch_size=None,
+             batch_input_shape=None,
+             dtype=None, input_tensor=None, sparse=False, name=None):
+    if not name:
+        prefix = 'input'
+        name = prefix + '_' + str(K.get_uid(prefix))
+    super(InputLayer, self).__init__(dtype=dtype, name=name)
+
+    self.trainable = False
+    self.built = True
+    self.sparse = sparse
+    self.supports_masking = True  # Add this line to enable masking support
+
+    if input_shape and batch_input_shape:
+        raise ValueError('Only provide the input_shape OR '
+                         'batch_input_shape argument to '
+                         'InputLayer, not both at the same time.')
+    if input_tensor is not None and batch_input_shape is None:
+        # If input_tensor is set, and batch_input_shape is not set:
+        # Attempt automatic input shape inference.
+        try:
+            batch_input_shape = K.int_shape(input_tensor)
+        except TypeError:
+            if not input_shape and not batch_input_shape:
+                raise ValueError('InputLayer was provided '
+                                 'an input_tensor argument, '
+                                 'but its input shape cannot be '
+                                 'automatically inferred. '
+                                 'You should pass an input_shape or '
+                                 'batch_input_shape argument.')
+    if not batch_input_shape:
+        if not input_shape:
+            raise ValueError('An Input layer should be passed either '
+                             'a `batch_input_shape` or an `input_shape`.')
+        else:
+            batch_input_shape = (batch_size,) + tuple(input_shape)
+    else:
+        batch_input_shape = tuple(batch_input_shape)
+
+    if not dtype:
+        if input_tensor is None:
+            dtype = K.floatx()
+        else:
+            dtype = K.dtype(input_tensor)
+
+    self.batch_input_shape = batch_input_shape
+    self.dtype = dtype
+
+    if input_tensor is None:
+        self.is_placeholder = True
+        input_tensor = K.placeholder(shape=batch_input_shape,
+                                     dtype=dtype,
+                                     sparse=self.sparse,
+                                     name=self.name)
+    else:
+        self.is_placeholder = False
+        input_tensor._keras_shape = batch_input_shape
+    # Create an input node to add to self.outbound_node
+    # and set output_tensors' _keras_history.
+    input_tensor._uses_learning_phase = False
+    input_tensor._keras_history = (self, 0, 0)
+    Node(self,
+         inbound_layers=[],
+         node_indices=[],
+         tensor_indices=[],
+         input_tensors=[input_tensor],
+         output_tensors=[input_tensor],
+         input_masks=[None],
+         output_masks=[None],
+         input_shapes=[batch_input_shape],
+         output_shapes=[batch_input_shape])
+```",
+keras-22-vall_llama-4,UNKNOWN,UNKNOWN,"```python
+@interfaces.legacy_input_support
+def __init__(self, input_shape=None, batch_size=None,
+             batch_input_shape=None,
+             dtype=None, input_tensor=None, sparse=False, name=None):
+    if not name:
+        prefix = 'input'
+        name = prefix + '_' + str(K.get_uid(prefix))
+    super(InputLayer, self).__init__(dtype=dtype, name=name)
+
+    self.trainable = False
+    self.built = True
+    self.sparse = sparse
+    self.supports_masking = True  # Set supports_masking to True
+
+    if input_shape and batch_input_shape:
+        raise ValueError('Only provide the input_shape OR '
+                         'batch_input_shape argument to '
+                         'InputLayer, not both at the same time.')
+    if input_tensor is not None and batch_input_shape is None:
+        # If input_tensor is set, and batch_input_shape is not set:
+        # Attempt automatic input shape inference.
+        try:
+            batch_input_shape = K.int_shape(input_tensor)
+        except TypeError:
+            if not input_shape and not batch_input_shape:
+                raise ValueError('InputLayer was provided '
+                                 'an input_tensor argument, '
+                                 'but its input shape cannot be '
+                                 'automatically inferred. '
+                                 'You should pass an input_shape or '
+                                 'batch_input_shape argument.')
+    if not batch_input_shape:
+        if not input_shape:
+            raise ValueError('An Input layer should be passed either '
+                             'a `batch_input_shape` or an `input_shape`.')
+        else:
+            batch_input_shape = (batch_size,) + tuple(input_shape)
+    else:
+        batch_input_shape = tuple(batch_input_shape)
+
+    if not dtype:
+        if input_tensor is None:
+            dtype = K.floatx()
+        else:
+            dtype = K.dtype(input_tensor)
+
+    self.batch_input_shape = batch_input_shape
+    self.dtype = dtype
+
+    if input_tensor is None:
+        self.is_placeholder = True
+        input_tensor = K.placeholder(shape=batch_input_shape,
+                                     dtype=dtype,
+                                     sparse=self.sparse,
+                                     name=self.name)
+    else:
+        self.is_placeholder = False
+        input_tensor._keras_shape = batch_input_shape
+    # Create an input node to add to self.outbound_node
+    # and set output_tensors' _keras_history.
+    input_tensor._uses_learning_phase = False
+    input_tensor._keras_history = (self, 0, 0)
+    Node(self,
+         inbound_layers=[],
+         node_indices=[],
+         tensor_indices=[],
+         input_tensors=[input_tensor],
+         output_tensors=[input_tensor],
+         input_masks=[None],
+         output_masks=[None],
+         input_shapes=[batch_input_shape],
+         output_shapes=[batch_input_shape])
+```",
+keras-22-vall_llama-5,UNKNOWN,UNKNOWN,"```python
+@interfaces.legacy_input_support
+def __init__(self, input_shape=None, batch_size=None,
+             batch_input_shape=None,
+             dtype=None, input_tensor=None, sparse=False, name=None):
+    if not name:
+        prefix = 'input'
+        name = prefix + '_' + str(K.get_uid(prefix))
+    super(InputLayer, self).__init__(dtype=dtype, name=name)
+
+    self.trainable = False
+    self.built = True
+    self.sparse = sparse
+    self.supports_masking = True  # Explicitly set to support masking
+
+    if input_shape and batch_input_shape:
+        raise ValueError('Only provide the input_shape OR '
+                         'batch_input_shape argument to '
+                         'InputLayer, not both at the same time.')
+    if input_tensor is not None and batch_input_shape is None:
+        # If input_tensor is set, and batch_input_shape is not set:
+        # Attempt automatic input shape inference.
+        try:
+            batch_input_shape = K.int_shape(input_tensor)
+        except TypeError:
+            if not input_shape and not batch_input_shape:
+                raise ValueError('InputLayer was provided '
+                                 'an input_tensor argument, '
+                                 'but its input shape cannot be '
+                                 'automatically inferred. '
+                                 'You should pass an input_shape or '
+                                 'batch_input_shape argument.')
+    if not batch_input_shape:
+        if not input_shape:
+            raise ValueError('An Input layer should be passed either '
+                             'a `batch_input_shape` or an `input_shape`.')
+        else:
+            batch_input_shape = (batch_size,) + tuple(input_shape)
+    else:
+        batch_input_shape = tuple(batch_input_shape)
+
+    if not dtype:
+        if input_tensor is None:
+            dtype = K.floatx()
+        else:
+            dtype = K.dtype(input_tensor)
+
+    self.batch_input_shape = batch_input_shape
+    self.dtype = dtype
+
+    if input_tensor is None:
+        self.is_placeholder = True
+        input_tensor = K.placeholder(shape=batch_input_shape,
+                                     dtype=dtype,
+                                     sparse=self.sparse,
+                                     name=self.name)
+    else:
+        self.is_placeholder = False
+        input_tensor._keras_shape = batch_input_shape
+    # Create an input node to add to self.outbound_node
+    # and set output_tensors' _keras_history.
+    input_tensor._uses_learning_phase = False
+    input_tensor._keras_history = (self, 0, 0)
+    Node(self,
+         inbound_layers=[],
+         node_indices=[],
+         tensor_indices=[],
+         input_tensors=[input_tensor],
+         output_tensors=[input_tensor],
+         input_masks=[None],
+         output_masks=[None],
+         input_shapes=[batch_input_shape],
+         output_shapes=[batch_input_shape])
+```",
+keras-22-vall_llama-6,UNKNOWN,UNKNOWN,"### Step 1: Analyze the buggy function and its relationship with corresponding GitHub Issue's or Pull Request's title and description, test code, corresponding error message, the runtime input/output values, the expected input/output values, used methods and classes in the buggy function from the repository, the last commit made to the buggy function in the past, the documentation of the project, past related issues
+The bug in the code is related to the masking functionality in Keras. When using the `TimeDistributed` layer with a `Sequential` layer that does not support masking, the code crashes with a `TypeError`. The `TimeDistributed` layer is trying to pass a mask to the `Sequential` layer, but the `Sequential` layer does not support masking.
+
+### Step 2: Identify potential error locations within the buggy function.
+The error is occurring in the `TimeDistributed` layer when it tries to call the `compute_mask` method on the `Sequential` layer. The `Sequential` layer does not support masking, so it raises a `TypeError`.
+
+### Step 3: Identify the cause of the bug using the buggy function, GitHub's corresponding Issue's or Pull Request's title and description, test code, corresponding error message, the runtime input/output values, the expected input/output values, used methods and classes in the buggy function from the repository, the last commit made to the buggy function in the past, the documentation of the project, past related issues
+The cause of the bug is that the `InputLayer` class does not set the `supports_masking` attribute to `True`. This attribute is used by the `TimeDistributed` layer to determine whether the layer supports masking.
+
+### Step 4: Think of a strategy for fixing the bug.
+To fix the bug, we need to set the `supports_masking` attribute to `True` in the `InputLayer` class. We can do this by adding `self.supports_masking = True` in the `__init__` method of the `InputLayer` class.
+
+### Step 5: Given the buggy function, edit the content of the function and output ONLY the WHOLE corrected version of the function wrapped in triple backticks.
+```python
+@interfaces.legacy_input_support
+def __init__(self, input_shape=None, batch_size=None,
+             batch_input_shape=None,
+             dtype=None, input_tensor=None, sparse=False, name=None):
+    if not name:
+        prefix = 'input'
+        name = prefix + '_' + str(K.get_uid(prefix))
+    super(InputLayer, self).__init__(dtype=dtype, name=name)
+
+    self.trainable = False
+    self.built = True
+    self.sparse = sparse
+    self.supports_masking = True  # Added this line to fix the bug
+
+    if input_shape and batch_input_shape:
+        raise ValueError('Only provide the input_shape OR '
+                         'batch_input_shape argument to '
+                         'InputLayer, not both at the same time.')
+    if input_tensor is not None and batch_input_shape is None:
+        # If input_tensor is set, and batch_input_shape is not set:
+        # Attempt automatic input shape inference.
+        try:
+            batch_input_shape = K.int_shape(input_tensor)
+        except TypeError:
+            if not input_shape and not batch_input_shape:
+                raise ValueError('InputLayer was provided '
+                                 'an input_tensor argument, '
+                                 'but its input shape cannot be '
+                                 'automatically inferred. '
+                                 'You should pass an input_shape or '
+                                 'batch_input_shape argument.')
+    if not batch_input_shape:
+        if not input_shape:
+            raise ValueError('An Input layer should be passed either '
+                             'a `batch_input_shape` or an `input_shape`.')
+        else:
+            batch_input_shape = (batch_size,) + tuple(input_shape)
+    else:
+        batch_input_shape = tuple(batch_input_shape)
+
+    if not dtype:
+        if input_tensor is None:
+            dtype = K.floatx()
+        else:
+            dtype = K.dtype(input_tensor)
+
+    self.batch_input_shape = batch_input_shape
+    self.dtype = dtype
+
+    if input_tensor is None:
+        self.is_placeholder = True
+        input_tensor = K.placeholder(shape=batch_input_shape,
+                                     dtype=dtype,
+                                     sparse=self.sparse,
+                                     name=self.name)
+    else:
+        self.is_placeholder = False
+        input_tensor._keras_shape = batch_input_shape
+    # Create an input node to add to self.outbound_node
+    # and set output_tensors' _keras_history.
+    input_tensor._uses_learning_phase = False
+    input_tensor._keras_history = (self, 0, 0)
+    Node(self,
+         inbound_layers=[],
+         node_indices=[],
+         tensor_indices=[],
+         input_tensors=[input_tensor],
+         output_tensors=[input_tensor],
+         input_masks=[None],
+         output_masks=[None],
+         input_shapes=[batch_input_shape],
+         output_shapes=[batch_input_shape])
+```",
+keras-22-vall_llama-7,UNKNOWN,UNKNOWN,"```python
+@interfaces.legacy_input_support
+def __init__(self, input_shape=None, batch_size=None,
+             batch_input_shape=None,
+             dtype=None, input_tensor=None, sparse=False, name=None):
+    if not name:
+        prefix = 'input'
+        name = prefix + '_' + str(K.get_uid(prefix))
+    super(InputLayer, self).__init__(dtype=dtype, name=name)
+
+    self.trainable = False
+    self.built = True
+    self.sparse = sparse
+    self.supports_masking = True
+
+    if input_shape and batch_input_shape:
+        raise ValueError('Only provide the input_shape OR '
+                         'batch_input_shape argument to '
+                         'InputLayer, not both at the same time.')
+    if input_tensor is not None and batch_input_shape is None:
+        # If input_tensor is set, and batch_input_shape is not set:
+        # Attempt automatic input shape inference.
+        try:
+            batch_input_shape = K.int_shape(input_tensor)
+        except TypeError:
+            if not input_shape and not batch_input_shape:
+                raise ValueError('InputLayer was provided '
+                                 'an input_tensor argument, '
+                                 'but its input shape cannot be '
+                                 'automatically inferred. '
+                                 'You should pass an input_shape or '
+                                 'batch_input_shape argument.')
+    if not batch_input_shape:
+        if not input_shape:
+            raise ValueError('An Input layer should be passed either '
+                             'a `batch_input_shape` or an `input_shape`.')
+        else:
+            batch_input_shape = (batch_size,) + tuple(input_shape)
+    else:
+        batch_input_shape = tuple(batch_input_shape)
+
+    if not dtype:
+        if input_tensor is None:
+            dtype = K.floatx()
+        else:
+            dtype = K.dtype(input_tensor)
+
+    self.batch_input_shape = batch_input_shape
+    self.dtype = dtype
+
+    if input_tensor is None:
+        self.is_placeholder = True
+        input_tensor = K.placeholder(shape=batch_input_shape,
+                                     dtype=dtype,
+                                     sparse=self.sparse,
+                                     name=self.name)
+    else:
+        self.is_placeholder = False
+        input_tensor._keras_shape = batch_input_shape
+    # Create an input node to add to self.outbound_node
+    # and set output_tensors' _keras_history.
+    input_tensor._uses_learning_phase = False
+    input_tensor._keras_history = (self, 0, 0)
+    Node(self,
+         inbound_layers=[],
+         node_indices=[],
+         tensor_indices=[],
+         input_tensors=[input_tensor],
+         output_tensors=[input_tensor],
+         input_masks=[None],
+         output_masks=[None],
+         input_shapes=[batch_input_shape],
+         output_shapes=[batch_input_shape])
+```",
+keras-22-vall_llama-8,UNKNOWN,UNKNOWN,"```python
+@interfaces.legacy_input_support
+def __init__(self, input_shape=None, batch_size=None,
+             batch_input_shape=None,
+             dtype=None, input_tensor=None, sparse=False, name=None):
+    if not name:
+        prefix = 'input'
+        name = prefix + '_' + str(K.get_uid(prefix))
+    super(InputLayer, self).__init__(dtype=dtype, name=name)
+    self.trainable = False
+    self.built = True
+    self.sparse = sparse
+    self.supports_masking = True  # Set to True
+
+    if input_shape and batch_input_shape:
+        raise ValueError('Only provide the input_shape OR '
+                         'batch_input_shape argument to '
+                         'InputLayer, not both at the same time.')
+    if input_tensor is not None and batch_input_shape is None:
+        # If input_tensor is set, and batch_input_shape is not set:
+        # Attempt automatic input shape inference.
+        try:
+            batch_input_shape = K.int_shape(input_tensor)
+        except TypeError:
+            if not input_shape and not batch_input_shape:
+                raise ValueError('InputLayer was provided '
+                                 'an input_tensor argument, '
+                                 'but its input shape cannot be '
+                                 'automatically inferred. '
+                                 'You should pass an input_shape or '
+                                 'batch_input_shape argument.')
+    if not batch_input_shape:
+        if not input_shape:
+            raise ValueError('An Input layer should be passed either '
+                             'a `batch_input_shape` or an `input_shape`.')
+        else:
+            batch_input_shape = (batch_size,) + tuple(input_shape)
+    else:
+        batch_input_shape = tuple(batch_input_shape)
+
+    if not dtype:
+        if input_tensor is None:
+            dtype = K.floatx()
+        else:
+            dtype = K.dtype(input_tensor)
+
+    self.batch_input_shape = batch_input_shape
+    self.dtype = dtype
+
+    if input_tensor is None:
+        self.is_placeholder = True
+        input_tensor = K.placeholder(shape=batch_input_shape,
+                                     dtype=dtype,
+                                     sparse=self.sparse,
+                                     name=self.name)
+    else:
+        self.is_placeholder = False
+        input_tensor._keras_shape = batch_input_shape
+    # Create an input node to add to self.outbound_node
+    # and set output_tensors' _keras_history.
+    input_tensor._uses_learning_phase = False
+    input_tensor._keras_history = (self, 0, 0)
+    Node(self,
+         inbound_layers=[],
+         node_indices=[],
+         tensor_indices=[],
+         input_tensors=[input_tensor],
+         output_tensors=[input_tensor],
+         input_masks=[None],
+         output_masks=[None],
+         input_shapes=[batch_input_shape],
+         output_shapes=[batch_input_shape])
+```",
+keras-22-vall_llama-9,UNKNOWN,UNKNOWN,"```python
+@interfaces.legacy_input_support
+def __init__(self, input_shape=None, batch_size=None,
+             batch_input_shape=None,
+             dtype=None, input_tensor=None, sparse=False, name=None):
+    if not name:
+        prefix = 'input'
+        name = prefix + '_' + str(K.get_uid(prefix))
+    super(InputLayer, self).__init__(dtype=dtype, name=name)
+
+    self.trainable = False
+    self.built = True
+    self.sparse = sparse
+    self.supports_masking = True
+
+    if input_shape and batch_input_shape:
+        raise ValueError('Only provide the input_shape OR '
+                         'batch_input_shape argument to '
+                         'InputLayer, not both at the same time.')
+    if input_tensor is not None and batch_input_shape is None:
+        # If input_tensor is set, and batch_input_shape is not set:
+        # Attempt automatic input shape inference.
+        try:
+            batch_input_shape = K.int_shape(input_tensor)
+        except TypeError:
+            if not input_shape and not batch_input_shape:
+                raise ValueError('InputLayer was provided '
+                                 'an input_tensor argument, '
+                                 'but its input shape cannot be '
+                                 'automatically inferred. '
+                                 'You should pass an input_shape or '
+                                 'batch_input_shape argument.')
+    if not batch_input_shape:
+        if not input_shape:
+            raise ValueError('An Input layer should be passed either '
+                             'a `batch_input_shape` or an `input_shape`.')
+        else:
+            batch_input_shape = (batch_size,) + tuple(input_shape)
+    else:
+        batch_input_shape = tuple(batch_input_shape)
+
+    if not dtype:
+        if input_tensor is None:
+            dtype = K.floatx()
+        else:
+            dtype = K.dtype(input_tensor)
+
+    self.batch_input_shape = batch_input_shape
+    self.dtype = dtype
+
+    if input_tensor is None:
+        self.is_placeholder = True
+        input_tensor = K.placeholder(shape=batch_input_shape,
+                                     dtype=dtype,
+                                     sparse=self.sparse,
+                                     name=self.name)
+    else:
+        self.is_placeholder = False
+        input_tensor._keras_shape = batch_input_shape
+    # Create an input node to add to self.outbound_node
+    # and set output_tensors' _keras_history.
+    input_tensor._uses_learning_phase = False
+    input_tensor._keras_history = (self, 0, 0)
+    Node(self,
+         inbound_layers=[],
+         node_indices=[],
+         tensor_indices=[],
+         input_tensors=[input_tensor],
+         output_tensors=[input_tensor],
+         input_masks=[None],
+         output_masks=[None],
+         input_shapes=[batch_input_shape],
+         output_shapes=[batch_input_shape])
+```",

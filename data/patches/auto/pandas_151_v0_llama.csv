@@ -1,0 +1,304 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-151-v0_llama-0,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    # Convert string value to numpy array with the same dtype as the existing array
+    if isinstance(value, str):
+        value = np.array([value], dtype=values.dtype)
+
+    t = np.result_type(value, values)
+    if t!= self._ndarray.dtype:
+        values = values.astype(t, casting=""safe"")
+        values[key] = value
+        self._dtype = PandasDtype(t)
+        self._ndarray = values
+    else:
+        self._ndarray[key] = value
+```",
+pandas-151-v0_llama-1,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    if isinstance(value, str):
+        value = np.array([value], dtype=object)[0]
+    else:
+        value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    if isinstance(value, str):
+        if values.dtype.kind == 'O':
+            values[key] = value
+        else:
+            values = values.astype(object)
+            values[key] = value
+            self._dtype = PandasDtype(object)
+            self._ndarray = values
+    else:
+        t = np.result_type(value, values)
+        if t!= values.dtype:
+            values = values.astype(t, casting=""safe"")
+            values[key] = value
+            self._dtype = PandasDtype(t)
+            self._ndarray = values
+        else:
+            values[key] = value
+            self._ndarray = values
+```",
+pandas-151-v0_llama-2,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    if isinstance(value, str):
+        t = np.dtype('O')
+    else:
+        t = np.result_type(value, values)
+    
+    if t!= self._ndarray.dtype:
+        values = values.astype(t, casting=""safe"")
+        values[key] = value
+        self._dtype = PandasDtype(t)
+        self._ndarray = values
+    else:
+        self._ndarray[key] = value
+```",
+pandas-151-v0_llama-3,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+
+    # Determine if we need to change the dtype
+    if isinstance(value, str):
+        # If value is a string, check if it can be represented by the current dtype
+        if values.dtype.kind == 'O':
+            # If current dtype is object, we can assign the string directly
+            values[key] = value
+        elif values.dtype.kind == 'U':
+            # If current dtype is unicode, we can assign the string directly
+            values[key] = value
+        else:
+            # If current dtype is not object or unicode, try to find a common dtype
+            try:
+                t = np.promote_types(values.dtype, np.dtype('U'))
+                values = values.astype(t)
+                values[key] = value
+                self._dtype = PandasDtype(t)
+                self._ndarray = values
+            except TypeError:
+                # If promotion fails, raise an error
+                raise ValueError(f""Cannot assign string '{value}' to array with dtype {values.dtype}"")
+    else:
+        # If value is not a string, find a common dtype
+        t = np.result_type(value, values)
+        if t!= self._ndarray.dtype:
+            values = values.astype(t, casting=""safe"")
+            values[key] = value
+            self._dtype = PandasDtype(t)
+            self._ndarray = values
+        else:
+            self._ndarray[key] = value
+```",
+pandas-151-v0_llama-4,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    # Check if the dtype of the value is compatible with the dtype of the array
+    if self._ndarray.dtype.kind == 'O' and not isinstance(value, str):
+        values = np.array([value], dtype=object)
+    else:
+        values = np.array([value], dtype=self._ndarray.dtype)
+
+    t = np.find_common_type([values.dtype, self._ndarray.dtype], [])
+
+    if t!= self._ndarray.dtype:
+        self._ndarray = self._ndarray.astype(t, casting=""safe"")
+        self._dtype = PandasDtype(t)
+
+    self._ndarray[key] = value
+```",
+pandas-151-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    if isinstance(value, str):
+        value = np.array([value], dtype=object)[0]
+    else:
+        value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    if isinstance(value, str) and values.dtype.kind == 'O':
+        values[key] = value
+    else:
+        t = np.result_type(value, values)
+        if t!= self._ndarray.dtype:
+            values = values.astype(t, casting=""safe"")
+            values[key] = value
+            self._dtype = PandasDtype(t)
+            self._ndarray = values
+        else:
+            self._ndarray[key] = value
+```",
+pandas-151-v0_llama-6,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    
+    # Get the dtype of the value, handling the case where value is a string
+    if isinstance(value, str):
+        value_dtype = np.dtype('O')  # object dtype for strings
+    else:
+        value_dtype = value.dtype
+
+    # Get the dtype of the existing array
+    existing_dtype = values.dtype
+
+    # Determine the resulting dtype
+    if existing_dtype.kind == 'O':  # object dtype
+        t = existing_dtype
+    elif value_dtype.kind == 'O':  # object dtype
+        t = value_dtype
+    else:
+        t = np.result_type(value, values)
+    
+    if t!= self._ndarray.dtype:
+        values = values.astype(t, casting=""safe"")
+        values[key] = value
+        self._dtype = PandasDtype(t)
+        self._ndarray = values
+    else:
+        self._ndarray[key] = value
+```",
+pandas-151-v0_llama-7,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    if isinstance(value, str):
+        value = np.array([value], dtype=object)
+    else:
+        value = np.asarray(value)
+
+    values = self._ndarray
+    if self._ndarray.dtype.kind == 'O':
+        values[key] = value
+    else:
+        t = np.result_type(value, values)
+        if t!= self._ndarray.dtype:
+            values = values.astype(t, casting=""safe"")
+        values[key] = value
+        self._dtype = PandasDtype(t)
+        self._ndarray = values
+    self._ndarray = values
+```",
+pandas-151-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    if isinstance(value, str):
+        value = np.array([value], dtype=object)[0]
+    else:
+        value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    if isinstance(value, str):
+        if self._ndarray.dtype.kind == 'O':
+            values[key] = value
+        else:
+            values = values.astype(object)
+            values[key] = value
+            self._ndarray = values
+            self._dtype = PandasDtype(object)
+    else:
+        t = np.result_type(value, values)
+        if t!= self._ndarray.dtype:
+            values = values.astype(t, casting=""safe"")
+            values[key] = value
+            self._dtype = PandasDtype(t)
+            self._ndarray = values
+        else:
+            self._ndarray[key] = value
+```",
+pandas-151-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    if isinstance(value, str):
+        if values.dtype.kind == 'O':  # object dtype
+            values[key] = np.array([value], dtype=object)
+        else:
+            # find the maximum length of the string in the array
+            max_len = max(len(x) for x in values)
+            max_len = max(max_len, len(value))
+            t = np.dtype(f'<U{max_len}')
+            values = values.astype(t)
+            values[key] = value
+            self._dtype = PandasDtype(t)
+            self._ndarray = values
+    else:
+        t = np.result_type(value, values)
+        if t!= self._ndarray.dtype:
+            values = values.astype(t, casting=""safe"")
+            values[key] = value
+            self._dtype = PandasDtype(t)
+            self._ndarray = values
+        else:
+            self._ndarray[key] = value
+```",

@@ -1,0 +1,1518 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-115-v0_llama-0,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the Problem**: The issue at hand is related to the pandas library's `interpolate` function. Specifically, when the `method='index'` parameter is used, the function does not behave as expected if the index of the Series or DataFrame is not sorted in ascending order. The function should raise a warning in such cases to alert the user of potential incorrect results.
+
+2. **Identifying the Source of the Problem**: The provided code snippet for the `interpolate_1d` function does not explicitly check if the index is sorted before performing the interpolation when `method='index'`. This omission leads to incorrect results when the index is not sorted.
+
+3. **Developing a Solution Strategy**: To fix this issue, we need to modify the `interpolate_1d` function to check if the index is sorted in ascending order when `method='index'`. If the index is not sorted, the function should raise a warning to inform the user. Additionally, we should ensure that the interpolation is performed correctly after sorting the index if necessary.
+
+4. **Implementing the Solution**: We will add a condition to check if the index is sorted when `method='index'`. If the index is not sorted, we will raise a warning. Then, we will proceed with the interpolation, ensuring that the index is sorted.
+
+### Fixed solution:
+```python
+def interpolate_1d(
+    xvalues,
+    yvalues,
+    method=""linear"",
+    limit=None,
+    limit_direction=""forward"",
+    limit_area=None,
+    fill_value=None,
+    bounds_error=False,
+    order=None,
+    **kwargs,
+):
+    """"""
+    Logic for the 1-d interpolation.  The result should be 1-d, inputs
+    xvalues and yvalues will each be 1-d arrays of the same length.
+
+    Bounds_error is currently hardcoded to False since non-scipy ones don't
+    take it as an argument.
+    """"""
+    # Treat the original, non-scipy methods first.
+
+    invalid = isna(yvalues)
+    valid = ~invalid
+
+    if not valid.any():
+        # have to call np.asarray(xvalues) since xvalues could be an Index
+        # which can't be mutated
+        result = np.empty_like(np.asarray(xvalues), dtype=np.float64)
+        result.fill(np.nan)
+        return result
+
+    if valid.all():
+        return yvalues
+
+    if method == ""time"":
+        if not getattr(xvalues, ""is_all_dates"", None):
+            # if not issubclass(xvalues.dtype.type, np.datetime64):
+            raise ValueError(
+                ""time-weighted interpolation only works ""
+                ""on Series or DataFrames with a ""
+                ""DatetimeIndex""
+            )
+        method = ""values""
+
+    valid_limit_directions = [""forward"", ""backward"", ""both""]
+    limit_direction = limit_direction.lower()
+    if limit_direction not in valid_limit_directions:
+        msg = ""Invalid limit_direction: expecting one of {valid!r}, got {invalid!r}.""
+        raise ValueError(
+            msg.format(valid=valid_limit_directions, invalid=limit_direction)
+        )
+
+    if limit_area is not None:
+        valid_limit_areas = [""inside"", ""outside""]
+        limit_area = limit_area.lower()
+        if limit_area not in valid_limit_areas:
+            raise ValueError(
+                ""Invalid limit_area: expecting one of {}, got ""
+                ""{}."".format(valid_limit_areas, limit_area)
+            )
+
+    # default limit is unlimited GH #16282
+    limit = algos._validate_limit(nobs=None, limit=limit)
+
+    if method == ""index"":
+        # Check if index is sorted in ascending order
+        if not np.all(xvalues.values[:-1] <= xvalues.values[1:]):
+            import warnings
+            warnings.warn(""Index is not sorted. Results may be incorrect."", UserWarning)
+
+    # These are sets of index pointers to invalid values... i.e. {0, 1, etc...
+    all_nans = set(np.flatnonzero(invalid))
+    start_nans = set(range(find_valid_index(yvalues, ""first"")))
+    end_nans = set(range(1 + find_valid_index(yvalues, ""last""), len(valid)))
+    mid_nans = all_nans - start_nans - end_nans
+
+    # Like the sets above, preserve_nans contains indices of invalid values,
+    # but in this case, it is the final set of indices that need to be
+    # preserved as NaN after the interpolation.
+
+    # For example if limit_direction='forward' then preserve_nans will
+    # contain indices of NaNs at the beginning of the series, and NaNs that
+    # are more than'limit' away from the prior non-NaN.
+
+    # set preserve_nans based on direction using _interp_limit
+    if limit_direction == ""forward"":
+        preserve_nans = start_nans | set(_interp_limit(invalid, limit, 0))
+    elif limit_direction == ""backward"":
+        preserve_nans = end_nans | set(_interp_limit(invalid, 0, limit))
+    else:
+        # both directions... just use _interp_limit
+        preserve_nans = set(_interp_limit(invalid, limit, limit))
+
+    # if limit_area is set, add either mid or outside indices
+    # to preserve_nans GH #16284
+    if limit_area == ""inside"":
+        # preserve NaNs on the outside
+        preserve_nans |= start_nans | end_nans
+    elif limit_area == ""outside"":
+        # preserve NaNs on the inside
+        preserve_nans |= mid_nans
+
+    # sort preserve_nans and covert to list
+    preserve_nans = sorted(preserve_nans)
+
+    xvalues = getattr(xvalues, ""values"", xvalues)
+    yvalues = getattr(yvalues, ""values"", yvalues)
+    result = yvalues.copy()
+
+    if method in [""linear"", ""time"", ""index"", ""values""]:
+        if method in (""values"", ""index""):
+            inds = np.asarray(xvalues)
+            # hack for DatetimeIndex, #1646
+            if needs_i8_conversion(inds.dtype.type):
+                inds = inds.view(np.int64)
+            if inds.dtype == np.object_:
+                inds = lib.maybe_convert_objects(inds)
+        else:
+            inds = xvalues
+        if method == ""index"":
+            # Check if index is sorted in ascending order and sort if necessary
+            if not np.all(xvalues.values[:-1] <= xvalues.values[1:]):
+                xvalues = np.sort(xvalues)
+                yvalues = yvalues[np.argsort(xvalues)]
+                inds = np.sort(inds)
+        
+        result[invalid] = np.interp(inds[invalid], inds[valid], yvalues[valid])
+        result[preserve_nans] = np.nan
+        return result
+
+    sp_methods = [
+        ""nearest"",
+        ""zero"",
+        ""slinear"",
+        ""quadratic"",
+        ""cubic"",
+        ""barycentric"",
+        ""krogh"",
+        ""spline"",
+        ""polynomial"",
+        ""from_derivatives"",
+        ""piecewise_polynomial"",
+        ""pchip"",
+        ""akima"",
+    ]
+
+    if method in sp_methods:
+        inds = np.asarray(xvalues)
+        # hack for DatetimeIndex, #1646
+        if issubclass(inds.dtype.type, np.datetime64):
+            inds = inds.view(np.int64)
+        result[invalid] = _interpolate_scipy_wrapper(
+            inds[valid],
+            yvalues[valid],
+            inds[invalid],
+            method=method,
+            fill_value=fill_value,
+            bounds_error=bounds_error,
+            order=order,
+            **kwargs,
+        )
+        result[preserve_nans] = np.nan
+        return result
+```
+
+### Explanation of changes:
+*   **Added Index Sorted Check**: Before performing interpolation with `method='index'`, the code now checks if the index is sorted in ascending order. If not, it raises a warning to alert the user of potential incorrect results.
+*   **Sorting Index for Interpolation**: When `method='index'` and the index is not sorted, the code sorts the index and corresponding values before performing the interpolation. This ensures that the interpolation is done correctly even if the original index was not sorted.
+
+### Tests and example uses:
+You can test the modified function using the following example:
+
+```python
+import pandas as pd
+import numpy as np
+
+# Create a sample Series with unsorted index
+s = pd.Series(data=[10, 9, np.nan, 2, 1], index=[10, 9, 3, 2, 1])
+
+# Perform interpolation with method='index'
+result = s.interpolate(method='index')
+
+# Check if the result is as expected
+print(result)
+```",
+pandas-115-v0_llama-1,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Analyze the test function and its output**: We are given a test function that checks if the `interpolate` method with `method='index'` works as expected when the index is not sorted.
+2. **Check the `interpolate_1d` function**: This function is responsible for interpolating the values. We see that it does not check if the index is sorted before performing the interpolation.
+3. **Add a condition to check the index**: To raise a warning when calling `.interpolate(method='index')` on a Series or DataFrame where the Index is not sorted with `ascending=True`, we need to add a condition to check the index.
+4. **Use the `is_monotonic_increasing` function to check if the index is sorted**: This function checks if the values in the index are monotonically increasing.
+
+### Fixed solution:
+```python
+import numpy as np
+import pandas as pd
+
+def interpolate_1d(
+    xvalues,
+    yvalues,
+    method=""linear"",
+    limit=None,
+    limit_direction=""forward"",
+    limit_area=None,
+    fill_value=None,
+    bounds_error=False,
+    order=None,
+    **kwargs,
+):
+    """"""
+    Logic for the 1-d interpolation.  The result should be 1-d, inputs
+    xvalues and yvalues will each be 1-d arrays of the same length.
+
+    Bounds_error is currently hardcoded to False since non-scipy ones don't
+    take it as an argument.
+    """"""
+    # Check if the index is sorted
+    if method == 'index' and not xvalues.is_monotonic_increasing:
+        import warnings
+        warnings.warn(""Index is not sorted. This may lead to incorrect results."")
+
+    #... rest of the function remains the same...
+```
+
+### Explanation of changes:
+*   We added a condition to check if the `method` is `'index'` and if the `xvalues` (which is the index) is not monotonically increasing.
+*   If the condition is met, we raise a warning using the `warnings.warn` function.
+
+### Tests and example uses:
+To test this function, we can use the provided test function:
+```python
+# define a Series to be used with interpolation to fill the NaN value
+s = pd.Series(data=[10, 9, np.nan, 2, 1], index=[10,9,3,2,1])
+
+# Test the function
+s.interpolate(method='index')
+```
+This should raise a warning that the index is not sorted. After sorting the index, the function should work as expected:
+```python
+s.sort_index().interpolate(method='index')
+```",
+pandas-115-v0_llama-2,UNKNOWN,UNKNOWN,"```python
+def interpolate_1d(
+    xvalues,
+    yvalues,
+    method=""linear"",
+    limit=None,
+    limit_direction=""forward"",
+    limit_area=None,
+    fill_value=None,
+    bounds_error=False,
+    order=None,
+    **kwargs,
+):
+    """"""
+    Logic for the 1-d interpolation.  The result should be 1-d, inputs
+    xvalues and yvalues will each be 1-d arrays of the same length.
+
+    Bounds_error is currently hardcoded to False since non-scipy ones don't
+    take it as an argument.
+    """"""
+    # Treat the original, non-scipy methods first.
+
+    invalid = isna(yvalues)
+    valid = ~invalid
+
+    if not valid.any():
+        # have to call np.asarray(xvalues) since xvalues could be an Index
+        # which can't be mutated
+        result = np.empty_like(np.asarray(xvalues), dtype=np.float64)
+        result.fill(np.nan)
+        return result
+
+    if valid.all():
+        return yvalues
+
+    if method == ""time"":
+        if not getattr(xvalues, ""is_all_dates"", None):
+            # if not issubclass(xvalues.dtype.type, np.datetime64):
+            raise ValueError(
+                ""time-weighted interpolation only works ""
+                ""on Series or DataFrames with a ""
+                ""DatetimeIndex""
+            )
+        method = ""values""
+
+    valid_limit_directions = [""forward"", ""backward"", ""both""]
+    limit_direction = limit_direction.lower()
+    if limit_direction not in valid_limit_directions:
+        msg = ""Invalid limit_direction: expecting one of {valid!r}, got {invalid!r}.""
+        raise ValueError(
+            msg.format(valid=valid_limit_directions, invalid=limit_direction)
+        )
+
+    if limit_area is not None:
+        valid_limit_areas = [""inside"", ""outside""]
+        limit_area = limit_area.lower()
+        if limit_area not in valid_limit_areas:
+            raise ValueError(
+                ""Invalid limit_area: expecting one of {}, got ""
+                ""{}."".format(valid_limit_areas, limit_area)
+            )
+
+    # default limit is unlimited GH #16282
+    limit = algos._validate_limit(nobs=None, limit=limit)
+
+    # Check if xvalues is sorted in ascending order
+    if method == 'index' and not np.all(np.diff(xvalues) >= 0):
+        import warnings
+        warnings.warn(""Index is not sorted. The result may not be as expected."", UserWarning)
+
+    # These are sets of index pointers to invalid values... i.e. {0, 1, etc...
+    all_nans = set(np.flatnonzero(invalid))
+    start_nans = set(range(find_valid_index(yvalues, ""first"")))
+    end_nans = set(range(1 + find_valid_index(yvalues, ""last""), len(valid)))
+    mid_nans = all_nans - start_nans - end_nans
+
+    # Like the sets above, preserve_nans contains indices of invalid values,
+    # but in this case, it is the final set of indices that need to be
+    # preserved as NaN after the interpolation.
+
+    # For example if limit_direction='forward' then preserve_nans will
+    # contain indices of NaNs at the beginning of the series, and NaNs that
+    # are more than'limit' away from the prior non-NaN.
+
+    # set preserve_nans based on direction using _interp_limit
+    if limit_direction == ""forward"":
+        preserve_nans = start_nans | set(_interp_limit(invalid, limit, 0))
+    elif limit_direction == ""backward"":
+        preserve_nans = end_nans | set(_interp_limit(invalid, 0, limit))
+    else:
+        # both directions... just use _interp_limit
+        preserve_nans = set(_interp_limit(invalid, limit, limit))
+
+    # if limit_area is set, add either mid or outside indices
+    # to preserve_nans GH #16284
+    if limit_area == ""inside"":
+        # preserve NaNs on the outside
+        preserve_nans |= start_nans | end_nans
+    elif limit_area == ""outside"":
+        # preserve NaNs on the inside
+        preserve_nans |= mid_nans
+
+    # sort preserve_nans and covert to list
+    preserve_nans = sorted(preserve_nans)
+
+    xvalues = getattr(xvalues, ""values"", xvalues)
+    yvalues = getattr(yvalues, ""values"", yvalues)
+    result = yvalues.copy()
+
+    if method in [""linear"", ""time"", ""index"", ""values""]:
+        if method in (""values"", ""index""):
+            inds = np.asarray(xvalues)
+            # hack for DatetimeIndex, #1646
+            if needs_i8_conversion(inds.dtype.type):
+                inds = inds.view(np.int64)
+            if inds.dtype == np.object_:
+                inds = lib.maybe_convert_objects(inds)
+        else:
+            inds = xvalues
+        # Sort the indices before interpolation if method is 'index'
+        if method == 'index':
+            indexer = np.argsort(inds)
+            inds = inds[indexer]
+            yvalues = yvalues[indexer]
+            invalid = invalid[indexer]
+            result = yvalues.copy()
+            result[invalid] = np.interp(inds[invalid], inds[~invalid], yvalues[~invalid])
+            result = result[np.argsort(indexer)]
+        else:
+            result[invalid] = np.interp(inds[invalid], inds[valid], yvalues[valid])
+        result[preserve_nans] = np.nan
+        return result
+
+    sp_methods = [
+        ""nearest"",
+        ""zero"",
+        ""slinear"",
+        ""quadratic"",
+        ""cubic"",
+        ""barycentric"",
+        ""krogh"",
+        ""spline"",
+        ""polynomial"",
+        ""from_derivatives"",
+        ""piecewise_polynomial"",
+        ""pchip"",
+        ""akima"",
+    ]
+
+    if method in sp_methods:
+        inds = np.asarray(xvalues)
+        # hack for DatetimeIndex, #1646
+        if issubclass(inds.dtype.type, np.datetime64):
+            inds = inds.view(np.int64)
+        result[invalid] = _interpolate_scipy_wrapper(
+            inds[valid],
+            yvalues[valid],
+            inds[invalid],
+            method=method,
+            fill_value=fill_value,
+            bounds_error=bounds_error,
+            order=order,
+            **kwargs,
+        )
+        result[preserve_nans] = np.nan
+        return result
+```",
+pandas-115-v0_llama-3,UNKNOWN,UNKNOWN,"```python
+def interpolate_1d(
+    xvalues,
+    yvalues,
+    method=""linear"",
+    limit=None,
+    limit_direction=""forward"",
+    limit_area=None,
+    fill_value=None,
+    bounds_error=False,
+    order=None,
+    **kwargs,
+):
+    """"""
+    Logic for the 1-d interpolation.  The result should be 1-d, inputs
+    xvalues and yvalues will each be 1-d arrays of the same length.
+
+    Bounds_error is currently hardcoded to False since non-scipy ones don't
+    take it as an argument.
+    """"""
+    # Treat the original, non-scipy methods first.
+
+    invalid = isna(yvalues)
+    valid = ~invalid
+
+    if not valid.any():
+        # have to call np.asarray(xvalues) since xvalues could be an Index
+        # which can't be mutated
+        result = np.empty_like(np.asarray(xvalues), dtype=np.float64)
+        result.fill(np.nan)
+        return result
+
+    if valid.all():
+        return yvalues
+
+    if method == ""time"":
+        if not getattr(xvalues, ""is_all_dates"", None):
+            # if not issubclass(xvalues.dtype.type, np.datetime64):
+            raise ValueError(
+                ""time-weighted interpolation only works ""
+                ""on Series or DataFrames with a ""
+                ""DatetimeIndex""
+            )
+        method = ""values""
+
+    valid_limit_directions = [""forward"", ""backward"", ""both""]
+    limit_direction = limit_direction.lower()
+    if limit_direction not in valid_limit_directions:
+        msg = ""Invalid limit_direction: expecting one of {valid!r}, got {invalid!r}.""
+        raise ValueError(
+            msg.format(valid=valid_limit_directions, invalid=limit_direction)
+        )
+
+    if limit_area is not None:
+        valid_limit_areas = [""inside"", ""outside""]
+        limit_area = limit_area.lower()
+        if limit_area not in valid_limit_areas:
+            raise ValueError(
+                ""Invalid limit_area: expecting one of {}, got ""
+                ""{}."".format(valid_limit_areas, limit_area)
+            )
+
+    # default limit is unlimited GH #16282
+    limit = algos._validate_limit(nobs=None, limit=limit)
+
+    # These are sets of index pointers to invalid values... i.e. {0, 1, etc...
+    all_nans = set(np.flatnonzero(invalid))
+    start_nans = set(range(find_valid_index(yvalues, ""first"")))
+    end_nans = set(range(1 + find_valid_index(yvalues, ""last""), len(valid)))
+    mid_nans = all_nans - start_nans - end_nans
+
+    # Like the sets above, preserve_nans contains indices of invalid values,
+    # but in this case, it is the final set of indices that need to be
+    # preserved as NaN after the interpolation.
+
+    # For example if limit_direction='forward' then preserve_nans will
+    # contain indices of NaNs at the beginning of the series, and NaNs that
+    # are more than'limit' away from the prior non-NaN.
+
+    # set preserve_nans based on direction using _interp_limit
+    if limit_direction == ""forward"":
+        preserve_nans = start_nans | set(_interp_limit(invalid, limit, 0))
+    elif limit_direction == ""backward"":
+        preserve_nans = end_nans | set(_interp_limit(invalid, 0, limit))
+    else:
+        # both directions... just use _interp_limit
+        preserve_nans = set(_interp_limit(invalid, limit, limit))
+
+    # if limit_area is set, add either mid or outside indices
+    # to preserve_nans GH #16284
+    if limit_area == ""inside"":
+        # preserve NaNs on the outside
+        preserve_nans |= start_nans | end_nans
+    elif limit_area == ""outside"":
+        # preserve NaNs on the inside
+        preserve_nans |= mid_nans
+
+    # sort preserve_nans and covert to list
+    preserve_nans = sorted(preserve_nans)
+
+    xvalues = getattr(xvalues, ""values"", xvalues)
+    yvalues = getattr(yvalues, ""values"", yvalues)
+    result = yvalues.copy()
+
+    if method in [""linear"", ""time"", ""index"", ""values""]:
+        if method in (""values"", ""index""):
+            inds = np.asarray(xvalues)
+            # hack for DatetimeIndex, #1646
+            if needs_i8_conversion(inds.dtype.type):
+                inds = inds.view(np.int64)
+            if inds.dtype == np.object_:
+                inds = lib.maybe_convert_objects(inds)
+        else:
+            inds = xvalues
+        if not np.all(inds[:-1] <= inds[1:]):
+            import warnings
+            warnings.warn(""index is not sorted, interpolation results may be unexpected"")
+        result[invalid] = np.interp(inds[invalid], inds[valid], yvalues[valid])
+        result[preserve_nans] = np.nan
+        return result
+
+    sp_methods = [
+        ""nearest"",
+        ""zero"",
+        ""slinear"",
+        ""quadratic"",
+        ""cubic"",
+        ""barycentric"",
+        ""krogh"",
+        ""spline"",
+        ""polynomial"",
+        ""from_derivatives"",
+        ""piecewise_polynomial"",
+        ""pchip"",
+        ""akima"",
+    ]
+
+    if method in sp_methods:
+        inds = np.asarray(xvalues)
+        # hack for DatetimeIndex, #1646
+        if issubclass(inds.dtype.type, np.datetime64):
+            inds = inds.view(np.int64)
+        result[invalid] = _interpolate_scipy_wrapper(
+            inds[valid],
+            yvalues[valid],
+            inds[invalid],
+            method=method,
+            fill_value=fill_value,
+            bounds_error=bounds_error,
+            order=order,
+            **kwargs,
+        )
+        result[preserve_nans] = np.nan
+        return result
+```",
+pandas-115-v0_llama-4,UNKNOWN,UNKNOWN,"```python
+def interpolate_1d(
+    xvalues,
+    yvalues,
+    method=""linear"",
+    limit=None,
+    limit_direction=""forward"",
+    limit_area=None,
+    fill_value=None,
+    bounds_error=False,
+    order=None,
+    **kwargs,
+):
+    """"""
+    Logic for the 1-d interpolation.  The result should be 1-d, inputs
+    xvalues and yvalues will each be 1-d arrays of the same length.
+
+    Bounds_error is currently hardcoded to False since non-scipy ones don't
+    take it as an argument.
+    """"""
+    # Treat the original, non-scipy methods first.
+
+    invalid = isna(yvalues)
+    valid = ~invalid
+
+    if not valid.any():
+        # have to call np.asarray(xvalues) since xvalues could be an Index
+        # which can't be mutated
+        result = np.empty_like(np.asarray(xvalues), dtype=np.float64)
+        result.fill(np.nan)
+        return result
+
+    if valid.all():
+        return yvalues
+
+    if method == ""time"":
+        if not getattr(xvalues, ""is_all_dates"", None):
+            # if not issubclass(xvalues.dtype.type, np.datetime64):
+            raise ValueError(
+                ""time-weighted interpolation only works ""
+                ""on Series or DataFrames with a ""
+                ""DatetimeIndex""
+            )
+        method = ""values""
+
+    valid_limit_directions = [""forward"", ""backward"", ""both""]
+    limit_direction = limit_direction.lower()
+    if limit_direction not in valid_limit_directions:
+        msg = ""Invalid limit_direction: expecting one of {valid!r}, got {invalid!r}.""
+        raise ValueError(
+            msg.format(valid=valid_limit_directions, invalid=limit_direction)
+        )
+
+    if limit_area is not None:
+        valid_limit_areas = [""inside"", ""outside""]
+        limit_area = limit_area.lower()
+        if limit_area not in valid_limit_areas:
+            raise ValueError(
+                ""Invalid limit_area: expecting one of {}, got ""
+                ""{}."".format(valid_limit_areas, limit_area)
+            )
+
+    # default limit is unlimited GH #16282
+    limit = algos._validate_limit(nobs=None, limit=limit)
+
+    if method == ""index"":
+        if not xvalues.is_monotonic_increasing:
+            import warnings
+            warnings.warn(""Index is not sorted. The result may not be as expected."", UserWarning)
+
+    # These are sets of index pointers to invalid values... i.e. {0, 1, etc...
+    all_nans = set(np.flatnonzero(invalid))
+    start_nans = set(range(find_valid_index(yvalues, ""first"")))
+    end_nans = set(range(1 + find_valid_index(yvalues, ""last""), len(valid)))
+    mid_nans = all_nans - start_nans - end_nans
+
+    # Like the sets above, preserve_nans contains indices of invalid values,
+    # but in this case, it is the final set of indices that need to be
+    # preserved as NaN after the interpolation.
+
+    # For example if limit_direction='forward' then preserve_nans will
+    # contain indices of NaNs at the beginning of the series, and NaNs that
+    # are more than'limit' away from the prior non-NaN.
+
+    # set preserve_nans based on direction using _interp_limit
+    if limit_direction == ""forward"":
+        preserve_nans = start_nans | set(_interp_limit(invalid, limit, 0))
+    elif limit_direction == ""backward"":
+        preserve_nans = end_nans | set(_interp_limit(invalid, 0, limit))
+    else:
+        # both directions... just use _interp_limit
+        preserve_nans = set(_interp_limit(invalid, limit, limit))
+
+    # if limit_area is set, add either mid or outside indices
+    # to preserve_nans GH #16284
+    if limit_area == ""inside"":
+        # preserve NaNs on the outside
+        preserve_nans |= start_nans | end_nans
+    elif limit_area == ""outside"":
+        # preserve NaNs on the inside
+        preserve_nans |= mid_nans
+
+    # sort preserve_nans and covert to list
+    preserve_nans = sorted(preserve_nans)
+
+    xvalues = getattr(xvalues, ""values"", xvalues)
+    yvalues = getattr(yvalues, ""values"", yvalues)
+    result = yvalues.copy()
+
+    if method in [""linear"", ""time"", ""index"", ""values""]:
+        if method in (""values"", ""index""):
+            inds = np.asarray(xvalues)
+            # hack for DatetimeIndex, #1646
+            if needs_i8_conversion(inds.dtype.type):
+                inds = inds.view(np.int64)
+            if inds.dtype == np.object_:
+                inds = lib.maybe_convert_objects(inds)
+        else:
+            inds = xvalues
+        result[invalid] = np.interp(inds[invalid], inds[valid], yvalues[valid])
+        result[preserve_nans] = np.nan
+        return result
+
+    sp_methods = [
+        ""nearest"",
+        ""zero"",
+        ""slinear"",
+        ""quadratic"",
+        ""cubic"",
+        ""barycentric"",
+        ""krogh"",
+        ""spline"",
+        ""polynomial"",
+        ""from_derivatives"",
+        ""piecewise_polynomial"",
+        ""pchip"",
+        ""akima"",
+    ]
+
+    if method in sp_methods:
+        inds = np.asarray(xvalues)
+        # hack for DatetimeIndex, #1646
+        if issubclass(inds.dtype.type, np.datetime64):
+            inds = inds.view(np.int64)
+        result[invalid] = _interpolate_scipy_wrapper(
+            inds[valid],
+            yvalues[valid],
+            inds[invalid],
+            method=method,
+            fill_value=fill_value,
+            bounds_error=bounds_error,
+            order=order,
+            **kwargs,
+        )
+        result[preserve_nans] = np.nan
+        return result
+```",
+pandas-115-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+def interpolate_1d(
+    xvalues,
+    yvalues,
+    method=""linear"",
+    limit=None,
+    limit_direction=""forward"",
+    limit_area=None,
+    fill_value=None,
+    bounds_error=False,
+    order=None,
+    **kwargs,
+):
+    """"""
+    Logic for the 1-d interpolation.  The result should be 1-d, inputs
+    xvalues and yvalues will each be 1-d arrays of the same length.
+
+    Bounds_error is currently hardcoded to False since non-scipy ones don't
+    take it as an argument.
+    """"""
+    # Check if the index is sorted
+    if method == 'index' and not xvalues.is_monotonic_increasing:
+        import warnings
+        warnings.warn(""Index is not sorted. The result may not be as expected."", UserWarning)
+
+    invalid = isna(yvalues)
+    valid = ~invalid
+
+    if not valid.any():
+        # have to call np.asarray(xvalues) since xvalues could be an Index
+        # which can't be mutated
+        result = np.empty_like(np.asarray(xvalues), dtype=np.float64)
+        result.fill(np.nan)
+        return result
+
+    if valid.all():
+        return yvalues
+
+    if method == ""time"":
+        if not getattr(xvalues, ""is_all_dates"", None):
+            # if not issubclass(xvalues.dtype.type, np.datetime64):
+            raise ValueError(
+                ""time-weighted interpolation only works ""
+                ""on Series or DataFrames with a ""
+                ""DatetimeIndex""
+            )
+        method = ""values""
+
+    valid_limit_directions = [""forward"", ""backward"", ""both""]
+    limit_direction = limit_direction.lower()
+    if limit_direction not in valid_limit_directions:
+        msg = ""Invalid limit_direction: expecting one of {valid!r}, got {invalid!r}.""
+        raise ValueError(
+            msg.format(valid=valid_limit_directions, invalid=limit_direction)
+        )
+
+    if limit_area is not None:
+        valid_limit_areas = [""inside"", ""outside""]
+        limit_area = limit_area.lower()
+        if limit_area not in valid_limit_areas:
+            raise ValueError(
+                ""Invalid limit_area: expecting one of {}, got ""
+                ""{}."".format(valid_limit_areas, limit_area)
+            )
+
+    # default limit is unlimited GH #16282
+    limit = algos._validate_limit(nobs=None, limit=limit)
+
+    # These are sets of index pointers to invalid values... i.e. {0, 1, etc...
+    all_nans = set(np.flatnonzero(invalid))
+    start_nans = set(range(find_valid_index(yvalues, ""first"")))
+    end_nans = set(range(1 + find_valid_index(yvalues, ""last""), len(valid)))
+    mid_nans = all_nans - start_nans - end_nans
+
+    # Like the sets above, preserve_nans contains indices of invalid values,
+    # but in this case, it is the final set of indices that need to be
+    # preserved as NaN after the interpolation.
+
+    # For example if limit_direction='forward' then preserve_nans will
+    # contain indices of NaNs at the beginning of the series, and NaNs that
+    # are more than'limit' away from the prior non-NaN.
+
+    # set preserve_nans based on direction using _interp_limit
+    if limit_direction == ""forward"":
+        preserve_nans = start_nans | set(_interp_limit(invalid, limit, 0))
+    elif limit_direction == ""backward"":
+        preserve_nans = end_nans | set(_interp_limit(invalid, 0, limit))
+    else:
+        # both directions... just use _interp_limit
+        preserve_nans = set(_interp_limit(invalid, limit, limit))
+
+    # if limit_area is set, add either mid or outside indices
+    # to preserve_nans GH #16284
+    if limit_area == ""inside"":
+        # preserve NaNs on the outside
+        preserve_nans |= start_nans | end_nans
+    elif limit_area == ""outside"":
+        # preserve NaNs on the inside
+        preserve_nans |= mid_nans
+
+    # sort preserve_nans and covert to list
+    preserve_nans = sorted(preserve_nans)
+
+    xvalues = getattr(xvalues, ""values"", xvalues)
+    yvalues = getattr(yvalues, ""values"", yvalues)
+    result = yvalues.copy()
+
+    if method in [""linear"", ""time"", ""index"", ""values""]:
+        if method in (""values"", ""index""):
+            inds = np.asarray(xvalues)
+            # hack for DatetimeIndex, #1646
+            if needs_i8_conversion(inds.dtype.type):
+                inds = inds.view(np.int64)
+            if inds.dtype == np.object_:
+                inds = lib.maybe_convert_objects(inds)
+        else:
+            inds = xvalues
+        result[invalid] = np.interp(inds[invalid], inds[valid], yvalues[valid])
+        result[preserve_nans] = np.nan
+        return result
+
+    sp_methods = [
+        ""nearest"",
+        ""zero"",
+        ""slinear"",
+        ""quadratic"",
+        ""cubic"",
+        ""barycentric"",
+        ""krogh"",
+        ""spline"",
+        ""polynomial"",
+        ""from_derivatives"",
+        ""piecewise_polynomial"",
+        ""pchip"",
+        ""akima"",
+    ]
+
+    if method in sp_methods:
+        inds = np.asarray(xvalues)
+        # hack for DatetimeIndex, #1646
+        if issubclass(inds.dtype.type, np.datetime64):
+            inds = inds.view(np.int64)
+        result[invalid] = _interpolate_scipy_wrapper(
+            inds[valid],
+            yvalues[valid],
+            inds[invalid],
+            method=method,
+            fill_value=fill_value,
+            bounds_error=bounds_error,
+            order=order,
+            **kwargs,
+        )
+        result[preserve_nans] = np.nan
+        return result
+```",
+pandas-115-v0_llama-6,UNKNOWN,UNKNOWN,"```python
+def interpolate_1d(
+    xvalues,
+    yvalues,
+    method=""linear"",
+    limit=None,
+    limit_direction=""forward"",
+    limit_area=None,
+    fill_value=None,
+    bounds_error=False,
+    order=None,
+    **kwargs,
+):
+    """"""
+    Logic for the 1-d interpolation.  The result should be 1-d, inputs
+    xvalues and yvalues will each be 1-d arrays of the same length.
+
+    Bounds_error is currently hardcoded to False since non-scipy ones don't
+    take it as an argument.
+    """"""
+    # Treat the original, non-scipy methods first.
+
+    invalid = isna(yvalues)
+    valid = ~invalid
+
+    if not valid.any():
+        # have to call np.asarray(xvalues) since xvalues could be an Index
+        # which can't be mutated
+        result = np.empty_like(np.asarray(xvalues), dtype=np.float64)
+        result.fill(np.nan)
+        return result
+
+    if valid.all():
+        return yvalues
+
+    if method == ""time"":
+        if not getattr(xvalues, ""is_all_dates"", None):
+            # if not issubclass(xvalues.dtype.type, np.datetime64):
+            raise ValueError(
+                ""time-weighted interpolation only works ""
+                ""on Series or DataFrames with a ""
+                ""DatetimeIndex""
+            )
+        method = ""values""
+
+    valid_limit_directions = [""forward"", ""backward"", ""both""]
+    limit_direction = limit_direction.lower()
+    if limit_direction not in valid_limit_directions:
+        msg = ""Invalid limit_direction: expecting one of {valid!r}, got {invalid!r}.""
+        raise ValueError(
+            msg.format(valid=valid_limit_directions, invalid=limit_direction)
+        )
+
+    if limit_area is not None:
+        valid_limit_areas = [""inside"", ""outside""]
+        limit_area = limit_area.lower()
+        if limit_area not in valid_limit_areas:
+            raise ValueError(
+                ""Invalid limit_area: expecting one of {}, got ""
+                ""{}."".format(valid_limit_areas, limit_area)
+            )
+
+    # default limit is unlimited GH #16282
+    limit = algos._validate_limit(nobs=None, limit=limit)
+
+    # These are sets of index pointers to invalid values... i.e. {0, 1, etc...
+    all_nans = set(np.flatnonzero(invalid))
+    start_nans = set(range(find_valid_index(yvalues, ""first"")))
+    end_nans = set(range(1 + find_valid_index(yvalues, ""last""), len(valid)))
+    mid_nans = all_nans - start_nans - end_nans
+
+    # Like the sets above, preserve_nans contains indices of invalid values,
+    # but in this case, it is the final set of indices that need to be
+    # preserved as NaN after the interpolation.
+
+    # For example if limit_direction='forward' then preserve_nans will
+    # contain indices of NaNs at the beginning of the series, and NaNs that
+    # are more than'limit' away from the prior non-NaN.
+
+    # set preserve_nans based on direction using _interp_limit
+    if limit_direction == ""forward"":
+        preserve_nans = start_nans | set(_interp_limit(invalid, limit, 0))
+    elif limit_direction == ""backward"":
+        preserve_nans = end_nans | set(_interp_limit(invalid, 0, limit))
+    else:
+        # both directions... just use _interp_limit
+        preserve_nans = set(_interp_limit(invalid, limit, limit))
+
+    # if limit_area is set, add either mid or outside indices
+    # to preserve_nans GH #16284
+    if limit_area == ""inside"":
+        # preserve NaNs on the outside
+        preserve_nans |= start_nans | end_nans
+    elif limit_area == ""outside"":
+        # preserve NaNs on the inside
+        preserve_nans |= mid_nans
+
+    # sort preserve_nans and covert to list
+    preserve_nans = sorted(preserve_nans)
+
+    xvalues = getattr(xvalues, ""values"", xvalues)
+    yvalues = getattr(yvalues, ""values"", yvalues)
+    result = yvalues.copy()
+
+    if method in [""linear"", ""time"", ""index"", ""values""]:
+        if not is_sorted(xvalues):
+            raise Warning(""Index is not sorted. The result may not be as expected."")
+        if method in (""values"", ""index""):
+            inds = np.asarray(xvalues)
+            # hack for DatetimeIndex, #1646
+            if needs_i8_conversion(inds.dtype.type):
+                inds = inds.view(np.int64)
+            if inds.dtype == np.object_:
+                inds = lib.maybe_convert_objects(inds)
+        else:
+            inds = xvalues
+        result[invalid] = np.interp(inds[invalid], inds[valid], yvalues[valid])
+        result[preserve_nans] = np.nan
+        return result
+
+    sp_methods = [
+        ""nearest"",
+        ""zero"",
+        ""slinear"",
+        ""quadratic"",
+        ""cubic"",
+        ""barycentric"",
+        ""krogh"",
+        ""spline"",
+        ""polynomial"",
+        ""from_derivatives"",
+        ""piecewise_polynomial"",
+        ""pchip"",
+        ""akima"",
+    ]
+
+    if method in sp_methods:
+        inds = np.asarray(xvalues)
+        # hack for DatetimeIndex, #1646
+        if issubclass(inds.dtype.type, np.datetime64):
+            inds = inds.view(np.int64)
+        result[invalid] = _interpolate_scipy_wrapper(
+            inds[valid],
+            yvalues[valid],
+            inds[invalid],
+            method=method,
+            fill_value=fill_value,
+            bounds_error=bounds_error,
+            order=order,
+            **kwargs,
+        )
+        result[preserve_nans] = np.nan
+        return result
+
+
+def is_sorted(x):
+    return np.all(np.diff(x) >= 0)
+```",
+pandas-115-v0_llama-7,UNKNOWN,UNKNOWN,"```python
+def interpolate_1d(
+    xvalues,
+    yvalues,
+    method=""linear"",
+    limit=None,
+    limit_direction=""forward"",
+    limit_area=None,
+    fill_value=None,
+    bounds_error=False,
+    order=None,
+    **kwargs,
+):
+    """"""
+    Logic for the 1-d interpolation.  The result should be 1-d, inputs
+    xvalues and yvalues will each be 1-d arrays of the same length.
+
+    Bounds_error is currently hardcoded to False since non-scipy ones don't
+    take it as an argument.
+    """"""
+    # Treat the original, non-scipy methods first.
+
+    invalid = isna(yvalues)
+    valid = ~invalid
+
+    if not valid.any():
+        # have to call np.asarray(xvalues) since xvalues could be an Index
+        # which can't be mutated
+        result = np.empty_like(np.asarray(xvalues), dtype=np.float64)
+        result.fill(np.nan)
+        return result
+
+    if valid.all():
+        return yvalues
+
+    if method == ""time"":
+        if not getattr(xvalues, ""is_all_dates"", None):
+            # if not issubclass(xvalues.dtype.type, np.datetime64):
+            raise ValueError(
+                ""time-weighted interpolation only works ""
+                ""on Series or DataFrames with a ""
+                ""DatetimeIndex""
+            )
+        method = ""values""
+
+    valid_limit_directions = [""forward"", ""backward"", ""both""]
+    limit_direction = limit_direction.lower()
+    if limit_direction not in valid_limit_directions:
+        msg = ""Invalid limit_direction: expecting one of {valid!r}, got {invalid!r}.""
+        raise ValueError(
+            msg.format(valid=valid_limit_directions, invalid=limit_direction)
+        )
+
+    if limit_area is not None:
+        valid_limit_areas = [""inside"", ""outside""]
+        limit_area = limit_area.lower()
+        if limit_area not in valid_limit_areas:
+            raise ValueError(
+                ""Invalid limit_area: expecting one of {}, got ""
+                ""{}."".format(valid_limit_areas, limit_area)
+            )
+
+    # default limit is unlimited GH #16282
+    limit = algos._validate_limit(nobs=None, limit=limit)
+
+    # These are sets of index pointers to invalid values... i.e. {0, 1, etc...
+    all_nans = set(np.flatnonzero(invalid))
+    start_nans = set(range(find_valid_index(yvalues, ""first"")))
+    end_nans = set(range(1 + find_valid_index(yvalues, ""last""), len(valid)))
+    mid_nans = all_nans - start_nans - end_nans
+
+    # Like the sets above, preserve_nans contains indices of invalid values,
+    # but in this case, it is the final set of indices that need to be
+    # preserved as NaN after the interpolation.
+
+    # For example if limit_direction='forward' then preserve_nans will
+    # contain indices of NaNs at the beginning of the series, and NaNs that
+    # are more than'limit' away from the prior non-NaN.
+
+    # set preserve_nans based on direction using _interp_limit
+    if limit_direction == ""forward"":
+        preserve_nans = start_nans | set(_interp_limit(invalid, limit, 0))
+    elif limit_direction == ""backward"":
+        preserve_nans = end_nans | set(_interp_limit(invalid, 0, limit))
+    else:
+        # both directions... just use _interp_limit
+        preserve_nans = set(_interp_limit(invalid, limit, limit))
+
+    # if limit_area is set, add either mid or outside indices
+    # to preserve_nans GH #16284
+    if limit_area == ""inside"":
+        # preserve NaNs on the outside
+        preserve_nans |= start_nans | end_nans
+    elif limit_area == ""outside"":
+        # preserve NaNs on the inside
+        preserve_nans |= mid_nans
+
+    # sort preserve_nans and covert to list
+    preserve_nans = sorted(preserve_nans)
+
+    xvalues = getattr(xvalues, ""values"", xvalues)
+    yvalues = getattr(yvalues, ""values"", yvalues)
+    result = yvalues.copy()
+
+    if method in [""linear"", ""time"", ""index"", ""values""]:
+        if method in (""values"", ""index""):
+            inds = np.asarray(xvalues)
+            # hack for DatetimeIndex, #1646
+            if needs_i8_conversion(inds.dtype.type):
+                inds = inds.view(np.int64)
+            if inds.dtype == np.object_:
+                inds = lib.maybe_convert_objects(inds)
+        else:
+            inds = xvalues
+
+        # sort the x and y values if the index is not sorted
+        if not np.all(np.diff(inds) >= 0):
+            indexer = np.argsort(inds)
+            inds = inds[indexer]
+            yvalues = yvalues[indexer]
+
+        result[invalid] = np.interp(inds[invalid], inds[valid], yvalues[valid])
+        result[preserve_nans] = np.nan
+        return result
+
+    sp_methods = [
+        ""nearest"",
+        ""zero"",
+        ""slinear"",
+        ""quadratic"",
+        ""cubic"",
+        ""barycentric"",
+        ""krogh"",
+        ""spline"",
+        ""polynomial"",
+        ""from_derivatives"",
+        ""piecewise_polynomial"",
+        ""pchip"",
+        ""akima"",
+    ]
+
+    if method in sp_methods:
+        inds = np.asarray(xvalues)
+        # hack for DatetimeIndex, #1646
+        if issubclass(inds.dtype.type, np.datetime64):
+            inds = inds.view(np.int64)
+        result[invalid] = _interpolate_scipy_wrapper(
+            inds[valid],
+            yvalues[valid],
+            inds[invalid],
+            method=method,
+            fill_value=fill_value,
+            bounds_error=bounds_error,
+            order=order,
+            **kwargs,
+        )
+        result[preserve_nans] = np.nan
+        return result
+```",
+pandas-115-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+def interpolate_1d(
+    xvalues,
+    yvalues,
+    method=""linear"",
+    limit=None,
+    limit_direction=""forward"",
+    limit_area=None,
+    fill_value=None,
+    bounds_error=False,
+    order=None,
+    **kwargs,
+):
+    """"""
+    Logic for the 1-d interpolation.  The result should be 1-d, inputs
+    xvalues and yvalues will each be 1-d arrays of the same length.
+
+    Bounds_error is currently hardcoded to False since non-scipy ones don't
+    take it as an argument.
+    """"""
+    # Check if the Index is sorted
+    if not isinstance(xvalues, (pd.Int64Index, pd.DatetimeIndex, pd.Float64Index)):
+        raise TypeError(""xvalues must be an Index"")
+    
+    if method == 'index' and not xvalues.is_monotonic_increasing:
+        import warnings
+        warnings.warn(""Index is not sorted. The result may not be as expected."", UserWarning)
+        
+    invalid = isna(yvalues)
+    valid = ~invalid
+
+    if not valid.any():
+        # have to call np.asarray(xvalues) since xvalues could be an Index
+        # which can't be mutated
+        result = np.empty_like(np.asarray(xvalues), dtype=np.float64)
+        result.fill(np.nan)
+        return result
+
+    if valid.all():
+        return yvalues
+
+    if method == ""time"":
+        if not getattr(xvalues, ""is_all_dates"", None):
+            # if not issubclass(xvalues.dtype.type, np.datetime64):
+            raise ValueError(
+                ""time-weighted interpolation only works ""
+                ""on Series or DataFrames with a ""
+                ""DatetimeIndex""
+            )
+        method = ""values""
+
+    valid_limit_directions = [""forward"", ""backward"", ""both""]
+    limit_direction = limit_direction.lower()
+    if limit_direction not in valid_limit_directions:
+        msg = ""Invalid limit_direction: expecting one of {valid!r}, got {invalid!r}.""
+        raise ValueError(
+            msg.format(valid=valid_limit_directions, invalid=limit_direction)
+        )
+
+    if limit_area is not None:
+        valid_limit_areas = [""inside"", ""outside""]
+        limit_area = limit_area.lower()
+        if limit_area not in valid_limit_areas:
+            raise ValueError(
+                ""Invalid limit_area: expecting one of {}, got ""
+                ""{}."".format(valid_limit_areas, limit_area)
+            )
+
+    # default limit is unlimited GH #16282
+    limit = algos._validate_limit(nobs=None, limit=limit)
+
+    # These are sets of index pointers to invalid values... i.e. {0, 1, etc...
+    all_nans = set(np.flatnonzero(invalid))
+    start_nans = set(range(find_valid_index(yvalues, ""first"")))
+    end_nans = set(range(1 + find_valid_index(yvalues, ""last""), len(valid)))
+    mid_nans = all_nans - start_nans - end_nans
+
+    # Like the sets above, preserve_nans contains indices of invalid values,
+    # but in this case, it is the final set of indices that need to be
+    # preserved as NaN after the interpolation.
+
+    # For example if limit_direction='forward' then preserve_nans will
+    # contain indices of NaNs at the beginning of the series, and NaNs that
+    # are more than'limit' away from the prior non-NaN.
+
+    # set preserve_nans based on direction using _interp_limit
+    if limit_direction == ""forward"":
+        preserve_nans = start_nans | set(_interp_limit(invalid, limit, 0))
+    elif limit_direction == ""backward"":
+        preserve_nans = end_nans | set(_interp_limit(invalid, 0, limit))
+    else:
+        # both directions... just use _interp_limit
+        preserve_nans = set(_interp_limit(invalid, limit, limit))
+
+    # if limit_area is set, add either mid or outside indices
+    # to preserve_nans GH #16284
+    if limit_area == ""inside"":
+        # preserve NaNs on the outside
+        preserve_nans |= start_nans | end_nans
+    elif limit_area == ""outside"":
+        # preserve NaNs on the inside
+        preserve_nans |= mid_nans
+
+    # sort preserve_nans and covert to list
+    preserve_nans = sorted(preserve_nans)
+
+    xvalues = getattr(xvalues, ""values"", xvalues)
+    yvalues = getattr(yvalues, ""values"", yvalues)
+    result = yvalues.copy()
+
+    if method in [""linear"", ""time"", ""index"", ""values""]:
+        if method in (""values"", ""index""):
+            inds = np.asarray(xvalues)
+            # hack for DatetimeIndex, #1646
+            if needs_i8_conversion(inds.dtype.type):
+                inds = inds.view(np.int64)
+            if inds.dtype == np.object_:
+                inds = lib.maybe_convert_objects(inds)
+        else:
+            inds = xvalues
+        result[invalid] = np.interp(inds[invalid], inds[valid], yvalues[valid])
+        result[preserve_nans] = np.nan
+        return result
+
+    sp_methods = [
+        ""nearest"",
+        ""zero"",
+        ""slinear"",
+        ""quadratic"",
+        ""cubic"",
+        ""barycentric"",
+        ""krogh"",
+        ""spline"",
+        ""polynomial"",
+        ""from_derivatives"",
+        ""piecewise_polynomial"",
+        ""pchip"",
+        ""akima"",
+    ]
+
+    if method in sp_methods:
+        inds = np.asarray(xvalues)
+        # hack for DatetimeIndex, #1646
+        if issubclass(inds.dtype.type, np.datetime64):
+            inds = inds.view(np.int64)
+        result[invalid] = _interpolate_scipy_wrapper(
+            inds[valid],
+            yvalues[valid],
+            inds[invalid],
+            method=method,
+            fill_value=fill_value,
+            bounds_error=bounds_error,
+            order=order,
+            **kwargs,
+        )
+        result[preserve_nans] = np.nan
+        return result
+```",
+pandas-115-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+def interpolate_1d(
+    xvalues,
+    yvalues,
+    method=""linear"",
+    limit=None,
+    limit_direction=""forward"",
+    limit_area=None,
+    fill_value=None,
+    bounds_error=False,
+    order=None,
+    **kwargs,
+):
+    """"""
+    Logic for the 1-d interpolation.  The result should be 1-d, inputs
+    xvalues and yvalues will each be 1-d arrays of the same length.
+
+    Bounds_error is currently hardcoded to False since non-scipy ones don't
+    take it as an argument.
+    """"""
+    # Treat the original, non-scipy methods first.
+
+    invalid = isna(yvalues)
+    valid = ~invalid
+
+    if not valid.any():
+        # have to call np.asarray(xvalues) since xvalues could be an Index
+        # which can't be mutated
+        result = np.empty_like(np.asarray(xvalues), dtype=np.float64)
+        result.fill(np.nan)
+        return result
+
+    if valid.all():
+        return yvalues
+
+    if method == ""time"":
+        if not getattr(xvalues, ""is_all_dates"", None):
+            # if not issubclass(xvalues.dtype.type, np.datetime64):
+            raise ValueError(
+                ""time-weighted interpolation only works ""
+                ""on Series or DataFrames with a ""
+                ""DatetimeIndex""
+            )
+        method = ""values""
+
+    valid_limit_directions = [""forward"", ""backward"", ""both""]
+    limit_direction = limit_direction.lower()
+    if limit_direction not in valid_limit_directions:
+        msg = ""Invalid limit_direction: expecting one of {valid!r}, got {invalid!r}.""
+        raise ValueError(
+            msg.format(valid=valid_limit_directions, invalid=limit_direction)
+        )
+
+    if limit_area is not None:
+        valid_limit_areas = [""inside"", ""outside""]
+        limit_area = limit_area.lower()
+        if limit_area not in valid_limit_areas:
+            raise ValueError(
+                ""Invalid limit_area: expecting one of {}, got ""
+                ""{}."".format(valid_limit_areas, limit_area)
+            )
+
+    # default limit is unlimited GH #16282
+    limit = algos._validate_limit(nobs=None, limit=limit)
+
+    # These are sets of index pointers to invalid values... i.e. {0, 1, etc...
+    all_nans = set(np.flatnonzero(invalid))
+    start_nans = set(range(find_valid_index(yvalues, ""first"")))
+    end_nans = set(range(1 + find_valid_index(yvalues, ""last""), len(valid)))
+    mid_nans = all_nans - start_nans - end_nans
+
+    # Like the sets above, preserve_nans contains indices of invalid values,
+    # but in this case, it is the final set of indices that need to be
+    # preserved as NaN after the interpolation.
+
+    # For example if limit_direction='forward' then preserve_nans will
+    # contain indices of NaNs at the beginning of the series, and NaNs that
+    # are more than'limit' away from the prior non-NaN.
+
+    # set preserve_nans based on direction using _interp_limit
+    if limit_direction == ""forward"":
+        preserve_nans = start_nans | set(_interp_limit(invalid, limit, 0))
+    elif limit_direction == ""backward"":
+        preserve_nans = end_nans | set(_interp_limit(invalid, 0, limit))
+    else:
+        # both directions... just use _interp_limit
+        preserve_nans = set(_interp_limit(invalid, limit, limit))
+
+    # if limit_area is set, add either mid or outside indices
+    # to preserve_nans GH #16284
+    if limit_area == ""inside"":
+        # preserve NaNs on the outside
+        preserve_nans |= start_nans | end_nans
+    elif limit_area == ""outside"":
+        # preserve NaNs on the inside
+        preserve_nans |= mid_nans
+
+    # sort preserve_nans and covert to list
+    preserve_nans = sorted(preserve_nans)
+
+    xvalues = getattr(xvalues, ""values"", xvalues)
+    yvalues = getattr(yvalues, ""values"", yvalues)
+    result = yvalues.copy()
+
+    # Check if the index is sorted
+    if method == ""index"" and not np.all(np.diff(xvalues) >= 0):
+        import warnings
+        warnings.warn(""Index is not sorted. Results may be incorrect."", UserWarning)
+
+    if method in [""linear"", ""time"", ""index"", ""values""]:
+        if method in (""values"", ""index""):
+            inds = np.asarray(xvalues)
+            # hack for DatetimeIndex, #1646
+            if needs_i8_conversion(inds.dtype.type):
+                inds = inds.view(np.int64)
+            if inds.dtype == np.object_:
+                inds = lib.maybe_convert_objects(inds)
+        else:
+            inds = xvalues
+        result[invalid] = np.interp(inds[invalid], inds[valid], yvalues[valid])
+        result[preserve_nans] = np.nan
+        return result
+
+    sp_methods = [
+        ""nearest"",
+        ""zero"",
+        ""slinear"",
+        ""quadratic"",
+        ""cubic"",
+        ""barycentric"",
+        ""krogh"",
+        ""spline"",
+        ""polynomial"",
+        ""from_derivatives"",
+        ""piecewise_polynomial"",
+        ""pchip"",
+        ""akima"",
+    ]
+
+    if method in sp_methods:
+        inds = np.asarray(xvalues)
+        # hack for DatetimeIndex, #1646
+        if issubclass(inds.dtype.type, np.datetime64):
+            inds = inds.view(np.int64)
+        result[invalid] = _interpolate_scipy_wrapper(
+            inds[valid],
+            yvalues[valid],
+            inds[invalid],
+            method=method,
+            fill_value=fill_value,
+            bounds_error=bounds_error,
+            order=order,
+            **kwargs,
+        )
+        result[preserve_nans] = np.nan
+        return result
+```",

@@ -1,0 +1,513 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-114-v0_gpt-0,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+    s = getattr(series, ""_values"", series)
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]  # Avoids converting to numpy array here
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Use only when necessary which prevents materialization of ExtensionArray
+    s = com.values_from_object(series)
+    k = self._convert_scalar_indexer(key, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+        except Exception:
+            raise e1
+    except TypeError:
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",
+pandas-114-v0_gpt-1,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+
+    s = getattr(series, ""_values"", series)
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]  # Directly return the value at the index instead
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Avoid unnecessary materialization of the ExtensionArray
+    if is_categorical_dtype(s):
+        k = self._convert_scalar_indexer(key, kind=""getitem"")
+        return s[k]  # Use indexing directly for categorical types
+
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+        except Exception:
+            raise e1
+    except TypeError:
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",
+pandas-114-v0_gpt-2,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+
+    # if we have something that is Index-like, then
+    # use this, e.g. DatetimeIndex
+    # Things like `Series._get_value` (via .at) pass the EA directly here.
+    s = getattr(series, ""_values"", series)
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        # GH 20882, 21257
+        # Unify Index and ExtensionArray treatment
+        # First try to convert the key to a location
+        # If that fails, raise a KeyError if an integer
+        # index, otherwise, see if key is an integer, and
+        # try that
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Ensure we do not convert series to numpy array
+    if isinstance(s, ExtensionArray):
+        if is_list_like(key):
+            # Directly use the mask as a boolean array for filtering
+            return s[key]
+        else:
+            # Handle single item key access
+            k = self._convert_scalar_indexer(key, kind=""getitem"")
+            if is_scalar(k):
+                return s[self.get_loc(k)]
+
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            # generator/iterator-like
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+        except Exception:
+            raise e1
+    except TypeError:
+        # e.g. ""[False] is an invalid key""
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",
+pandas-114-v0_gpt-3,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+
+    # if we have something that is Index-like, then
+    # use this, e.g. DatetimeIndex
+    # Things like `Series._get_value` (via .at) pass the EA directly here.
+    s = getattr(series, ""_values"", series)
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        # GH 20882, 21257
+        # Unify Index and ExtensionArray treatment
+        # First try to convert the key to a location
+        # If that fails, raise a KeyError if an integer
+        # index, otherwise, see if key is an integer, and
+        # try that
+        try:
+            iloc = self.get_loc(key)
+            return s.iloc[iloc]  # Use .iloc to avoid densification
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Avoid using com.values_from_object(series) to prevent densification
+    if is_integer(key) or is_bool(key):
+        return s[key]
+    
+    k = self._convert_scalar_indexer(key, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            # generator/iterator-like
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+        except Exception:
+            raise e1
+    except TypeError:
+        # e.g. ""[False] is an invalid key""
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",
+pandas-114-v0_gpt-4,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+    # if we have something that is Index-like, then
+    # use this, e.g. DatetimeIndex
+    # Things like `Series._get_value` (via .at) pass the EA directly here.
+    s = getattr(series, ""_values"", series)
+    
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        # GH 20882, 21257
+        # Unify Index and ExtensionArray treatment
+        # First try to convert the key to a location
+        # If that fails, raise a KeyError if an integer
+        # index, otherwise, see if key is an integer, and
+        # try that
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]  # This should not densify the array
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # If we reach here, we must handle cases that may densify the ExtensionArray
+    # Avoiding the get_values that densifies the array if possible.
+    k = com.values_from_object(key)
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+
+        # Rather than call libindex.get_value_at(s, key) that might trigger densification
+        # we can access elements directly.
+        try:
+            return s[k]  # This should maintain the ExtensionArray intact
+        except IndexError:
+            raise
+        except TypeError:
+            # generator/iterator-like
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+        except Exception:
+            raise e1
+    except TypeError:
+        # e.g. ""[False] is an invalid key""
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",
+pandas-114-v0_gpt-5,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+    s = getattr(series, ""_values"", series)
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        try:
+            iloc = self.get_loc(key)
+
+            # Return directly if the index doesn't need materialization
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Avoid materializing the object if possible
+    if isinstance(s, ExtensionArray) and not is_integer(key):
+        # If `key` is not an integer and `s` is an ExtensionArray,
+        # provide a safe lookup operation
+        if hasattr(s, '_get_value'):
+            return s._get_value(key)  # Use a custom method if available.
+
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+        except Exception:
+            raise e1
+    except TypeError:
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",
+pandas-114-v0_gpt-6,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+
+    s = getattr(series, ""_values"", series)
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+    
+    # Skip this conversion if s is an ExtensionArray to prevent materialization
+    if not isinstance(s, ExtensionArray):
+        s = com.values_from_object(series)
+
+    k = com.values_from_object(key)
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+        except Exception:
+            raise e1
+    except TypeError:
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",
+pandas-114-v0_gpt-7,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+    s = getattr(series, ""_values"", series)
+    
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Ensuring we do not materialize the ExtensionArray
+    if isinstance(s, ExtensionArray):
+        # Handle the case where we should not convert to ndarray
+        if isinstance(key, (slice, list, np.ndarray)):
+            return s[key]
+        else: 
+            k = self._convert_scalar_indexer(key, kind=""getitem"")
+            return s[k]
+
+    # Fallback for non-ExtensionArray cases
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+        except Exception:
+            raise e1
+    except TypeError:
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",
+pandas-114-v0_gpt-8,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+
+    # if we have something that is Index-like, then
+    # use this, e.g. DatetimeIndex
+    # Things like `Series._get_value` (via .at) pass the EA directly here.
+    s = getattr(series, ""_values"", series)
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        # GH 20882, 21257
+        # Unify Index and ExtensionArray treatment
+        # First try to convert the key to a location
+        # If that fails, raise a KeyError if an integer
+        # index, otherwise, see if key is an integer, and
+        # try that
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Avoid converting the ExtensionArray to a numpy array
+    if isinstance(s, ExtensionArray):
+        k = self._convert_scalar_indexer(key, kind=""getitem"")
+        return s[k]
+
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            # generator/iterator-like
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+        except Exception:
+            raise e1
+    except TypeError:
+        # e.g. ""[False] is an invalid key""
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",
+pandas-114-v0_gpt-9,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+
+    # if we have something that is Index-like, then
+    # use this, e.g. DatetimeIndex
+    # Things like `Series._get_value` (via .at) pass the EA directly here.
+    s = getattr(series, ""_values"", series)
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        # GH 20882, 21257
+        # Unify Index and ExtensionArray treatment
+        # First try to convert the key to a location
+        # If that fails, raise a KeyError if an integer
+        # index, otherwise, see if key is an integer, and
+        # try that
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Modify to avoid materializing the ExtensionArray
+    if isinstance(s, ExtensionArray):
+        k = self._convert_scalar_indexer(key, kind=""getitem"")
+        return s[k]
+
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            # generator/iterator-like
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+        except Exception:
+            raise e1
+    except TypeError:
+        # e.g. ""[False] is an invalid key""
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",

@@ -1,0 +1,419 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-148-v0_llama-0,UNKNOWN,UNKNOWN,"```python
+def apply_empty_result(self):
+    """"""
+    we have an empty result; at least 1 axis is 0
+
+    we will try to apply the function to an empty
+    series in order to see if this is a reduction function
+    """"""
+
+    # we are not asked to reduce or infer reduction
+    # so just return a copy of the existing object
+    if self.result_type not in [""reduce"", None]:
+        return self.obj.copy()
+
+    # we may need to infer
+    should_reduce = self.result_type == ""reduce""
+
+    from pandas import Series
+
+    if not should_reduce:
+
+        EMPTY_SERIES = Series([])
+        try:
+            r = self.f(EMPTY_SERIES, *self.args, **self.kwds)
+        except Exception:
+            pass
+        else:
+            should_reduce = not isinstance(r, Series)
+
+    if should_reduce:
+        if self.obj.empty:
+            # when the dataframe is empty, return a series with 0s
+            return Series(0, index=self.agg_axis)
+        else:
+            return self.obj._constructor_sliced(np.nan, index=self.agg_axis)
+    else:
+        return self.obj.copy()
+```",
+pandas-148-v0_llama-1,UNKNOWN,UNKNOWN,"```python
+def apply_empty_result(self):
+    """"""
+    we have an empty result; at least 1 axis is 0
+
+    we will try to apply the function to an empty
+    series in order to see if this is a reduction function
+    """"""
+
+    # we are not asked to reduce or infer reduction
+    # so just return a copy of the existing object
+    if self.result_type not in [""reduce"", None]:
+        return self.obj.copy()
+
+    # we may need to infer
+    should_reduce = self.result_type == ""reduce""
+
+    from pandas import Series
+
+    if not should_reduce:
+
+        EMPTY_SERIES = Series([], index=self.obj.columns)
+        try:
+            r = self.f(EMPTY_SERIES, *self.args, **self.kwds)
+        except Exception:
+            pass
+        else:
+            should_reduce = not isinstance(r, Series)
+
+    if should_reduce:
+        if self.f.__name__ in [""sum"", ""prod""]:
+            return Series(0, index=self.agg_axis)
+        elif self.f.__name__ in [""any"", ""all""]:
+            return Series(False, index=self.agg_axis) if self.f.__name__ == ""any"" else Series(True, index=self.agg_axis)
+        else:
+            return Series(0, index=self.agg_axis)
+    else:
+        return self.obj.copy()
+```",
+pandas-148-v0_llama-2,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Issue Identification**: The `apply_empty_result` function in pandas is inconsistent with the expected output when the DataFrame is empty. Specifically, `df.nunique()` returns an empty DataFrame instead of a Series with zeros for each column when the DataFrame has no rows.
+
+2. **Inconsistent Behavior**: The inconsistency arises because when the DataFrame is empty (`self.obj` has no rows), the function `apply_empty_result` checks if the result type is 'reduce' or None, and if not, it returns a copy of the existing object. However, this does not handle the case where the function applied (like `nunique`) should return a Series with zeros for an empty DataFrame.
+
+3. **Requirement for Consistency**: For consistency with how Series handles `nunique` when it's empty (returning 0), the DataFrame's `nunique` should also return a Series with zeros for each column when the DataFrame is empty.
+
+4. **Current Implementation Analysis**: The current implementation of `apply_empty_result` tries to infer if the function is a reduction function by applying it to an empty Series. If it's a reduction function, it returns `np.nan` for the result. However, this does not correctly handle the `nunique` case, as it should return 0 for empty Series/DataFrame.
+
+5. **Fixing Strategy**: To fix this, we need to modify the `apply_empty_result` function so that when the DataFrame is empty and the function is `nunique`, it returns a Series of zeros for each column.
+
+### Fixed solution:
+```python
+def apply_empty_result(self):
+    """"""
+    we have an empty result; at least 1 axis is 0
+
+    we will try to apply the function to an empty
+    series in order to see if this is a reduction function
+    """"""
+
+    # we are not asked to reduce or infer reduction
+    # so just return a copy of the existing object
+    if self.result_type not in [""reduce"", None]:
+        return self.obj.copy()
+
+    # we may need to infer
+    should_reduce = self.result_type == ""reduce""
+
+    from pandas import Series
+
+    if not should_reduce:
+
+        EMPTY_SERIES = Series([])
+        try:
+            r = self.f(EMPTY_SERIES, *self.args, **self.kwds)
+        except Exception:
+            pass
+        else:
+            should_reduce = not isinstance(r, Series)
+
+    # Special handling for nunique to return zeros for empty DataFrame
+    if should_reduce and self.f.__name__ == 'nunique':
+        return Series(0, index=self.agg_axis)
+
+    if should_reduce:
+        return self.obj._constructor_sliced(np.nan, index=self.agg_axis)
+    else:
+        return self.obj.copy()
+```
+
+### Explanation of changes:
+* Added a special case to check if the function `self.f` is `nunique` and if so, return a Series of zeros for each column in `self.agg_axis`.
+* This change ensures that `df.nunique()` for an empty DataFrame returns a Series with zeros, consistent with how `Series.nunique()` behaves for an empty Series.
+
+### Tests and example uses:
+```python
+import pandas as pd
+
+# Test with an empty DataFrame
+df = pd.DataFrame(columns=['a', 'b', 'c'])
+print(df.nunique())  # Expected output: Series with zeros for each column
+
+# Test with a non-empty DataFrame
+df = pd.DataFrame({'a': [1, 2, 3], 'b': [1, 1, 1]})
+print(df.nunique())  # Expected output: Series with unique counts for each column
+```",
+pandas-148-v0_llama-3,UNKNOWN,UNKNOWN,"```python
+def apply_empty_result(self):
+    """"""
+    we have an empty result; at least 1 axis is 0
+
+    we will try to apply the function to an empty
+    series in order to see if this is a reduction function
+    """"""
+
+    # we are not asked to reduce or infer reduction
+    # so just return a copy of the existing object
+    if self.result_type not in [""reduce"", None]:
+        return self.obj.copy()
+
+    # we may need to infer
+    should_reduce = self.result_type == ""reduce""
+
+    from pandas import Series
+
+    if not should_reduce:
+
+        EMPTY_SERIES = Series([])
+        try:
+            r = self.f(EMPTY_SERIES, *self.args, **self.kwds)
+        except Exception:
+            pass
+        else:
+            should_reduce = not isinstance(r, Series)
+
+    if should_reduce:
+        # Check if the function is nunique
+        if self.f.__name__ == 'nunique':
+            return Series(0, index=self.agg_axis)
+        # If nunique, return Series with 0 values
+        elif hasattr(self.obj, 'nunique') and self.obj.nunique().empty:
+            return Series(0, index=self.agg_axis)
+        else:
+            return self.obj._constructor_sliced(np.nan, index=self.agg_axis)
+    else:
+        return self.obj.copy()
+```",
+pandas-148-v0_llama-4,UNKNOWN,UNKNOWN,"```python
+def apply_empty_result(self):
+    """"""
+    we have an empty result; at least 1 axis is 0
+
+    we will try to apply the function to an empty
+    series in order to see if this is a reduction function
+    """"""
+
+    # we are not asked to reduce or infer reduction
+    # so just return a copy of the existing object
+    if self.result_type not in [""reduce"", None]:
+        return self.obj.copy()
+
+    # we may need to infer
+    should_reduce = self.result_type == ""reduce""
+
+    from pandas import Series
+
+    if not should_reduce:
+
+        EMPTY_SERIES = Series([])
+        try:
+            r = self.f(EMPTY_SERIES, *self.args, **self.kwds)
+        except Exception:
+            pass
+        else:
+            should_reduce = not isinstance(r, Series)
+
+    if should_reduce:
+        if self.f.__name__ in ['sum', 'prod']:
+            return Series(0, index=self.agg_axis)
+        elif self.f.__name__ in ['any', 'all']:
+            return Series(False, index=self.agg_axis)
+        else:
+            return self.obj._constructor_sliced(np.nan, index=self.agg_axis)
+    else:
+        return self.obj.copy()
+```",
+pandas-148-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+def apply_empty_result(self):
+    """"""
+    we have an empty result; at least 1 axis is 0
+
+    we will try to apply the function to an empty
+    series in order to see if this is a reduction function
+    """"""
+
+    # we are not asked to reduce or infer reduction
+    # so just return a copy of the existing object
+    if self.result_type not in [""reduce"", None]:
+        return self.obj.copy()
+
+    # we may need to infer
+    should_reduce = self.result_type == ""reduce""
+
+    from pandas import Series
+
+    if not should_reduce:
+
+        EMPTY_SERIES = Series([])
+        try:
+            r = self.f(EMPTY_SERIES, *self.args, **self.kwds)
+        except Exception:
+            pass
+        else:
+            should_reduce = not isinstance(r, Series)
+
+    if should_reduce:
+        # Handle the case where the function is applied to an empty DataFrame
+        if self.obj.empty:
+            if self.f.__name__ in ['sum', 'prod']:
+                return Series(0, index=self.agg_axis)
+            elif self.f.__name__ in ['any', 'all']:
+                return Series(False, index=self.agg_axis)
+            else:
+                return Series(0, index=self.agg_axis)
+        else:
+            return self.obj._constructor_sliced(np.nan, index=self.agg_axis)
+    else:
+        return self.obj.copy()
+```",
+pandas-148-v0_llama-6,UNKNOWN,UNKNOWN,"```python
+def apply_empty_result(self):
+    """"""
+    we have an empty result; at least 1 axis is 0
+
+    we will try to apply the function to an empty
+    series in order to see if this is a reduction function
+    """"""
+
+    # we are not asked to reduce or infer reduction
+    # so just return a copy of the existing object
+    if self.result_type not in [""reduce"", None]:
+        return self.obj.copy()
+
+    # we may need to infer
+    should_reduce = self.result_type == ""reduce""
+
+    from pandas import Series
+
+    if not should_reduce:
+
+        EMPTY_SERIES = Series([])
+        try:
+            r = self.f(EMPTY_SERIES, *self.args, **self.kwds)
+        except Exception:
+            pass
+        else:
+            should_reduce = not isinstance(r, Series)
+
+    if should_reduce:
+        # Fix: apply function to each column and return a Series
+        result = self.obj.apply(lambda x: self.f(x, *self.args, **self.kwds))
+        # If function returns a scalar, convert to Series
+        if isinstance(result, (int, float, bool)):
+            result = Series([result] * len(self.obj.columns), index=self.obj.columns)
+        return result
+    else:
+        return self.obj.copy()
+```",
+pandas-148-v0_llama-7,UNKNOWN,UNKNOWN,"```python
+def apply_empty_result(self):
+    """"""
+    we have an empty result; at least 1 axis is 0
+
+    we will try to apply the function to an empty
+    series in order to see if this is a reduction function
+    """"""
+
+    # we are not asked to reduce or infer reduction
+    # so just return a copy of the existing object
+    if self.result_type not in [""reduce"", None]:
+        return self.obj.copy()
+
+    # we may need to infer
+    should_reduce = self.result_type == ""reduce""
+
+    from pandas import Series
+
+    if not should_reduce:
+
+        EMPTY_SERIES = Series([])
+        try:
+            r = self.f(EMPTY_SERIES, *self.args, **self.kwds)
+        except Exception:
+            pass
+        else:
+            should_reduce = not isinstance(r, Series)
+
+    if should_reduce:
+        # Return a Series with zeros for each column
+        return Series(0, index=self.agg_axis)
+    else:
+        return self.obj.copy()
+```",
+pandas-148-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+def apply_empty_result(self):
+    """"""
+    we have an empty result; at least 1 axis is 0
+
+    we will try to apply the function to an empty
+    series in order to see if this is a reduction function
+    """"""
+
+    # we are not asked to reduce or infer reduction
+    # so just return a copy of the existing object
+    if self.result_type not in [""reduce"", None]:
+        return self.obj.copy()
+
+    # we may need to infer
+    should_reduce = self.result_type == ""reduce""
+
+    from pandas import Series
+
+    if not should_reduce:
+
+        EMPTY_SERIES = Series([])
+        try:
+            r = self.f(EMPTY_SERIES, *self.args, **self.kwds)
+        except Exception:
+            pass
+        else:
+            should_reduce = not isinstance(r, Series)
+
+    if should_reduce:
+        # For an empty DataFrame with a reduction function, return a Series with zeros.
+        # If the function is a boolean reduction function, return a Series with False values.
+        if self.f.__name__ in [""any"", ""all""]:
+            return Series(False, index=self.agg_axis)
+        else:
+            return Series(0, index=self.agg_axis)
+    else:
+        return self.obj.copy()
+```",
+pandas-148-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+def apply_empty_result(self):
+    """"""
+    we have an empty result; at least 1 axis is 0
+
+    we will try to apply the function to an empty
+    series in order to see if this is a reduction function
+    """"""
+
+    # we are not asked to reduce or infer reduction
+    # so just return a copy of the existing object
+    if self.result_type not in [""reduce"", None]:
+        return self.obj.copy()
+
+    # we may need to infer
+    should_reduce = self.result_type == ""reduce""
+
+    from pandas import Series
+
+    if not should_reduce:
+
+        EMPTY_SERIES = Series([])
+        try:
+            r = self.f(EMPTY_SERIES, *self.args, **self.kwds)
+        except Exception:
+            pass
+        else:
+            should_reduce = not isinstance(r, Series)
+
+    if should_reduce:
+        # If self.obj is an empty DataFrame, return a Series of zeros
+        if self.obj.empty:
+            return Series(0, index=self.agg_axis)
+        else:
+            return self.obj._constructor_sliced(np.nan, index=self.agg_axis)
+    else:
+        return self.obj.copy()
+```",

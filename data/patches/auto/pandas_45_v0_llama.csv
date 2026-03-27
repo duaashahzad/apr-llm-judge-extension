@@ -1,0 +1,1244 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-45-v0_llama-0,UNKNOWN,UNKNOWN,"```python
+def sanitize_array(
+    data, index, dtype=None, copy: bool = False, raise_cast_failure: bool = False
+):
+    """"""
+    Sanitize input data to an ndarray, copy if specified, coerce to the
+    dtype if specified.
+    """"""
+    if dtype is not None:
+        dtype = pandas_dtype(dtype)
+
+    if isinstance(data, ma.MaskedArray):
+        mask = ma.getmaskarray(data)
+        if mask.any():
+            data, fill_value = maybe_upcast(data, copy=True)
+            data.soften_mask()  # set hardmask False if it was True
+            data[mask] = fill_value
+        else:
+            data = data.copy()
+
+    # extract ndarray or ExtensionArray, ensure we have no PandasArray
+    data = extract_array(data, extract_numpy=True)
+
+    # GH#846
+    if isinstance(data, np.ndarray):
+
+        if dtype is not None and is_float_dtype(data.dtype) and is_integer_dtype(dtype):
+            # possibility of nan -> garbage
+            try:
+                subarr = _try_cast(data, dtype, copy, True)
+            except ValueError:
+                if copy:
+                    subarr = data.copy()
+                else:
+                    subarr = np.array(data, copy=False)
+        else:
+            # we will try to copy be-definition here
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    elif isinstance(data, ABCExtensionArray):
+        # it is already ensured above this is not a PandasArray
+        subarr = data
+
+        if dtype is not None:
+            subarr = subarr.astype(dtype, copy=copy)
+        elif copy:
+            subarr = subarr.copy()
+        return subarr
+
+    elif isinstance(data, (list, tuple)) and len(data) > 0:
+        if dtype is not None:
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+        else:
+            subarr = maybe_convert_platform(data)
+
+        subarr = maybe_cast_to_datetime(subarr, dtype)
+
+    elif isinstance(data, range):
+        # GH#16804
+        arr = np.arange(data.start, data.stop, data.step, dtype=""int64"")
+        subarr = _try_cast(arr, dtype, copy, raise_cast_failure)
+    elif isinstance(data, set):
+        # Convert set to list to ensure correct ordering
+        data = list(data)
+        if dtype is not None:
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+        else:
+            subarr = maybe_convert_platform(data)
+
+        subarr = maybe_cast_to_datetime(subarr, dtype)
+    else:
+        subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    # scalar like, GH
+    if getattr(subarr, ""ndim"", 0) == 0:
+        if isinstance(data, list):  # pragma: no cover
+            subarr = np.array(data, dtype=object)
+        elif index is not None:
+            value = data
+
+            # figure out the dtype from the value (upcast if necessary)
+            if dtype is None:
+                dtype, value = infer_dtype_from_scalar(value)
+            else:
+                # need to possibly convert the value here
+                value = maybe_cast_to_datetime(value, dtype)
+
+            subarr = construct_1d_arraylike_from_scalar(value, len(index), dtype)
+
+        else:
+            return subarr.item()
+
+    # the result that we want
+    elif subarr.ndim == 1:
+        if index is not None:
+
+            # a 1-element ndarray
+            if len(subarr)!= len(index) and len(subarr) == 1:
+                subarr = construct_1d_arraylike_from_scalar(
+                    subarr[0], len(index), subarr.dtype
+                )
+
+    elif subarr.ndim > 1:
+        if isinstance(data, np.ndarray):
+            raise Exception(""Data must be 1-dimensional"")
+        else:
+            subarr = com.asarray_tuplesafe(data, dtype=dtype)
+
+    if not (is_extension_array_dtype(subarr.dtype) or is_extension_array_dtype(dtype)):
+        # This is to prevent mixed-type Series getting all casted to
+        # NumPy string type, e.g. NaN --> '-1#IND'.
+        if issubclass(subarr.dtype.type, str):
+            # GH#16605
+            # If not empty convert the data to dtype
+            # GH#19853: If data is a scalar, subarr has already the result
+            if not lib.is_scalar(data):
+                if not np.all(isna(data)):
+                    data = np.array(data, dtype=dtype, copy=False)
+                subarr = np.array(data, dtype=object, copy=copy)
+
+        if is_object_dtype(subarr.dtype) and not is_object_dtype(dtype):
+            inferred = lib.infer_dtype(subarr, skipna=False)
+            if inferred in {""interval"", ""period""}:
+                subarr = array(subarr)
+
+    return subarr
+```",
+pandas-45-v0_llama-1,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. The provided function `sanitize_array` is used to sanitize input data to a numpy array, with options to copy the data and coerce it to a specified dtype.
+2. The issue arises when trying to create a DataFrame with a set as a column. The set is being replicated n times, where n is the length of the set.
+3. The test function `test_construction_from_set_raises` expects a TypeError to be raised when creating a DataFrame with a set, but instead, the set is being replicated.
+4. Looking at the `sanitize_array` function, there is no specific handling for sets. Sets are unordered collections of unique elements, and they do not fit into the typical data structures used in pandas DataFrames.
+5. When a set is passed to the `sanitize_array` function, it is being treated as a scalar value and is being replicated to match the length of the index.
+
+### Fixed solution:
+```python
+def sanitize_array(
+    data, index, dtype=None, copy: bool = False, raise_cast_failure: bool = False
+):
+    """"""
+    Sanitize input data to an ndarray, copy if specified, coerce to the
+    dtype if specified.
+    """"""
+    if dtype is not None:
+        dtype = pandas_dtype(dtype)
+
+    if isinstance(data, ma.MaskedArray):
+        mask = ma.getmaskarray(data)
+        if mask.any():
+            data, fill_value = maybe_upcast(data, copy=True)
+            data.soften_mask()  # set hardmask False if it was True
+            data[mask] = fill_value
+        else:
+            data = data.copy()
+
+    # extract ndarray or ExtensionArray, ensure we have no PandasArray
+    data = extract_array(data, extract_numpy=True)
+
+    # GH#846
+    if isinstance(data, np.ndarray):
+
+        if dtype is not None and is_float_dtype(data.dtype) and is_integer_dtype(dtype):
+            # possibility of nan -> garbage
+            try:
+                subarr = _try_cast(data, dtype, copy, True)
+            except ValueError:
+                if copy:
+                    subarr = data.copy()
+                else:
+                    subarr = np.array(data, copy=False)
+        else:
+            # we will try to copy be-definition here
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    elif isinstance(data, ABCExtensionArray):
+        # it is already ensured above this is not a PandasArray
+        subarr = data
+
+        if dtype is not None:
+            subarr = subarr.astype(dtype, copy=copy)
+        elif copy:
+            subarr = subarr.copy()
+        return subarr
+
+    elif isinstance(data, (list, tuple)) and len(data) > 0:
+        if dtype is not None:
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+        else:
+            subarr = maybe_convert_platform(data)
+
+        subarr = maybe_cast_to_datetime(subarr, dtype)
+
+    elif isinstance(data, range):
+        # GH#16804
+        arr = np.arange(data.start, data.stop, data.step, dtype=""int64"")
+        subarr = _try_cast(arr, dtype, copy, raise_cast_failure)
+    elif isinstance(data, set):
+        # Raise an error for sets, as they are unordered and cannot be used as a column
+        raise TypeError(""Set type is unordered"")
+    else:
+        subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    # scalar like, GH
+    if getattr(subarr, ""ndim"", 0) == 0:
+        if isinstance(data, list):  # pragma: no cover
+            subarr = np.array(data, dtype=object)
+        elif index is not None:
+            value = data
+
+            # figure out the dtype from the value (upcast if necessary)
+            if dtype is None:
+                dtype, value = infer_dtype_from_scalar(value)
+            else:
+                # need to possibly convert the value here
+                value = maybe_cast_to_datetime(value, dtype)
+
+            subarr = construct_1d_arraylike_from_scalar(value, len(index), dtype)
+
+        else:
+            return subarr.item()
+
+    # the result that we want
+    elif subarr.ndim == 1:
+        if index is not None:
+
+            # a 1-element ndarray
+            if len(subarr)!= len(index) and len(subarr) == 1:
+                subarr = construct_1d_arraylike_from_scalar(
+                    subarr[0], len(index), subarr.dtype
+                )
+
+    elif subarr.ndim > 1:
+        if isinstance(data, np.ndarray):
+            raise Exception(""Data must be 1-dimensional"")
+        else:
+            subarr = com.asarray_tuplesafe(data, dtype=dtype)
+
+    if not (is_extension_array_dtype(subarr.dtype) or is_extension_array_dtype(dtype)):
+        # This is to prevent mixed-type Series getting all casted to
+        # NumPy string type, e.g. NaN --> '-1#IND'.
+        if issubclass(subarr.dtype.type, str):
+            # GH#16605
+            # If not empty convert the data to dtype
+            # GH#19853: If data is a scalar, subarr has already the result
+            if not lib.is_scalar(data):
+                if not np.all(isna(data)):
+                    data = np.array(data, dtype=dtype, copy=False)
+                subarr = np.array(data, dtype=object, copy=copy)
+
+        if is_object_dtype(subarr.dtype) and not is_object_dtype(dtype):
+            inferred = lib.infer_dtype(subarr, skipna=False)
+            if inferred in {""interval"", ""period""}:
+                subarr = array(subarr)
+
+    return subarr
+```
+
+### Explanation of changes:
+* Added a check for sets and raise a TypeError when a set is encountered, as sets are unordered and cannot be used as a column in a DataFrame.
+
+### Tests and example uses:
+* Test the function with a set as input: `sanitize_array({1, 2, 3}, None)` should raise a TypeError.
+* Test the function with a list as input: `sanitize_array([1, 2, 3], None)` should return a numpy array.
+* Test the function with a numpy array as input: `sanitize_array(np.array([1, 2, 3]), None)` should return a numpy array.",
+pandas-45-v0_llama-2,UNKNOWN,UNKNOWN,"```python
+def sanitize_array(
+    data, index, dtype=None, copy: bool = False, raise_cast_failure: bool = False
+):
+    """"""
+    Sanitize input data to an ndarray, copy if specified, coerce to the
+    dtype if specified.
+    """"""
+    if dtype is not None:
+        dtype = pandas_dtype(dtype)
+
+    if isinstance(data, ma.MaskedArray):
+        mask = ma.getmaskarray(data)
+        if mask.any():
+            data, fill_value = maybe_upcast(data, copy=True)
+            data.soften_mask()  # set hardmask False if it was True
+            data[mask] = fill_value
+        else:
+            data = data.copy()
+
+    # extract ndarray or ExtensionArray, ensure we have no PandasArray
+    data = extract_array(data, extract_numpy=True)
+
+    # GH#846
+    if isinstance(data, np.ndarray):
+
+        if dtype is not None and is_float_dtype(data.dtype) and is_integer_dtype(dtype):
+            # possibility of nan -> garbage
+            try:
+                subarr = _try_cast(data, dtype, copy, True)
+            except ValueError:
+                if copy:
+                    subarr = data.copy()
+                else:
+                    subarr = np.array(data, copy=False)
+        else:
+            # we will try to copy be-definition here
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    elif isinstance(data, ABCExtensionArray):
+        # it is already ensured above this is not a PandasArray
+        subarr = data
+
+        if dtype is not None:
+            subarr = subarr.astype(dtype, copy=copy)
+        elif copy:
+            subarr = subarr.copy()
+        return subarr
+
+    elif isinstance(data, (list, tuple)) and len(data) > 0:
+        if dtype is not None:
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+        else:
+            subarr = maybe_convert_platform(data)
+
+        subarr = maybe_cast_to_datetime(subarr, dtype)
+
+    elif isinstance(data, range):
+        # GH#16804
+        arr = np.arange(data.start, data.stop, data.step, dtype=""int64"")
+        subarr = _try_cast(arr, dtype, copy, raise_cast_failure)
+    elif isinstance(data, set):
+        # Convert set to list before processing
+        data = list(data)
+        if dtype is not None:
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+        else:
+            subarr = maybe_convert_platform(data)
+
+        subarr = maybe_cast_to_datetime(subarr, dtype)
+    else:
+        subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    # scalar like, GH
+    if getattr(subarr, ""ndim"", 0) == 0:
+        if isinstance(data, list):  # pragma: no cover
+            subarr = np.array(data, dtype=object)
+        elif index is not None:
+            value = data
+
+            # figure out the dtype from the value (upcast if necessary)
+            if dtype is None:
+                dtype, value = infer_dtype_from_scalar(value)
+            else:
+                # need to possibly convert the value here
+                value = maybe_cast_to_datetime(value, dtype)
+
+            subarr = construct_1d_arraylike_from_scalar(value, len(index), dtype)
+
+        else:
+            return subarr.item()
+
+    # the result that we want
+    elif subarr.ndim == 1:
+        if index is not None:
+
+            # a 1-element ndarray
+            if len(subarr)!= len(index) and len(subarr) == 1:
+                subarr = construct_1d_arraylike_from_scalar(
+                    subarr[0], len(index), subarr.dtype
+                )
+
+    elif subarr.ndim > 1:
+        if isinstance(data, np.ndarray):
+            raise Exception(""Data must be 1-dimensional"")
+        else:
+            subarr = com.asarray_tuplesafe(data, dtype=dtype)
+
+    if not (is_extension_array_dtype(subarr.dtype) or is_extension_array_dtype(dtype)):
+        # This is to prevent mixed-type Series getting all casted to
+        # NumPy string type, e.g. NaN --> '-1#IND'.
+        if issubclass(subarr.dtype.type, str):
+            # GH#16605
+            # If not empty convert the data to dtype
+            # GH#19853: If data is a scalar, subarr has already the result
+            if not lib.is_scalar(data):
+                if not np.all(isna(data)):
+                    data = np.array(data, dtype=dtype, copy=False)
+                subarr = np.array(data, dtype=object, copy=copy)
+
+        if is_object_dtype(subarr.dtype) and not is_object_dtype(dtype):
+            inferred = lib.infer_dtype(subarr, skipna=False)
+            if inferred in {""interval"", ""period""}:
+                subarr = array(subarr)
+
+    return subarr
+```",
+pandas-45-v0_llama-3,UNKNOWN,UNKNOWN,"```python
+def sanitize_array(
+    data, index, dtype=None, copy: bool = False, raise_cast_failure: bool = False
+):
+    """"""
+    Sanitize input data to an ndarray, copy if specified, coerce to the
+    dtype if specified.
+    """"""
+    if dtype is not None:
+        dtype = pandas_dtype(dtype)
+
+    if isinstance(data, ma.MaskedArray):
+        mask = ma.getmaskarray(data)
+        if mask.any():
+            data, fill_value = maybe_upcast(data, copy=True)
+            data.soften_mask()  # set hardmask False if it was True
+            data[mask] = fill_value
+        else:
+            data = data.copy()
+
+    # extract ndarray or ExtensionArray, ensure we have no PandasArray
+    data = extract_array(data, extract_numpy=True)
+
+    # GH#846
+    if isinstance(data, np.ndarray):
+
+        if dtype is not None and is_float_dtype(data.dtype) and is_integer_dtype(dtype):
+            # possibility of nan -> garbage
+            try:
+                subarr = _try_cast(data, dtype, copy, True)
+            except ValueError:
+                if copy:
+                    subarr = data.copy()
+                else:
+                    subarr = np.array(data, copy=False)
+        else:
+            # we will try to copy be-definition here
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    elif isinstance(data, ABCExtensionArray):
+        # it is already ensured above this is not a PandasArray
+        subarr = data
+
+        if dtype is not None:
+            subarr = subarr.astype(dtype, copy=copy)
+        elif copy:
+            subarr = subarr.copy()
+        return subarr
+
+    elif isinstance(data, (list, tuple)) and len(data) > 0:
+        if dtype is not None:
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+        else:
+            subarr = maybe_convert_platform(data)
+
+        subarr = maybe_cast_to_datetime(subarr, dtype)
+
+    elif isinstance(data, range):
+        # GH#16804
+        arr = np.arange(data.start, data.stop, data.step, dtype=""int64"")
+        subarr = _try_cast(arr, dtype, copy, raise_cast_failure)
+    elif isinstance(data, set):
+        # Convert set to list and then to numpy array
+        subarr = np.array(list(data))
+    else:
+        subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    # scalar like, GH
+    if getattr(subarr, ""ndim"", 0) == 0:
+        if isinstance(data, list):  # pragma: no cover
+            subarr = np.array(data, dtype=object)
+        elif index is not None:
+            value = data
+
+            # figure out the dtype from the value (upcast if necessary)
+            if dtype is None:
+                dtype, value = infer_dtype_from_scalar(value)
+            else:
+                # need to possibly convert the value here
+                value = maybe_cast_to_datetime(value, dtype)
+
+            subarr = construct_1d_arraylike_from_scalar(value, len(index), dtype)
+
+        else:
+            return subarr.item()
+
+    # the result that we want
+    elif subarr.ndim == 1:
+        if index is not None:
+
+            # a 1-element ndarray
+            if len(subarr)!= len(index) and len(subarr) == 1:
+                subarr = construct_1d_arraylike_from_scalar(
+                    subarr[0], len(index), subarr.dtype
+                )
+
+    elif subarr.ndim > 1:
+        if isinstance(data, np.ndarray):
+            raise Exception(""Data must be 1-dimensional"")
+        else:
+            subarr = com.asarray_tuplesafe(data, dtype=dtype)
+
+    if not (is_extension_array_dtype(subarr.dtype) or is_extension_array_dtype(dtype)):
+        # This is to prevent mixed-type Series getting all casted to
+        # NumPy string type, e.g. NaN --> '-1#IND'.
+        if issubclass(subarr.dtype.type, str):
+            # GH#16605
+            # If not empty convert the data to dtype
+            # GH#19853: If data is a scalar, subarr has already the result
+            if not lib.is_scalar(data):
+                if not np.all(isna(data)):
+                    data = np.array(data, dtype=dtype, copy=False)
+                subarr = np.array(data, dtype=object, copy=copy)
+
+        if is_object_dtype(subarr.dtype) and not is_object_dtype(dtype):
+            inferred = lib.infer_dtype(subarr, skipna=False)
+            if inferred in {""interval"", ""period""}:
+                subarr = array(subarr)
+
+    return subarr
+```",
+pandas-45-v0_llama-4,UNKNOWN,UNKNOWN,"```python
+def sanitize_array(
+    data, index, dtype=None, copy: bool = False, raise_cast_failure: bool = False
+):
+    """"""
+    Sanitize input data to an ndarray, copy if specified, coerce to the
+    dtype if specified.
+    """"""
+    if dtype is not None:
+        dtype = pandas_dtype(dtype)
+
+    if isinstance(data, ma.MaskedArray):
+        mask = ma.getmaskarray(data)
+        if mask.any():
+            data, fill_value = maybe_upcast(data, copy=True)
+            data.soften_mask()  # set hardmask False if it was True
+            data[mask] = fill_value
+        else:
+            data = data.copy()
+
+    # extract ndarray or ExtensionArray, ensure we have no PandasArray
+    data = extract_array(data, extract_numpy=True)
+
+    # GH#846
+    if isinstance(data, np.ndarray):
+
+        if dtype is not None and is_float_dtype(data.dtype) and is_integer_dtype(dtype):
+            # possibility of nan -> garbage
+            try:
+                subarr = _try_cast(data, dtype, copy, True)
+            except ValueError:
+                if copy:
+                    subarr = data.copy()
+                else:
+                    subarr = np.array(data, copy=False)
+        else:
+            # we will try to copy be-definition here
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    elif isinstance(data, ABCExtensionArray):
+        # it is already ensured above this is not a PandasArray
+        subarr = data
+
+        if dtype is not None:
+            subarr = subarr.astype(dtype, copy=copy)
+        elif copy:
+            subarr = subarr.copy()
+        return subarr
+
+    elif isinstance(data, (list, tuple)) and len(data) > 0:
+        if dtype is not None:
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+        else:
+            subarr = maybe_convert_platform(data)
+
+        subarr = maybe_cast_to_datetime(subarr, dtype)
+
+    elif isinstance(data, range):
+        # GH#16804
+        arr = np.arange(data.start, data.stop, data.step, dtype=""int64"")
+        subarr = _try_cast(arr, dtype, copy, raise_cast_failure)
+    elif isinstance(data, set):
+        # This line has been added to convert the set into a list
+        data = list(data)
+        subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+    else:
+        subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    # scalar like, GH
+    if getattr(subarr, ""ndim"", 0) == 0:
+        if isinstance(data, list):  # pragma: no cover
+            subarr = np.array(data, dtype=object)
+        elif index is not None:
+            value = data
+
+            # figure out the dtype from the value (upcast if necessary)
+            if dtype is None:
+                dtype, value = infer_dtype_from_scalar(value)
+            else:
+                # need to possibly convert the value here
+                value = maybe_cast_to_datetime(value, dtype)
+
+            subarr = construct_1d_arraylike_from_scalar(value, len(index), dtype)
+
+        else:
+            return subarr.item()
+
+    # the result that we want
+    elif subarr.ndim == 1:
+        if index is not None:
+
+            # a 1-element ndarray
+            if len(subarr)!= len(index) and len(subarr) == 1:
+                subarr = construct_1d_arraylike_from_scalar(
+                    subarr[0], len(index), subarr.dtype
+                )
+
+    elif subarr.ndim > 1:
+        if isinstance(data, np.ndarray):
+            raise Exception(""Data must be 1-dimensional"")
+        else:
+            subarr = com.asarray_tuplesafe(data, dtype=dtype)
+
+    if not (is_extension_array_dtype(subarr.dtype) or is_extension_array_dtype(dtype)):
+        # This is to prevent mixed-type Series getting all casted to
+        # NumPy string type, e.g. NaN --> '-1#IND'.
+        if issubclass(subarr.dtype.type, str):
+            # GH#16605
+            # If not empty convert the data to dtype
+            # GH#19853: If data is a scalar, subarr has already the result
+            if not lib.is_scalar(data):
+                if not np.all(isna(data)):
+                    data = np.array(data, dtype=dtype, copy=False)
+                subarr = np.array(data, dtype=object, copy=copy)
+
+        if is_object_dtype(subarr.dtype) and not is_object_dtype(dtype):
+            inferred = lib.infer_dtype(subarr, skipna=False)
+            if inferred in {""interval"", ""period""}:
+                subarr = array(subarr)
+
+    return subarr
+```",
+pandas-45-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+def sanitize_array(
+    data, index, dtype=None, copy: bool = False, raise_cast_failure: bool = False
+):
+    """"""
+    Sanitize input data to an ndarray, copy if specified, coerce to the
+    dtype if specified.
+    """"""
+    if dtype is not None:
+        dtype = pandas_dtype(dtype)
+
+    if isinstance(data, ma.MaskedArray):
+        mask = ma.getmaskarray(data)
+        if mask.any():
+            data, fill_value = maybe_upcast(data, copy=True)
+            data.soften_mask()  # set hardmask False if it was True
+            data[mask] = fill_value
+        else:
+            data = data.copy()
+
+    # extract ndarray or ExtensionArray, ensure we have no PandasArray
+    data = extract_array(data, extract_numpy=True)
+
+    # GH#846
+    if isinstance(data, np.ndarray):
+
+        if dtype is not None and is_float_dtype(data.dtype) and is_integer_dtype(dtype):
+            # possibility of nan -> garbage
+            try:
+                subarr = _try_cast(data, dtype, copy, True)
+            except ValueError:
+                if copy:
+                    subarr = data.copy()
+                else:
+                    subarr = np.array(data, copy=False)
+        else:
+            # we will try to copy be-definition here
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    elif isinstance(data, ABCExtensionArray):
+        # it is already ensured above this is not a PandasArray
+        subarr = data
+
+        if dtype is not None:
+            subarr = subarr.astype(dtype, copy=copy)
+        elif copy:
+            subarr = subarr.copy()
+        return subarr
+
+    elif isinstance(data, (list, tuple)) and len(data) > 0:
+        if dtype is not None:
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+        else:
+            subarr = maybe_convert_platform(data)
+
+        subarr = maybe_cast_to_datetime(subarr, dtype)
+
+    elif isinstance(data, range):
+        # GH#16804
+        arr = np.arange(data.start, data.stop, data.step, dtype=""int64"")
+        subarr = _try_cast(arr, dtype, copy, raise_cast_failure)
+    elif isinstance(data, set):
+        # Convert the set to a list
+        subarr = _try_cast(list(data), dtype, copy, raise_cast_failure)
+    else:
+        subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    # scalar like, GH
+    if getattr(subarr, ""ndim"", 0) == 0:
+        if isinstance(data, list):  # pragma: no cover
+            subarr = np.array(data, dtype=object)
+        elif index is not None:
+            value = data
+
+            # figure out the dtype from the value (upcast if necessary)
+            if dtype is None:
+                dtype, value = infer_dtype_from_scalar(value)
+            else:
+                # need to possibly convert the value here
+                value = maybe_cast_to_datetime(value, dtype)
+
+            subarr = construct_1d_arraylike_from_scalar(value, len(index), dtype)
+
+        else:
+            return subarr.item()
+
+    # the result that we want
+    elif subarr.ndim == 1:
+        if index is not None:
+
+            # a 1-element ndarray
+            if len(subarr)!= len(index) and len(subarr) == 1:
+                subarr = construct_1d_arraylike_from_scalar(
+                    subarr[0], len(index), subarr.dtype
+                )
+
+    elif subarr.ndim > 1:
+        if isinstance(data, np.ndarray):
+            raise Exception(""Data must be 1-dimensional"")
+        else:
+            subarr = com.asarray_tuplesafe(data, dtype=dtype)
+
+    if not (is_extension_array_dtype(subarr.dtype) or is_extension_array_dtype(dtype)):
+        # This is to prevent mixed-type Series getting all casted to
+        # NumPy string type, e.g. NaN --> '-1#IND'.
+        if issubclass(subarr.dtype.type, str):
+            # GH#16605
+            # If not empty convert the data to dtype
+            # GH#19853: If data is a scalar, subarr has already the result
+            if not lib.is_scalar(data):
+                if not np.all(isna(data)):
+                    data = np.array(data, dtype=dtype, copy=False)
+                subarr = np.array(data, dtype=object, copy=copy)
+
+        if is_object_dtype(subarr.dtype) and not is_object_dtype(dtype):
+            inferred = lib.infer_dtype(subarr, skipna=False)
+            if inferred in {""interval"", ""period""}:
+                subarr = array(subarr)
+
+    return subarr
+```",
+pandas-45-v0_llama-6,UNKNOWN,UNKNOWN,"```python
+def sanitize_array(
+    data, index, dtype=None, copy: bool = False, raise_cast_failure: bool = False
+):
+    """"""
+    Sanitize input data to an ndarray, copy if specified, coerce to the
+    dtype if specified.
+    """"""
+    if dtype is not None:
+        dtype = pandas_dtype(dtype)
+
+    if isinstance(data, ma.MaskedArray):
+        mask = ma.getmaskarray(data)
+        if mask.any():
+            data, fill_value = maybe_upcast(data, copy=True)
+            data.soften_mask()  # set hardmask False if it was True
+            data[mask] = fill_value
+        else:
+            data = data.copy()
+
+    # extract ndarray or ExtensionArray, ensure we have no PandasArray
+    data = extract_array(data, extract_numpy=True)
+
+    # Check if data is a set
+    if isinstance(data, set):
+        # Raise an error because sets are unordered
+        raise TypeError(""Set type is unordered"")
+
+    # GH#846
+    if isinstance(data, np.ndarray):
+
+        if dtype is not None and is_float_dtype(data.dtype) and is_integer_dtype(dtype):
+            # possibility of nan -> garbage
+            try:
+                subarr = _try_cast(data, dtype, copy, True)
+            except ValueError:
+                if copy:
+                    subarr = data.copy()
+                else:
+                    subarr = np.array(data, copy=False)
+        else:
+            # we will try to copy be-definition here
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    elif isinstance(data, ABCExtensionArray):
+        # it is already ensured above this is not a PandasArray
+        subarr = data
+
+        if dtype is not None:
+            subarr = subarr.astype(dtype, copy=copy)
+        elif copy:
+            subarr = subarr.copy()
+        return subarr
+
+    elif isinstance(data, (list, tuple)) and len(data) > 0:
+        if dtype is not None:
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+        else:
+            subarr = maybe_convert_platform(data)
+
+        subarr = maybe_cast_to_datetime(subarr, dtype)
+
+    elif isinstance(data, range):
+        # GH#16804
+        arr = np.arange(data.start, data.stop, data.step, dtype=""int64"")
+        subarr = _try_cast(arr, dtype, copy, raise_cast_failure)
+    else:
+        subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    # scalar like, GH
+    if getattr(subarr, ""ndim"", 0) == 0:
+        if isinstance(data, list):  # pragma: no cover
+            subarr = np.array(data, dtype=object)
+        elif index is not None:
+            value = data
+
+            # figure out the dtype from the value (upcast if necessary)
+            if dtype is None:
+                dtype, value = infer_dtype_from_scalar(value)
+            else:
+                # need to possibly convert the value here
+                value = maybe_cast_to_datetime(value, dtype)
+
+            subarr = construct_1d_arraylike_from_scalar(value, len(index), dtype)
+
+        else:
+            return subarr.item()
+
+    # the result that we want
+    elif subarr.ndim == 1:
+        if index is not None:
+
+            # a 1-element ndarray
+            if len(subarr)!= len(index) and len(subarr) == 1:
+                subarr = construct_1d_arraylike_from_scalar(
+                    subarr[0], len(index), subarr.dtype
+                )
+
+    elif subarr.ndim > 1:
+        if isinstance(data, np.ndarray):
+            raise Exception(""Data must be 1-dimensional"")
+        else:
+            subarr = com.asarray_tuplesafe(data, dtype=dtype)
+
+    if not (is_extension_array_dtype(subarr.dtype) or is_extension_array_dtype(dtype)):
+        # This is to prevent mixed-type Series getting all casted to
+        # NumPy string type, e.g. NaN --> '-1#IND'.
+        if issubclass(subarr.dtype.type, str):
+            # GH#16605
+            # If not empty convert the data to dtype
+            # GH#19853: If data is a scalar, subarr has already the result
+            if not lib.is_scalar(data):
+                if not np.all(isna(data)):
+                    data = np.array(data, dtype=dtype, copy=False)
+                subarr = np.array(data, dtype=object, copy=copy)
+
+        if is_object_dtype(subarr.dtype) and not is_object_dtype(dtype):
+            inferred = lib.infer_dtype(subarr, skipna=False)
+            if inferred in {""interval"", ""period""}:
+                subarr = array(subarr)
+
+    return subarr
+```",
+pandas-45-v0_llama-7,UNKNOWN,UNKNOWN,"```python
+def sanitize_array(
+    data, index, dtype=None, copy: bool = False, raise_cast_failure: bool = False
+):
+    """"""
+    Sanitize input data to an ndarray, copy if specified, coerce to the
+    dtype if specified.
+    """"""
+    if dtype is not None:
+        dtype = pandas_dtype(dtype)
+
+    if isinstance(data, ma.MaskedArray):
+        mask = ma.getmaskarray(data)
+        if mask.any():
+            data, fill_value = maybe_upcast(data, copy=True)
+            data.soften_mask()  # set hardmask False if it was True
+            data[mask] = fill_value
+        else:
+            data = data.copy()
+
+    # extract ndarray or ExtensionArray, ensure we have no PandasArray
+    data = extract_array(data, extract_numpy=True)
+
+    if isinstance(data, set):
+        # Convert set to list before processing
+        data = list(data)
+
+    # GH#846
+    if isinstance(data, np.ndarray):
+
+        if dtype is not None and is_float_dtype(data.dtype) and is_integer_dtype(dtype):
+            # possibility of nan -> garbage
+            try:
+                subarr = _try_cast(data, dtype, copy, True)
+            except ValueError:
+                if copy:
+                    subarr = data.copy()
+                else:
+                    subarr = np.array(data, copy=False)
+        else:
+            # we will try to copy be-definition here
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    elif isinstance(data, ABCExtensionArray):
+        # it is already ensured above this is not a PandasArray
+        subarr = data
+
+        if dtype is not None:
+            subarr = subarr.astype(dtype, copy=copy)
+        elif copy:
+            subarr = subarr.copy()
+        return subarr
+
+    elif isinstance(data, (list, tuple)) and len(data) > 0:
+        if dtype is not None:
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+        else:
+            subarr = maybe_convert_platform(data)
+
+        subarr = maybe_cast_to_datetime(subarr, dtype)
+
+    elif isinstance(data, range):
+        # GH#16804
+        arr = np.arange(data.start, data.stop, data.step, dtype=""int64"")
+        subarr = _try_cast(arr, dtype, copy, raise_cast_failure)
+    else:
+        subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    # scalar like, GH
+    if getattr(subarr, ""ndim"", 0) == 0:
+        if isinstance(data, list):  # pragma: no cover
+            subarr = np.array(data, dtype=object)
+        elif index is not None:
+            value = data
+
+            # figure out the dtype from the value (upcast if necessary)
+            if dtype is None:
+                dtype, value = infer_dtype_from_scalar(value)
+            else:
+                # need to possibly convert the value here
+                value = maybe_cast_to_datetime(value, dtype)
+
+            subarr = construct_1d_arraylike_from_scalar(value, len(index), dtype)
+
+        else:
+            return subarr.item()
+
+    # the result that we want
+    elif subarr.ndim == 1:
+        if index is not None:
+
+            # a 1-element ndarray
+            if len(subarr)!= len(index) and len(subarr) == 1:
+                subarr = construct_1d_arraylike_from_scalar(
+                    subarr[0], len(index), subarr.dtype
+                )
+
+    elif subarr.ndim > 1:
+        if isinstance(data, np.ndarray):
+            raise Exception(""Data must be 1-dimensional"")
+        else:
+            subarr = com.asarray_tuplesafe(data, dtype=dtype)
+
+    if not (is_extension_array_dtype(subarr.dtype) or is_extension_array_dtype(dtype)):
+        # This is to prevent mixed-type Series getting all casted to
+        # NumPy string type, e.g. NaN --> '-1#IND'.
+        if issubclass(subarr.dtype.type, str):
+            # GH#16605
+            # If not empty convert the data to dtype
+            # GH#19853: If data is a scalar, subarr has already the result
+            if not lib.is_scalar(data):
+                if not np.all(isna(data)):
+                    data = np.array(data, dtype=dtype, copy=False)
+                subarr = np.array(data, dtype=object, copy=copy)
+
+        if is_object_dtype(subarr.dtype) and not is_object_dtype(dtype):
+            inferred = lib.infer_dtype(subarr, skipna=False)
+            if inferred in {""interval"", ""period""}:
+                subarr = array(subarr)
+
+    return subarr
+```",
+pandas-45-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+def sanitize_array(
+    data, index, dtype=None, copy: bool = False, raise_cast_failure: bool = False
+):
+    """"""
+    Sanitize input data to an ndarray, copy if specified, coerce to the
+    dtype if specified.
+    """"""
+    if dtype is not None:
+        dtype = pandas_dtype(dtype)
+
+    if isinstance(data, ma.MaskedArray):
+        mask = ma.getmaskarray(data)
+        if mask.any():
+            data, fill_value = maybe_upcast(data, copy=True)
+            data.soften_mask()  # set hardmask False if it was True
+            data[mask] = fill_value
+        else:
+            data = data.copy()
+
+    # extract ndarray or ExtensionArray, ensure we have no PandasArray
+    data = extract_array(data, extract_numpy=True)
+
+    # GH#846
+    if isinstance(data, np.ndarray):
+
+        if dtype is not None and is_float_dtype(data.dtype) and is_integer_dtype(dtype):
+            # possibility of nan -> garbage
+            try:
+                subarr = _try_cast(data, dtype, copy, True)
+            except ValueError:
+                if copy:
+                    subarr = data.copy()
+                else:
+                    subarr = np.array(data, copy=False)
+        else:
+            # we will try to copy be-definition here
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    elif isinstance(data, ABCExtensionArray):
+        # it is already ensured above this is not a PandasArray
+        subarr = data
+
+        if dtype is not None:
+            subarr = subarr.astype(dtype, copy=copy)
+        elif copy:
+            subarr = subarr.copy()
+        return subarr
+
+    elif isinstance(data, (list, tuple)) and len(data) > 0:
+        if dtype is not None:
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+        else:
+            subarr = maybe_convert_platform(data)
+
+        subarr = maybe_cast_to_datetime(subarr, dtype)
+
+    elif isinstance(data, range):
+        # GH#16804
+        arr = np.arange(data.start, data.stop, data.step, dtype=""int64"")
+        subarr = _try_cast(arr, dtype, copy, raise_cast_failure)
+    elif isinstance(data, set):
+        # Raise an error when a set is used to create a DataFrame
+        raise TypeError(""Set type is unordered"")
+    else:
+        subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    # scalar like, GH
+    if getattr(subarr, ""ndim"", 0) == 0:
+        if isinstance(data, list):  # pragma: no cover
+            subarr = np.array(data, dtype=object)
+        elif index is not None:
+            value = data
+
+            # figure out the dtype from the value (upcast if necessary)
+            if dtype is None:
+                dtype, value = infer_dtype_from_scalar(value)
+            else:
+                # need to possibly convert the value here
+                value = maybe_cast_to_datetime(value, dtype)
+
+            subarr = construct_1d_arraylike_from_scalar(value, len(index), dtype)
+
+        else:
+            return subarr.item()
+
+    # the result that we want
+    elif subarr.ndim == 1:
+        if index is not None:
+
+            # a 1-element ndarray
+            if len(subarr)!= len(index) and len(subarr) == 1:
+                subarr = construct_1d_arraylike_from_scalar(
+                    subarr[0], len(index), subarr.dtype
+                )
+
+    elif subarr.ndim > 1:
+        if isinstance(data, np.ndarray):
+            raise Exception(""Data must be 1-dimensional"")
+        else:
+            subarr = com.asarray_tuplesafe(data, dtype=dtype)
+
+    if not (is_extension_array_dtype(subarr.dtype) or is_extension_array_dtype(dtype)):
+        # This is to prevent mixed-type Series getting all casted to
+        # NumPy string type, e.g. NaN --> '-1#IND'.
+        if issubclass(subarr.dtype.type, str):
+            # GH#16605
+            # If not empty convert the data to dtype
+            # GH#19853: If data is a scalar, subarr has already the result
+            if not lib.is_scalar(data):
+                if not np.all(isna(data)):
+                    data = np.array(data, dtype=dtype, copy=False)
+                subarr = np.array(data, dtype=object, copy=copy)
+
+        if is_object_dtype(subarr.dtype) and not is_object_dtype(dtype):
+            inferred = lib.infer_dtype(subarr, skipna=False)
+            if inferred in {""interval"", ""period""}:
+                subarr = array(subarr)
+
+    return subarr
+```",
+pandas-45-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+def sanitize_array(
+    data, index, dtype=None, copy: bool = False, raise_cast_failure: bool = False
+):
+    """"""
+    Sanitize input data to an ndarray, copy if specified, coerce to the
+    dtype if specified.
+    """"""
+    if dtype is not None:
+        dtype = pandas_dtype(dtype)
+
+    if isinstance(data, ma.MaskedArray):
+        mask = ma.getmaskarray(data)
+        if mask.any():
+            data, fill_value = maybe_upcast(data, copy=True)
+            data.soften_mask()  # set hardmask False if it was True
+            data[mask] = fill_value
+        else:
+            data = data.copy()
+
+    # extract ndarray or ExtensionArray, ensure we have no PandasArray
+    data = extract_array(data, extract_numpy=True)
+
+    # Check for set type and raise TypeError
+    if isinstance(data, set):
+        raise TypeError(""Set type is unordered"")
+
+    # GH#846
+    if isinstance(data, np.ndarray):
+
+        if dtype is not None and is_float_dtype(data.dtype) and is_integer_dtype(dtype):
+            # possibility of nan -> garbage
+            try:
+                subarr = _try_cast(data, dtype, copy, True)
+            except ValueError:
+                if copy:
+                    subarr = data.copy()
+                else:
+                    subarr = np.array(data, copy=False)
+        else:
+            # we will try to copy be-definition here
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    elif isinstance(data, ABCExtensionArray):
+        # it is already ensured above this is not a PandasArray
+        subarr = data
+
+        if dtype is not None:
+            subarr = subarr.astype(dtype, copy=copy)
+        elif copy:
+            subarr = subarr.copy()
+        return subarr
+
+    elif isinstance(data, (list, tuple)) and len(data) > 0:
+        if dtype is not None:
+            subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+        else:
+            subarr = maybe_convert_platform(data)
+
+        subarr = maybe_cast_to_datetime(subarr, dtype)
+
+    elif isinstance(data, range):
+        # GH#16804
+        arr = np.arange(data.start, data.stop, data.step, dtype=""int64"")
+        subarr = _try_cast(arr, dtype, copy, raise_cast_failure)
+    else:
+        subarr = _try_cast(data, dtype, copy, raise_cast_failure)
+
+    # scalar like, GH
+    if getattr(subarr, ""ndim"", 0) == 0:
+        if isinstance(data, list):  # pragma: no cover
+            subarr = np.array(data, dtype=object)
+        elif index is not None:
+            value = data
+
+            # figure out the dtype from the value (upcast if necessary)
+            if dtype is None:
+                dtype, value = infer_dtype_from_scalar(value)
+            else:
+                # need to possibly convert the value here
+                value = maybe_cast_to_datetime(value, dtype)
+
+            subarr = construct_1d_arraylike_from_scalar(value, len(index), dtype)
+
+        else:
+            return subarr.item()
+
+    # the result that we want
+    elif subarr.ndim == 1:
+        if index is not None:
+
+            # a 1-element ndarray
+            if len(subarr)!= len(index) and len(subarr) == 1:
+                subarr = construct_1d_arraylike_from_scalar(
+                    subarr[0], len(index), subarr.dtype
+                )
+
+    elif subarr.ndim > 1:
+        if isinstance(data, np.ndarray):
+            raise Exception(""Data must be 1-dimensional"")
+        else:
+            subarr = com.asarray_tuplesafe(data, dtype=dtype)
+
+    if not (is_extension_array_dtype(subarr.dtype) or is_extension_array_dtype(dtype)):
+        # This is to prevent mixed-type Series getting all casted to
+        # NumPy string type, e.g. NaN --> '-1#IND'.
+        if issubclass(subarr.dtype.type, str):
+            # GH#16605
+            # If not empty convert the data to dtype
+            # GH#19853: If data is a scalar, subarr has already the result
+            if not lib.is_scalar(data):
+                if not np.all(isna(data)):
+                    data = np.array(data, dtype=dtype, copy=False)
+                subarr = np.array(data, dtype=object, copy=copy)
+
+        if is_object_dtype(subarr.dtype) and not is_object_dtype(dtype):
+            inferred = lib.infer_dtype(subarr, skipna=False)
+            if inferred in {""interval"", ""period""}:
+                subarr = array(subarr)
+
+    return subarr
+```",

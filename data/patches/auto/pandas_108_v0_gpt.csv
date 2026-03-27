@@ -1,0 +1,708 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-108-v0_gpt-0,UNKNOWN,UNKNOWN,"```python
+def infer_dtype_from_scalar(val, pandas_dtype: bool = False):
+    """"""
+    Interpret the dtype from a scalar.
+
+    Parameters
+    ----------
+    pandas_dtype : bool, default False
+        whether to infer dtype including pandas extension types.
+        If False, scalar belongs to pandas extension types is inferred as
+        object
+    """"""
+
+    dtype = np.object_
+
+    # a 1-element ndarray
+    if isinstance(val, np.ndarray):
+        msg = ""invalid ndarray passed to infer_dtype_from_scalar""
+        if val.ndim != 0:
+            raise ValueError(msg)
+
+        dtype = val.dtype
+        val = val.item()
+
+    elif isinstance(val, str):
+        dtype = np.object_
+
+    elif isinstance(val, (np.datetime64, datetime)):
+        val = tslibs.Timestamp(val)
+        if val is tslibs.NaT or val.tz is None:
+            dtype = np.dtype(""M8[ns]"")
+        else:
+            if pandas_dtype:
+                dtype = DatetimeTZDtype(unit=""ns"", tz=val.tz)
+            else:
+                return np.object_, val
+        val = val.value
+
+    elif isinstance(val, (np.timedelta64, timedelta)):
+        val = tslibs.Timedelta(val).value
+        dtype = np.dtype(""m8[ns]"")
+
+    elif is_bool(val):
+        dtype = np.bool_
+
+    elif is_integer(val):
+        if isinstance(val, np.integer):
+            dtype = type(val)
+        else:
+            dtype = np.int64
+
+    elif is_float(val):
+        if isinstance(val, np.floating):
+            dtype = type(val)
+        else:
+            dtype = np.float64
+
+    elif is_complex(val):
+        dtype = np.complex_
+
+    elif pandas_dtype:
+        if lib.is_period(val):
+            dtype = PeriodDtype(freq=val.freq)
+            val = val.ordinal
+        elif isinstance(val, pd.Interval):
+            dtype = pd.IntervalDtype(subtype=val.left.__class__.__name__)
+            val = val.ordinal
+
+    return dtype, val
+```",
+pandas-108-v0_gpt-1,UNKNOWN,UNKNOWN,"```python
+def infer_dtype_from_scalar(val, pandas_dtype: bool = False):
+    """"""
+    Interpret the dtype from a scalar.
+
+    Parameters
+    ----------
+    pandas_dtype : bool, default False
+        whether to infer dtype including pandas extension types.
+        If False, scalar belongs to pandas extension types is inferred as
+        object
+    """"""
+
+    dtype = np.object_
+
+    # a 1-element ndarray
+    if isinstance(val, np.ndarray):
+        msg = ""invalid ndarray passed to infer_dtype_from_scalar""
+        if val.ndim != 0:
+            raise ValueError(msg)
+
+        dtype = val.dtype
+        val = val.item()
+
+    elif isinstance(val, str):
+        dtype = np.object_
+
+    elif isinstance(val, (np.datetime64, datetime)):
+        val = tslibs.Timestamp(val)
+        if val is tslibs.NaT or val.tz is None:
+            dtype = np.dtype(""M8[ns]"")
+        else:
+            if pandas_dtype:
+                dtype = DatetimeTZDtype(unit=""ns"", tz=val.tz)
+            else:
+                return np.object_, val
+        val = val.value
+
+    elif isinstance(val, (np.timedelta64, timedelta)):
+        val = tslibs.Timedelta(val).value
+        dtype = np.dtype(""m8[ns]"")
+
+    elif is_bool(val):
+        dtype = np.bool_
+
+    elif is_integer(val):
+        if isinstance(val, np.integer):
+            dtype = type(val)
+        else:
+            dtype = np.int64
+            
+    elif is_float(val):
+        if isinstance(val, np.floating):
+            dtype = type(val)
+        else:
+            dtype = np.float64
+
+    elif is_complex(val):
+        dtype = np.complex_
+
+    elif isinstance(val, pd.Interval) and pandas_dtype:
+        # New handling for Interval type
+        closed = val.closed
+        if is_integer(val.left) and is_integer(val.right):
+            dtype = 'interval[int64]'
+        elif is_float(val.left) and is_float(val.right):
+            dtype = 'interval[float64]'
+        elif isinstance(val.left, (Timestamp, np.datetime64)) and isinstance(val.right, (Timestamp, np.datetime64)):
+            dtype = 'interval[datetime64[ns]]'
+        elif isinstance(val.left, Timedelta) and isinstance(val.right, Timedelta):
+            dtype = 'interval[timedelta64[ns]]'
+        else:
+            dtype = np.object_
+
+    return dtype, val
+```",
+pandas-108-v0_gpt-2,UNKNOWN,UNKNOWN,"```python
+def infer_dtype_from_scalar(val, pandas_dtype: bool = False):
+    """"""
+    Interpret the dtype from a scalar.
+
+    Parameters
+    ----------
+    pandas_dtype : bool, default False
+        whether to infer dtype including pandas extension types.
+        If False, scalar belongs to pandas extension types is inferred as
+        object
+    """"""
+
+    dtype = np.object_
+
+    # a 1-element ndarray
+    if isinstance(val, np.ndarray):
+        msg = ""invalid ndarray passed to infer_dtype_from_scalar""
+        if val.ndim != 0:
+            raise ValueError(msg)
+
+        dtype = val.dtype
+        val = val.item()
+
+    elif isinstance(val, str):
+        dtype = np.object_
+
+    elif isinstance(val, (np.datetime64, datetime)):
+        val = tslibs.Timestamp(val)
+        if val is tslibs.NaT or val.tz is None:
+            dtype = np.dtype(""M8[ns]"")
+        else:
+            if pandas_dtype:
+                dtype = DatetimeTZDtype(unit=""ns"", tz=val.tz)
+            else:
+                return np.object_, val
+        val = val.value
+
+    elif isinstance(val, (np.timedelta64, timedelta)):
+        val = tslibs.Timedelta(val).value
+        dtype = np.dtype(""m8[ns]"")
+
+    elif is_bool(val):
+        dtype = np.bool_
+
+    elif is_integer(val):
+        if isinstance(val, np.integer):
+            dtype = type(val)
+        else:
+            dtype = np.int64
+
+    elif is_float(val):
+        if isinstance(val, np.floating):
+            dtype = type(val)
+        else:
+            dtype = np.float64
+
+    elif is_complex(val):
+        dtype = np.complex_
+
+    elif isinstance(val, pd.Interval) and pandas_dtype:
+        dtype = pd.IntervalDtype(subtype=np.int64 if is_integer(val.left) else np.float64 if is_float(val.left) else np.object_)
+        
+    elif pandas_dtype:
+        if lib.is_period(val):
+            dtype = PeriodDtype(freq=val.freq)
+            val = val.ordinal
+
+    return dtype, val
+```",
+pandas-108-v0_gpt-3,UNKNOWN,UNKNOWN,"```python
+def infer_dtype_from_scalar(val, pandas_dtype: bool = False):
+    """"""
+    Interpret the dtype from a scalar.
+
+    Parameters
+    ----------
+    pandas_dtype : bool, default False
+        whether to infer dtype including pandas extension types.
+        If False, scalar belongs to pandas extension types is inferred as
+        object
+    """"""
+
+    dtype = np.object_
+
+    # a 1-element ndarray
+    if isinstance(val, np.ndarray):
+        msg = ""invalid ndarray passed to infer_dtype_from_scalar""
+        if val.ndim != 0:
+            raise ValueError(msg)
+
+        dtype = val.dtype
+        val = val.item()
+
+    elif isinstance(val, str):
+        dtype = np.object_
+
+    elif isinstance(val, (np.datetime64, datetime)):
+        val = tslibs.Timestamp(val)
+        if val is tslibs.NaT or val.tz is None:
+            dtype = np.dtype(""M8[ns]"")
+        else:
+            if pandas_dtype:
+                dtype = DatetimeTZDtype(unit=""ns"", tz=val.tz)
+            else:
+                return np.object_, val
+        val = val.value
+
+    elif isinstance(val, (np.timedelta64, timedelta)):
+        val = tslibs.Timedelta(val).value
+        dtype = np.dtype(""m8[ns]"")
+
+    elif is_bool(val):
+        dtype = np.bool_
+
+    elif is_integer(val):
+        if isinstance(val, np.integer):
+            dtype = type(val)
+        else:
+            dtype = np.int64
+
+    elif is_float(val):
+        if isinstance(val, np.floating):
+            dtype = type(val)
+        else:
+            dtype = np.float64
+
+    elif is_complex(val):
+        dtype = np.complex_
+
+    elif isinstance(val, pd.Interval) and pandas_dtype:
+        dtype = pd.IntervalDtype(subtype=np.int64) if isinstance(val.left, int) else pd.IntervalDtype()
+        val = val.to_tuple()
+
+    return dtype, val
+```",
+pandas-108-v0_gpt-4,UNKNOWN,UNKNOWN,"```python
+def infer_dtype_from_scalar(val, pandas_dtype: bool = False):
+    """"""
+    Interpret the dtype from a scalar.
+
+    Parameters
+    ----------
+    pandas_dtype : bool, default False
+        whether to infer dtype including pandas extension types.
+        If False, scalar belongs to pandas extension types is inferred as
+        object
+    """"""
+
+    dtype = np.object_
+
+    # a 1-element ndarray
+    if isinstance(val, np.ndarray):
+        msg = ""invalid ndarray passed to infer_dtype_from_scalar""
+        if val.ndim != 0:
+            raise ValueError(msg)
+
+        dtype = val.dtype
+        val = val.item()
+
+    elif isinstance(val, str):
+        dtype = np.object_
+
+    elif isinstance(val, (np.datetime64, datetime)):
+        val = tslibs.Timestamp(val)
+        if val is tslibs.NaT or val.tz is None:
+            dtype = np.dtype(""M8[ns]"")
+        else:
+            if pandas_dtype:
+                dtype = DatetimeTZDtype(unit=""ns"", tz=val.tz)
+            else:
+                return np.object_, val
+        val = val.value
+
+    elif isinstance(val, (np.timedelta64, timedelta)):
+        val = tslibs.Timedelta(val).value
+        dtype = np.dtype(""m8[ns]"")
+
+    elif is_bool(val):
+        dtype = np.bool_
+
+    elif is_integer(val):
+        if isinstance(val, np.integer):
+            dtype = type(val)
+        else:
+            dtype = np.int64
+
+    elif is_float(val):
+        if isinstance(val, np.floating):
+            dtype = type(val)
+        else:
+            dtype = np.float64
+
+    elif is_complex(val):
+        dtype = np.complex_
+
+    elif isinstance(val, pd.Interval) and pandas_dtype:
+        dtype = f""interval[{np.int64 if isinstance(val.left, (int, np.integer)) else np.float64}]""
+        val = val.ordinal
+
+    elif pandas_dtype:
+        if lib.is_period(val):
+            dtype = PeriodDtype(freq=val.freq)
+            val = val.ordinal
+
+    return dtype, val
+```",
+pandas-108-v0_gpt-5,UNKNOWN,UNKNOWN,"```python
+def infer_dtype_from_scalar(val, pandas_dtype: bool = False):
+    """"""
+    Interpret the dtype from a scalar.
+
+    Parameters
+    ----------
+    pandas_dtype : bool, default False
+        whether to infer dtype including pandas extension types.
+        If False, scalar belongs to pandas extension types is inferred as
+        object
+    """"""
+
+    dtype = np.object_
+
+    # a 1-element ndarray
+    if isinstance(val, np.ndarray):
+        msg = ""invalid ndarray passed to infer_dtype_from_scalar""
+        if val.ndim != 0:
+            raise ValueError(msg)
+
+        dtype = val.dtype
+        val = val.item()
+
+    elif isinstance(val, str):
+        dtype = np.object_
+
+    elif isinstance(val, (np.datetime64, datetime)):
+        val = tslibs.Timestamp(val)
+        if val is tslibs.NaT or val.tz is None:
+            dtype = np.dtype(""M8[ns]"")
+        else:
+            if pandas_dtype:
+                dtype = DatetimeTZDtype(unit=""ns"", tz=val.tz)
+            else:
+                return np.object_, val
+        val = val.value
+
+    elif isinstance(val, (np.timedelta64, timedelta)):
+        val = tslibs.Timedelta(val).value
+        dtype = np.dtype(""m8[ns]"")
+
+    elif is_bool(val):
+        dtype = np.bool_
+
+    elif is_integer(val):
+        if isinstance(val, np.integer):
+            dtype = type(val)
+        else:
+            dtype = np.int64
+
+    elif is_float(val):
+        if isinstance(val, np.floating):
+            dtype = type(val)
+        else:
+            dtype = np.float64
+
+    elif is_complex(val):
+        dtype = np.complex_
+
+    elif isinstance(val, pd.Interval) and pandas_dtype:
+        # Getting the subtype of the Interval
+        subtype = np.int64 if np.issubdtype(val.left, np.integer) else np.float64
+        dtype = pd.IntervalDtype(subtype=subtype)
+
+    elif pandas_dtype:
+        if lib.is_period(val):
+            dtype = PeriodDtype(freq=val.freq)
+            val = val.ordinal
+
+    return dtype, val
+```",
+pandas-108-v0_gpt-6,UNKNOWN,UNKNOWN,"```python
+def infer_dtype_from_scalar(val, pandas_dtype: bool = False):
+    """"""
+    Interpret the dtype from a scalar.
+
+    Parameters
+    ----------
+    pandas_dtype : bool, default False
+        whether to infer dtype including pandas extension types.
+        If False, scalar belongs to pandas extension types is inferred as
+        object
+    """"""
+
+    dtype = np.object_
+
+    # a 1-element ndarray
+    if isinstance(val, np.ndarray):
+        msg = ""invalid ndarray passed to infer_dtype_from_scalar""
+        if val.ndim != 0:
+            raise ValueError(msg)
+
+        dtype = val.dtype
+        val = val.item()
+
+    elif isinstance(val, str):
+        dtype = np.object_
+
+    elif isinstance(val, (np.datetime64, datetime)):
+        val = tslibs.Timestamp(val)
+        if val is tslibs.NaT or val.tz is None:
+            dtype = np.dtype(""M8[ns]"")
+        else:
+            if pandas_dtype:
+                dtype = DatetimeTZDtype(unit=""ns"", tz=val.tz)
+            else:
+                return np.object_, val
+        val = val.value
+
+    elif isinstance(val, (np.timedelta64, timedelta)):
+        val = tslibs.Timedelta(val).value
+        dtype = np.dtype(""m8[ns]"")
+
+    elif is_bool(val):
+        dtype = np.bool_
+
+    elif is_integer(val):
+        if isinstance(val, np.integer):
+            dtype = type(val)
+        else:
+            dtype = np.int64
+
+    elif is_float(val):
+        if isinstance(val, np.floating):
+            dtype = type(val)
+        else:
+            dtype = np.float64
+
+    elif is_complex(val):
+        dtype = np.complex_
+
+    elif pandas_dtype and isinstance(val, pd.Interval):
+        dtype = pd.IntervalDtype(subtype=np.int64 if is_integer(val.left) else np.float64 if is_float(val.left) else np.object_)
+        val = val
+
+    elif pandas_dtype:
+        if lib.is_period(val):
+            dtype = PeriodDtype(freq=val.freq)
+            val = val.ordinal
+
+    return dtype, val
+```",
+pandas-108-v0_gpt-7,UNKNOWN,UNKNOWN,"```python
+def infer_dtype_from_scalar(val, pandas_dtype: bool = False):
+    """"""
+    Interpret the dtype from a scalar.
+
+    Parameters
+    ----------
+    pandas_dtype : bool, default False
+        whether to infer dtype including pandas extension types.
+        If False, scalar belongs to pandas extension types is inferred as
+        object
+    """"""
+
+    dtype = np.object_
+
+    # a 1-element ndarray
+    if isinstance(val, np.ndarray):
+        msg = ""invalid ndarray passed to infer_dtype_from_scalar""
+        if val.ndim != 0:
+            raise ValueError(msg)
+
+        dtype = val.dtype
+        val = val.item()
+
+    elif isinstance(val, str):
+        dtype = np.object_
+
+    elif isinstance(val, (np.datetime64, datetime)):
+        val = tslibs.Timestamp(val)
+        if val is tslibs.NaT or val.tz is None:
+            dtype = np.dtype(""M8[ns]"")
+        else:
+            if pandas_dtype:
+                dtype = DatetimeTZDtype(unit=""ns"", tz=val.tz)
+            else:
+                return np.object_, val
+        val = val.value
+
+    elif isinstance(val, (np.timedelta64, timedelta)):
+        val = tslibs.Timedelta(val).value
+        dtype = np.dtype(""m8[ns]"")
+
+    elif is_bool(val):
+        dtype = np.bool_
+
+    elif is_integer(val):
+        if isinstance(val, np.integer):
+            dtype = type(val)
+        else:
+            dtype = np.int64
+
+    elif is_float(val):
+        if isinstance(val, np.floating):
+            dtype = type(val)
+        else:
+            dtype = np.float64
+
+    elif is_complex(val):
+        dtype = np.complex_
+
+    elif isinstance(val, pd.Interval) and pandas_dtype:
+        # Infer the IntervalDtype
+        dtype = pd.IntervalDtype(subtype=np.int64 if is_integer(val.left) else np.float64)
+
+    elif pandas_dtype:
+        if lib.is_period(val):
+            dtype = PeriodDtype(freq=val.freq)
+            val = val.ordinal
+
+    return dtype, val
+```",
+pandas-108-v0_gpt-8,UNKNOWN,UNKNOWN,"```python
+def infer_dtype_from_scalar(val, pandas_dtype: bool = False):
+    """"""
+    Interpret the dtype from a scalar.
+
+    Parameters
+    ----------
+    pandas_dtype : bool, default False
+        whether to infer dtype including pandas extension types.
+        If False, scalar belongs to pandas extension types is inferred as
+        object
+    """"""
+
+    dtype = np.object_
+
+    # a 1-element ndarray
+    if isinstance(val, np.ndarray):
+        msg = ""invalid ndarray passed to infer_dtype_from_scalar""
+        if val.ndim != 0:
+            raise ValueError(msg)
+
+        dtype = val.dtype
+        val = val.item()
+
+    elif isinstance(val, str):
+        dtype = np.object_
+
+    elif isinstance(val, (np.datetime64, datetime)):
+        val = tslibs.Timestamp(val)
+        if val is tslibs.NaT or val.tz is None:
+            dtype = np.dtype(""M8[ns]"")
+        else:
+            if pandas_dtype:
+                dtype = DatetimeTZDtype(unit=""ns"", tz=val.tz)
+            else:
+                return np.object_, val
+        val = val.value
+
+    elif isinstance(val, (np.timedelta64, timedelta)):
+        val = tslibs.Timedelta(val).value
+        dtype = np.dtype(""m8[ns]"")
+
+    elif is_bool(val):
+        dtype = np.bool_
+
+    elif is_integer(val):
+        if isinstance(val, np.integer):
+            dtype = type(val)
+        else:
+            dtype = np.int64
+
+    elif is_float(val):
+        if isinstance(val, np.floating):
+            dtype = type(val)
+        else:
+            dtype = np.float64
+
+    elif is_complex(val):
+        dtype = np.complex_
+
+    elif pandas_dtype and isinstance(val, pd.Interval):
+        dtype = pd.IntervalDtype(subtype=val.left.dtype)
+        val = val
+
+    elif pandas_dtype and lib.is_period(val):
+        dtype = PeriodDtype(freq=val.freq)
+        val = val.ordinal
+
+    return dtype, val
+```",
+pandas-108-v0_gpt-9,UNKNOWN,UNKNOWN,"```python
+def infer_dtype_from_scalar(val, pandas_dtype: bool = False):
+    """"""
+    Interpret the dtype from a scalar.
+
+    Parameters
+    ----------
+    pandas_dtype : bool, default False
+        whether to infer dtype including pandas extension types.
+        If False, scalar belongs to pandas extension types is inferred as
+        object
+    """"""
+
+    dtype = np.object_
+
+    if isinstance(val, np.ndarray):
+        msg = ""invalid ndarray passed to infer_dtype_from_scalar""
+        if val.ndim != 0:
+            raise ValueError(msg)
+
+        dtype = val.dtype
+        val = val.item()
+
+    elif isinstance(val, str):
+        dtype = np.object_
+
+    elif isinstance(val, (np.datetime64, datetime)):
+        val = tslibs.Timestamp(val)
+        if val is tslibs.NaT or val.tz is None:
+            dtype = np.dtype(""M8[ns]"")
+        else:
+            if pandas_dtype:
+                dtype = DatetimeTZDtype(unit=""ns"", tz=val.tz)
+            else:
+                return np.object_, val
+        val = val.value
+
+    elif isinstance(val, (np.timedelta64, timedelta)):
+        val = tslibs.Timedelta(val).value
+        dtype = np.dtype(""m8[ns]"")
+
+    elif is_bool(val):
+        dtype = np.bool_
+
+    elif is_integer(val):
+        if isinstance(val, np.integer):
+            dtype = type(val)
+        else:
+            dtype = np.int64
+
+    elif is_float(val):
+        if isinstance(val, np.floating):
+            dtype = type(val)
+        else:
+            dtype = np.float64
+
+    elif is_complex(val):
+        dtype = np.complex_
+
+    elif isinstance(val, pd.Interval) and pandas_dtype:
+        # Infer the dtype from the Interval
+        dtype = IntervalDtype(subtype=val.left.dtype)  # Use the type of the left bound
+
+    if isinstance(val, pd.Interval) and pandas_dtype:
+        # Ensure to return the correct dtype when val is an Interval and pandas_dtype is True
+        subtype = np.int64 if isinstance(val.left, int) else np.float64 if isinstance(val.left, float) else np.object_
+        dtype = pd.IntervalDtype(subtype=subtype)
+
+    return dtype, val
+```",

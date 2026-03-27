@@ -1,0 +1,439 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+fastapi-9-vall_gpt-0,UNKNOWN,UNKNOWN,"```python
+def get_body_field(*, dependant: Dependant, name: str) -> Optional[Field]:
+    flat_dependant = get_flat_dependant(dependant)
+    if not flat_dependant.body_params:
+        return None
+    
+    first_param = flat_dependant.body_params[0]
+    embed = getattr(first_param.schema, ""embed"", None)
+    
+    if len(flat_dependant.body_params) == 1 and not embed:
+        return get_schema_compatible_field(field=first_param)
+    
+    model_name = ""Body_"" + name
+    BodyModel = create_model(model_name)
+    
+    for f in flat_dependant.body_params:
+        BodyModel.__fields__[f.name] = get_schema_compatible_field(field=f)
+    
+    required = any(f.required for f in flat_dependant.body_params)
+    
+    # Determine the BodySchema based on parameter types
+    if any(isinstance(f.schema, params.File) for f in flat_dependant.body_params):
+        BodySchema = params.File
+    elif any(isinstance(f.schema, params.Form) for f in flat_dependant.body_params):
+        BodySchema = params.Form
+    else:
+        BodySchema = params.Body
+    
+    # Collect media types for the body
+    media_types = set()
+    for f in flat_dependant.body_params:
+        media_type = getattr(f.schema, ""media_type"", None)
+        if media_type:
+            media_types.add(media_type)
+
+    field = Field(
+        name=""body"",
+        type_=BodyModel,
+        default=None,
+        required=required,
+        model_config=BaseConfig,
+        class_validators={},
+        alias=""body"",
+        schema=BodySchema(None, media_type=list(media_types) if media_types else None),
+    )
+    return field
+```",
+fastapi-9-vall_gpt-1,UNKNOWN,UNKNOWN,"```python
+def get_body_field(*, dependant: Dependant, name: str) -> Optional[Field]:
+    flat_dependant = get_flat_dependant(dependant)
+    if not flat_dependant.body_params:
+        return None
+    first_param = flat_dependant.body_params[0]
+    embed = getattr(first_param.schema, ""embed"", None)
+    if len(flat_dependant.body_params) == 1 and not embed:
+        return get_schema_compatible_field(field=first_param)
+
+    model_name = ""Body_"" + name
+    BodyModel = create_model(model_name)
+
+    # To handle custom media types
+    media_types = set()  
+    for f in flat_dependant.body_params:
+        BodyModel.__fields__[f.name] = get_schema_compatible_field(field=f)
+        media_types.add(getattr(f, 'media_type', 'application/json'))
+
+    required = any(f.required for f in flat_dependant.body_params)
+
+    if any(isinstance(f.schema, params.File) for f in flat_dependant.body_params):
+        BodySchema: Type[params.Body] = params.File
+    elif any(isinstance(f.schema, params.Form) for f in flat_dependant.body_params):
+        BodySchema = params.Form
+    else:
+        BodySchema = params.Body
+
+    body_param_media_types = list(media_types)
+
+    field = Field(
+        name=""body"",
+        type_=BodyModel,
+        default=None,
+        required=required,
+        model_config=BaseConfig,
+        class_validators={},
+        alias=""body"",
+        schema=BodySchema(None, media_type=body_param_media_types),
+    )
+    return field
+```",
+fastapi-9-vall_gpt-2,UNKNOWN,UNKNOWN,"```python
+def get_body_field(*, dependant: Dependant, name: str) -> Optional[Field]:
+    flat_dependant = get_flat_dependant(dependant)
+    if not flat_dependant.body_params:
+        return None
+    first_param = flat_dependant.body_params[0]
+    embed = getattr(first_param.schema, ""embed"", None)
+    
+    if len(flat_dependant.body_params) == 1 and not embed:
+        return get_schema_compatible_field(field=first_param)
+    
+    model_name = ""Body_"" + name
+    BodyModel = create_model(model_name)
+    
+    for f in flat_dependant.body_params:
+        BodyModel.__fields__[f.name] = get_schema_compatible_field(field=f)
+        
+    required = any(f.required for f in flat_dependant.body_params)
+    
+    # Determine the Body schema here
+    if any(isinstance(f.schema, params.File) for f in flat_dependant.body_params):
+        BodySchema = params.File
+    elif any(isinstance(f.schema, params.Form) for f in flat_dependant.body_params):
+        BodySchema = params.Form
+    else:
+        BodySchema = params.Body
+        
+    # Add media_type handling to the schema construction.
+    media_type = 'application/vnd.api+json'  # specify the media type
+    body_schema_kwargs = {'default': None, 'media_type': media_type}
+
+    field = Field(
+        name=""body"",
+        type_=BodyModel,
+        default=None,
+        required=required,
+        model_config=BaseConfig,
+        class_validators={},
+        alias=""body"",
+        schema=BodySchema(**body_schema_kwargs),  # pass the media type to the schema
+    )
+    
+    return field
+```",
+fastapi-9-vall_gpt-3,UNKNOWN,UNKNOWN,"```python
+def get_body_field(*, dependant: Dependant, name: str) -> Optional[Field]:
+    flat_dependant = get_flat_dependant(dependant)
+    if not flat_dependant.body_params:
+        return None
+    first_param = flat_dependant.body_params[0]
+    embed = getattr(first_param.schema, ""embed"", None)
+    
+    # Adjusting the handling of the method to allow media_type configuration.
+    media_types = set()
+    
+    # Collect media_types from all body_params
+    for param in flat_dependant.body_params:
+        media_type = getattr(param, ""media_type"", ""application/json"")
+        media_types.add(media_type)
+    
+    if len(flat_dependant.body_params) == 1 and not embed:
+        return get_schema_compatible_field(field=first_param)
+    
+    model_name = ""Body_"" + name
+    BodyModel = create_model(model_name)
+    
+    for f in flat_dependant.body_params:
+        BodyModel.__fields__[f.name] = get_schema_compatible_field(field=f)
+    
+    required = any(f.required for f in flat_dependant.body_params)
+    
+    # Update the body_schema based on collected media_types
+    if any(isinstance(f.schema, params.File) for f in flat_dependant.body_params):
+        BodySchema: Type[params.Body] = params.File
+    elif any(isinstance(f.schema, params.Form) for f in flat_dependant.body_params):
+        BodySchema = params.Form
+    else:
+        BodySchema = params.Body
+
+    body_schema_args = {
+        'default': None,
+        'media_type': next(iter(media_types)) if media_types else None
+    }
+    
+    field = Field(
+        name=""body"",
+        type_=BodyModel,
+        default=None,
+        required=required,
+        model_config=BaseConfig,
+        class_validators={},
+        alias=""body"",
+        schema=BodySchema(**body_schema_args)
+    )
+    
+    return field
+```",
+fastapi-9-vall_gpt-4,UNKNOWN,UNKNOWN,"```python
+def get_body_field(*, dependant: Dependant, name: str) -> Optional[Field]:
+    flat_dependant = get_flat_dependant(dependant)
+    if not flat_dependant.body_params:
+        return None
+    first_param = flat_dependant.body_params[0]
+    embed = getattr(first_param.schema, ""embed"", None)
+
+    if len(flat_dependant.body_params) == 1 and not embed:
+        return get_schema_compatible_field(field=first_param)
+
+    model_name = ""Body_"" + name
+    BodyModel = create_model(model_name)
+    for f in flat_dependant.body_params:
+        BodyModel.__fields__[f.name] = get_schema_compatible_field(field=f)
+    
+    required = any(f.required for f in flat_dependant.body_params)
+
+    if any(isinstance(f.schema, params.File) for f in flat_dependant.body_params):
+        BodySchema = params.File
+    elif any(isinstance(f.schema, params.Form) for f in flat_dependant.body_params):
+        BodySchema = params.Form
+    else:
+        BodySchema = params.Body
+
+    body_param_media_types = set(""application/vnd.api+json"" for f in flat_dependant.body_params)
+
+    field = Field(
+        name=""body"",
+        type_=BodyModel,
+        default=None,
+        required=required,
+        model_config=BaseConfig,
+        class_validators={},
+        alias=""body"",
+        schema=BodySchema(
+            None,
+            media_type=body_param_media_types
+        ),
+    )
+    return field
+```",
+fastapi-9-vall_gpt-5,UNKNOWN,UNKNOWN,"```python
+def get_body_field(*, dependant: Dependant, name: str) -> Optional[Field]:
+    flat_dependant = get_flat_dependant(dependant)
+    if not flat_dependant.body_params:
+        return None
+    first_param = flat_dependant.body_params[0]
+    embed = getattr(first_param.schema, ""embed"", None)
+    model_name = ""Body_"" + name
+    BodyModel = create_model(model_name)
+    
+    for f in flat_dependant.body_params:
+        BodyModel.__fields__[f.name] = get_schema_compatible_field(field=f)
+    
+    required = any(f.required for f in flat_dependant.body_params)
+    
+    # Determine the body schema based on the type of parameters
+    if any(isinstance(f.schema, params.File) for f in flat_dependant.body_params):
+        BodySchema: Type[params.Body] = params.File
+    elif any(isinstance(f.schema, params.Form) for f in flat_dependant.body_params):
+        BodySchema = params.Form
+    else:
+        BodySchema = params.Body
+
+    # Prepare additional kwargs for body schema, supporting media types
+    media_type = getattr(first_param.schema, ""media_type"", None)
+    BodySchema_kwargs = {""default"": None}
+    if media_type:
+        BodySchema_kwargs[""media_type""] = media_type
+
+    field = Field(
+        name=""body"",
+        type_=BodyModel,
+        default=None,
+        required=required,
+        model_config=BaseConfig,
+        class_validators={},
+        alias=""body"",
+        schema=BodySchema(**BodySchema_kwargs),
+    )
+    return field
+```",
+fastapi-9-vall_gpt-6,UNKNOWN,UNKNOWN,"```python
+def get_body_field(*, dependant: Dependant, name: str) -> Optional[Field]:
+    flat_dependant = get_flat_dependant(dependant)
+    if not flat_dependant.body_params:
+        return None
+    first_param = flat_dependant.body_params[0]
+    embed = getattr(first_param.schema, ""embed"", None)
+    if len(flat_dependant.body_params) == 1 and not embed:
+        return get_schema_compatible_field(field=first_param)
+    
+    model_name = ""Body_"" + name
+    BodyModel = create_model(model_name)
+    for f in flat_dependant.body_params:
+        BodyModel.__fields__[f.name] = get_schema_compatible_field(field=f)
+    
+    required = any(True for f in flat_dependant.body_params if f.required)
+    BodySchema_kwargs = {
+        ""default"": None,
+        ""media_type"": 'application/vnd.api+json' if embed else None
+    }
+    
+    if any(isinstance(f.schema, params.File) for f in flat_dependant.body_params):
+        BodySchema: Type[params.Body] = params.File
+    elif any(isinstance(f.schema, params.Form) for f in flat_dependant.body_params):
+        BodySchema = params.Form
+    else:
+        BodySchema = params.Body
+
+    field = Field(
+        name=""body"",
+        type_=BodyModel,
+        default=None,
+        required=required,
+        model_config=BaseConfig,
+        class_validators={},
+        alias=""body"",
+        schema=BodySchema(**BodySchema_kwargs),
+    )
+    return field
+```",
+fastapi-9-vall_gpt-7,UNKNOWN,UNKNOWN,"```python
+def get_body_field(*, dependant: Dependant, name: str) -> Optional[Field]:
+    flat_dependant = get_flat_dependant(dependant)
+    if not flat_dependant.body_params:
+        return None
+    first_param = flat_dependant.body_params[0]
+    embed = getattr(first_param.schema, ""embed"", None)
+    
+    model_name = ""Body_"" + name
+    BodyModel = create_model(model_name)
+    for f in flat_dependant.body_params:
+        BodyModel.__fields__[f.name] = get_schema_compatible_field(field=f)
+    
+    required = any(f.required for f in flat_dependant.body_params)
+
+    if any(isinstance(f.schema, params.File) for f in flat_dependant.body_params):
+        BodySchema = params.File
+    elif any(isinstance(f.schema, params.Form) for f in flat_dependant.body_params):
+        BodySchema = params.Form
+    else:
+        BodySchema = params.Body
+
+    media_type = 'application/vnd.api+json'
+    body_param_media_types = [media_type]  # Add media type to support the required output
+    
+    field = Field(
+        name=""body"",
+        type_=BodyModel,
+        default=None,
+        required=required,
+        model_config=BaseConfig,
+        class_validators={},
+        alias=""body"",
+        schema=BodySchema(
+            default=None,
+            media_type=media_type,  # Set specified media_type
+        ),
+    )
+    
+    return field
+```",
+fastapi-9-vall_gpt-8,UNKNOWN,UNKNOWN,"```python
+def get_body_field(*, dependant: Dependant, name: str) -> Optional[Field]:
+    flat_dependant = get_flat_dependant(dependant)
+    if not flat_dependant.body_params:
+        return None
+
+    first_param = flat_dependant.body_params[0]
+    embed = getattr(first_param.schema, ""embed"", None)
+
+    if len(flat_dependant.body_params) == 1 and not embed:
+        return get_schema_compatible_field(field=first_param)
+
+    model_name = ""Body_"" + name
+    BodyModel = create_model(model_name)
+
+    for f in flat_dependant.body_params:
+        BodyModel.__fields__[f.name] = get_schema_compatible_field(field=f)
+
+    required = any(f.required for f in flat_dependant.body_params)
+    body_param_media_types = [getattr(f.schema, ""media_type"", ""application/json"") for f in flat_dependant.body_params]
+    
+    if any(isinstance(f.schema, params.File) for f in flat_dependant.body_params):
+        BodySchema: Type[params.Body] = params.File
+    elif any(isinstance(f.schema, params.Form) for f in flat_dependant.body_params):
+        BodySchema = params.Form
+    else:
+        BodySchema = params.Body
+
+    field = Field(
+        name=""body"",
+        type_=BodyModel,
+        default=None,
+        required=required,
+        model_config=BaseConfig,
+        class_validators={},
+        alias=""body"",
+        schema=BodySchema(media_type=body_param_media_types[0] if body_param_media_types else None),
+    )
+    return field
+```",
+fastapi-9-vall_gpt-9,UNKNOWN,UNKNOWN,"```python
+def get_body_field(*, dependant: Dependant, name: str) -> Optional[Field]:
+    flat_dependant = get_flat_dependant(dependant)
+    if not flat_dependant.body_params:
+        return None
+    
+    # Determine the media types based on the body parameters
+    body_param_media_types = []
+    for param in flat_dependant.body_params:
+        if param.media_type:
+            body_param_media_types.append(param.media_type)
+
+    # Use the first parameter to determine properties
+    first_param = flat_dependant.body_params[0]
+    embed = getattr(first_param.schema, ""embed"", None)
+
+    if len(flat_dependant.body_params) == 1 and not embed:
+        return get_schema_compatible_field(field=first_param)
+    
+    model_name = ""Body_"" + name
+    BodyModel = create_model(model_name)
+    for f in flat_dependant.body_params:
+        BodyModel.__fields__[f.name] = get_schema_compatible_field(field=f)
+
+    required = any(f.required for f in flat_dependant.body_params)
+    
+    # Update the BodySchema based on the defined media type
+    if any(isinstance(f.schema, params.File) for f in flat_dependant.body_params):
+        BodySchema: Type[params.Body] = params.File
+    elif any(isinstance(f.schema, params.Form) for f in flat_dependant.body_params):
+        BodySchema = params.Form
+    else:
+        # Set the media type for the Body based on the collected media types
+        BodySchema = params.Body
+    
+    # Create the body field with custom media_type
+    field = Field(
+        name=""body"",
+        type_=BodyModel,
+        default=None,
+        required=required,
+        model_config=BaseConfig,
+        class_validators={},
+        alias=""body"",
+        schema=BodySchema(default=None, media_type=body_param_media_types[0] if body_param_media_types else None),
+    )
+    return field
+```",

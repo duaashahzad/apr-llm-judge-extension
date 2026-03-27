@@ -1,0 +1,936 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-161-v0_llama-0,UNKNOWN,UNKNOWN,"```python
+@deprecate_kwarg(old_arg_name=""fill_value"", new_arg_name=""value"")
+def fillna(self, value=None, method=None, limit=None):
+    """"""
+    Fill NA/NaN values using the specified method.
+
+    Parameters
+    ----------
+    value : scalar, dict, Series
+        If a scalar value is passed it is used to fill all missing values.
+        Alternatively, a Series or dict can be used to fill in different
+        values for each index. The value should not be a list. The
+        value(s) passed should either be in the categories or should be
+        NaN.
+    method : {'backfill', 'bfill', 'pad', 'ffill', None}, default None
+        Method to use for filling holes in reindexed Series
+        pad / ffill: propagate last valid observation forward to next valid
+        backfill / bfill: use NEXT valid observation to fill gap
+    limit : int, default None
+        (Not implemented yet for Categorical!)
+        If method is specified, this is the maximum number of consecutive
+        NaN values to forward/backward fill. In other words, if there is
+        a gap with more than this number of consecutive NaNs, it will only
+        be partially filled. If method is not specified, this is the
+        maximum number of entries along the entire axis where NaNs will be
+        filled.
+
+    Returns
+    -------
+    filled : Categorical with NA/NaN filled
+    """"""
+    value, method = validate_fillna_kwargs(
+        value, method, validate_scalar_dict_value=False
+    )
+
+    if value is None:
+        value = np.nan
+    if limit is not None:
+        raise NotImplementedError(
+            ""specifying a limit for fillna has not been implemented yet""
+        )
+
+    codes = self._codes
+
+    # pad / bfill
+    if method is not None:
+
+        values = self.to_dense().reshape(-1, len(self))
+        values = interpolate_2d(values, method, 0, None, value).astype(
+            self.categories.dtype
+        )[0]
+        codes = _get_codes_for_values(values, self.categories)
+
+    else:
+
+        # If value is a dict or a Series (a dict value has already
+        # been converted to a Series)
+        if isinstance(value, ABCSeries):
+            if not value[~value.isin(self.categories)].isna().all():
+                raise ValueError(""fill value must be in categories"")
+
+            mask = codes == -1
+            values_codes = _get_codes_for_values(value, self.categories)
+            codes[mask] = values_codes[mask]
+
+        # If value is not a dict or Series it should be a scalar
+        elif is_hashable(value):
+            if not isna(value) and value not in self.categories:
+                raise ValueError(""fill value must be in categories"")
+
+            mask = codes == -1
+            if mask.any():
+                codes = codes.copy()
+                if isna(value):
+                    codes[mask] = -1
+                else:
+                    codes[mask] = self.categories.get_loc(value)
+
+        else:
+            raise TypeError(
+                '""value"" parameter must be a scalar, dict '
+                ""or Series, but you passed a ""
+                '""{0}""'.format(type(value).__name__)
+            )
+
+    return self._constructor(codes, dtype=self.dtype, fastpath=True)
+```",
+pandas-161-v0_llama-1,UNKNOWN,UNKNOWN,"```python
+@deprecate_kwarg(old_arg_name=""fill_value"", new_arg_name=""value"")
+def fillna(self, value=None, method=None, limit=None):
+    """"""
+    Fill NA/NaN values using the specified method.
+
+    Parameters
+    ----------
+    value : scalar, dict, Series
+        If a scalar value is passed it is used to fill all missing values.
+        Alternatively, a Series or dict can be used to fill in different
+        values for each index. The value should not be a list. The
+        value(s) passed should either be in the categories or should be
+        NaN.
+    method : {'backfill', 'bfill', 'pad', 'ffill', None}, default None
+        Method to use for filling holes in reindexed Series
+        pad / ffill: propagate last valid observation forward to next valid
+        backfill / bfill: use NEXT valid observation to fill gap
+    limit : int, default None
+        (Not implemented yet for Categorical!)
+        If method is specified, this is the maximum number of consecutive
+        NaN values to forward/backward fill. In other words, if there is
+        a gap with more than this number of consecutive NaNs, it will only
+        be partially filled. If method is not specified, this is the
+        maximum number of entries along the entire axis where NaNs will be
+        filled.
+
+    Returns
+    -------
+    filled : Categorical with NA/NaN filled
+    """"""
+    value, method = validate_fillna_kwargs(
+        value, method, validate_scalar_dict_value=False
+    )
+
+    if value is None:
+        value = np.nan
+    if limit is not None:
+        raise NotImplementedError(
+            ""specifying a limit for fillna has not been implemented yet""
+        )
+
+    codes = self._codes
+
+    # pad / bfill
+    if method is not None:
+
+        values = self.to_dense().reshape(-1, len(self))
+        values = interpolate_2d(values, method, 0, None, value).astype(
+            self.categories.dtype
+        )[0]
+        codes = _get_codes_for_values(values, self.categories)
+
+    else:
+
+        # If value is a dict or a Series (a dict value has already
+        # been converted to a Series)
+        if isinstance(value, ABCSeries):
+            if not value[~value.isin(self.categories)].isna().all():
+                raise ValueError(""fill value must be in categories"")
+
+            values_codes = _get_codes_for_values(value, self.categories)
+            indexer = np.where((codes == -1) & (values_codes!= -1))
+            codes = codes.copy()
+            codes[indexer] = values_codes[indexer]
+
+        # If value is not a dict or Series it should be a scalar
+        elif is_hashable(value):
+            if not isna(value) and value not in self.categories:
+                raise ValueError(""fill value must be in categories"")
+
+            mask = codes == -1
+            if mask.any():
+                codes = codes.copy()
+                if isna(value):
+                    codes[mask] = -1
+                else:
+                    codes[mask] = self.categories.get_loc(value)
+
+        else:
+            raise TypeError(
+                '""value"" parameter must be a scalar, dict '
+                ""or Series, but you passed a ""
+                '""{0}""'.format(type(value).__name__)
+            )
+
+    return self._constructor(codes, dtype=self.dtype, fastpath=True)
+```",
+pandas-161-v0_llama-2,UNKNOWN,UNKNOWN,"```python
+@deprecate_kwarg(old_arg_name=""fill_value"", new_arg_name=""value"")
+def fillna(self, value=None, method=None, limit=None):
+    """"""
+    Fill NA/NaN values using the specified method.
+
+    Parameters
+    ----------
+    value : scalar, dict, Series
+        If a scalar value is passed it is used to fill all missing values.
+        Alternatively, a Series or dict can be used to fill in different
+        values for each index. The value should not be a list. The
+        value(s) passed should either be in the categories or should be
+        NaN.
+    method : {'backfill', 'bfill', 'pad', 'ffill', None}, default None
+        Method to use for filling holes in reindexed Series
+        pad / ffill: propagate last valid observation forward to next valid
+        backfill / bfill: use NEXT valid observation to fill gap
+    limit : int, default None
+        (Not implemented yet for Categorical!)
+        If method is specified, this is the maximum number of consecutive
+        NaN values to forward/backward fill. In other words, if there is
+        a gap with more than this number of consecutive NaNs, it will only
+        be partially filled. If method is not specified, this is the
+        maximum number of entries along the entire axis where NaNs will be
+        filled.
+
+    Returns
+    -------
+    filled : Categorical with NA/NaN filled
+    """"""
+    value, method = validate_fillna_kwargs(
+        value, method, validate_scalar_dict_value=False
+    )
+
+    if value is None:
+        value = np.nan
+    if limit is not None:
+        raise NotImplementedError(
+            ""specifying a limit for fillna has not been implemented yet""
+        )
+
+    codes = self._codes
+
+    # pad / bfill
+    if method is not None:
+
+        values = self.to_dense().reshape(-1, len(self))
+        values = interpolate_2d(values, method, 0, None, value).astype(
+            self.categories.dtype
+        )[0]
+        codes = _get_codes_for_values(values, self.categories)
+
+    else:
+
+        # If value is a dict or a Series (a dict value has already
+        # been converted to a Series)
+        if isinstance(value, ABCSeries):
+            if not value[~value.isin(self.categories)].isna().all():
+                raise ValueError(""fill value must be in categories"")
+
+            values_codes = _get_codes_for_values(value, self.categories)
+            indexer = np.where((codes == -1))
+            codes[indexer] = values_codes[indexer]
+
+        # If value is not a dict or Series it should be a scalar
+        elif is_hashable(value):
+            if not isna(value) and value not in self.categories:
+                raise ValueError(""fill value must be in categories"")
+
+            mask = codes == -1
+            if mask.any():
+                codes = codes.copy()
+                if isna(value):
+                    codes[mask] = -1
+                else:
+                    codes[mask] = self.categories.get_loc(value)
+
+        else:
+            raise TypeError(
+                '""value"" parameter must be a scalar, dict '
+                ""or Series, but you passed a ""
+                '""{0}""'.format(type(value).__name__)
+            )
+
+    return self._constructor(codes, dtype=self.dtype, fastpath=True)
+```",
+pandas-161-v0_llama-3,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+
+1. **Identify the Bug**: The problem arises when using the `fillna` method on a categorical Series. The `fillna` method is overwriting all values in the Series, not just the NaN values. 
+
+2. **Understand the `fillna` Method**: The `fillna` method replaces NaN values in a Series with the specified value. However, for categorical data, it should only replace NaN values and not touch existing values.
+
+3. **Analyze the Provided Test Cases**: The provided test cases show that the `fillna` method is replacing all values in the Series, not just the NaN values. This indicates that the issue is with the condition that checks for NaN values before replacing them.
+
+4. **Review the `fillna` Implementation for Categorical Data**: In the `fillna` method for categorical data, the condition `if isinstance(value, ABCSeries):` checks if the fill value is a Series. If it is, the method tries to align the fill value Series with the original Series and then replaces the NaN values.
+
+5. **Identify the Root Cause**: The root cause of the problem is that the condition `indexer = np.where(values_codes!= -1)` is not correctly identifying the NaN values in the Series. As a result, all values are being replaced, not just the NaN values.
+
+6. **Determine the Correct Condition**: The correct condition to identify NaN values in a categorical Series is `np.where(codes == -1)`. This condition checks for the code -1, which represents NaN values in categorical data.
+
+7. **Implement the Correction**: The correction involves changing the condition `indexer = np.where(values_codes!= -1)` to `indexer = np.where(codes == -1)`. This ensures that only NaN values are replaced, not all values.
+
+### Fixed solution:
+
+```python
+@deprecate_kwarg(old_arg_name=""fill_value"", new_arg_name=""value"")
+def fillna(self, value=None, method=None, limit=None):
+    """"""
+    Fill NA/NaN values using the specified method.
+
+    Parameters
+    ----------
+    value : scalar, dict, Series
+        If a scalar value is passed it is used to fill all missing values.
+        Alternatively, a Series or dict can be used to fill in different
+        values for each index. The value should not be a list. The
+        value(s) passed should either be in the categories or should be
+        NaN.
+    method : {'backfill', 'bfill', 'pad', 'ffill', None}, default None
+        Method to use for filling holes in reindexed Series
+        pad / ffill: propagate last valid observation forward to next valid
+        backfill / bfill: use NEXT valid observation to fill gap
+    limit : int, default None
+        (Not implemented yet for Categorical!)
+        If method is specified, this is the maximum number of consecutive
+        NaN values to forward/backward fill. In other words, if there is
+        a gap with more than this number of consecutive NaNs, it will only
+        be partially filled. If method is not specified, this is the
+        maximum number of entries along the entire axis where NaNs will be
+        filled.
+
+    Returns
+    -------
+    filled : Categorical with NA/NaN filled
+    """"""
+    value, method = validate_fillna_kwargs(
+        value, method, validate_scalar_dict_value=False
+    )
+
+    if value is None:
+        value = np.nan
+    if limit is not None:
+        raise NotImplementedError(
+            ""specifying a limit for fillna has not been implemented yet""
+        )
+
+    codes = self._codes
+
+    # pad / bfill
+    if method is not None:
+
+        values = self.to_dense().reshape(-1, len(self))
+        values = interpolate_2d(values, method, 0, None, value).astype(
+            self.categories.dtype
+        )[0]
+        codes = _get_codes_for_values(values, self.categories)
+
+    else:
+
+        # If value is a dict or a Series (a dict value has already
+        # been converted to a Series)
+        if isinstance(value, ABCSeries):
+            if not value[~value.isin(self.categories)].isna().all():
+                raise ValueError(""fill value must be in categories"")
+
+            values_codes = _get_codes_for_values(value, self.categories)
+            indexer = np.where(codes == -1)  # Corrected condition
+            codes = codes.copy()  # Ensure codes is not modified in-place
+            codes[indexer] = values_codes.iloc[indexer[0]]
+
+        # If value is not a dict or Series it should be a scalar
+        elif is_hashable(value):
+            if not isna(value) and value not in self.categories:
+                raise ValueError(""fill value must be in categories"")
+
+            mask = codes == -1
+            if mask.any():
+                codes = codes.copy()  # Ensure codes is not modified in-place
+                if isna(value):
+                    codes[mask] = -1
+                else:
+                    codes[mask] = self.categories.get_loc(value)
+
+        else:
+            raise TypeError(
+                '""value"" parameter must be a scalar, dict '
+                ""or Series, but you passed a ""
+                '""{0}""'.format(type(value).__name__)
+            )
+
+    return self._constructor(codes, dtype=self.dtype, fastpath=True)
+```
+
+### Explanation of changes:
+
+*   **Corrected Condition**: The condition `indexer = np.where(values_codes!= -1)` has been changed to `indexer = np.where(codes == -1)` to correctly identify NaN values in the Series.
+*   **Copied Codes Array**: The line `codes = codes.copy()` has been added to ensure that the `codes` array is not modified in-place. This prevents unintended changes to the original Series.
+*   **Indexer Used for Setting Values**: The line `codes[indexer] = values_codes.iloc[indexer[0]]` has been changed to correctly set the fill values in the `codes` array using the `indexer`.
+
+### Tests and example uses:
+
+You can test the corrected `fillna` method using the provided test cases:
+
+```python
+import pandas as pd
+import numpy as np
+
+# Test case 1
+data = [""a"", np.nan, ""b"", np.nan, np.nan]
+s = pd.Series(pd.Categorical(data, categories=[""a"", ""b"", ""c"", ""d"", ""e""]))
+fill_value = pd.Series([""a"", ""b"", ""c"", ""d"", ""e""])
+expected_output = [""a"", ""b"", ""b"", ""d"", ""e""]
+result = s.fillna(fill_value)
+print(result.tolist() == expected_output)  # Should print: True
+
+# Test case 2
+data = [""a"", np.nan, ""b"", np.nan, np.nan]
+s = pd.Series(pd.Categorical(data, categories=[""a"", ""b"", ""c"", ""d"", ""e""]))
+fill_value = pd.Series([""b"", ""d"", ""a"", ""d"", ""a""])
+expected_output = [""a"", ""d"", ""b"", ""d"", ""a""]
+result = s.fillna(fill_value)
+print(result.tolist() == expected_output)  # Should print: True
+
+# Test case 3
+data = [""a"", np.nan, ""b"", np.nan, np.nan]
+s = pd.Series(pd.Categorical(data, categories=[""a"", ""b"", ""c"", ""d"", ""e""]))
+fill_value = pd.Series(pd.Categorical([""b"", ""d"", ""a"", ""d"", ""a""], categories=[""b"", ""c"", ""d"", ""e"", ""a""]))
+expected_output = [""a"", ""d"", ""b"", ""d"", ""a""]
+result = s.fillna(fill_value)
+print(result.tolist() == expected_output)  # Should print: True
+```",
+pandas-161-v0_llama-4,UNKNOWN,UNKNOWN,"```python
+@deprecate_kwarg(old_arg_name=""fill_value"", new_arg_name=""value"")
+def fillna(self, value=None, method=None, limit=None):
+    """"""
+    Fill NA/NaN values using the specified method.
+
+    Parameters
+    ----------
+    value : scalar, dict, Series
+        If a scalar value is passed it is used to fill all missing values.
+        Alternatively, a Series or dict can be used to fill in different
+        values for each index. The value should not be a list. The
+        value(s) passed should either be in the categories or should be
+        NaN.
+    method : {'backfill', 'bfill', 'pad', 'ffill', None}, default None
+        Method to use for filling holes in reindexed Series
+        pad / ffill: propagate last valid observation forward to next valid
+        backfill / bfill: use NEXT valid observation to fill gap
+    limit : int, default None
+        (Not implemented yet for Categorical!)
+        If method is specified, this is the maximum number of consecutive
+        NaN values to forward/backward fill. In other words, if there is
+        a gap with more than this number of consecutive NaNs, it will only
+        be partially filled. If method is not specified, this is the
+        maximum number of entries along the entire axis where NaNs will be
+        filled.
+
+    Returns
+    -------
+    filled : Categorical with NA/NaN filled
+    """"""
+    value, method = validate_fillna_kwargs(
+        value, method, validate_scalar_dict_value=False
+    )
+
+    if value is None:
+        value = np.nan
+    if limit is not None:
+        raise NotImplementedError(
+            ""specifying a limit for fillna has not been implemented yet""
+        )
+
+    codes = self._codes
+
+    # pad / bfill
+    if method is not None:
+
+        values = self.to_dense().reshape(-1, len(self))
+        values = interpolate_2d(values, method, 0, None, value).astype(
+            self.categories.dtype
+        )[0]
+        codes = _get_codes_for_values(values, self.categories)
+
+    else:
+
+        # If value is a dict or a Series (a dict value has already
+        # been converted to a Series)
+        if isinstance(value, ABCSeries):
+            if not value[~value.isin(self.categories)].isna().all():
+                raise ValueError(""fill value must be in categories"")
+
+            values_codes = _get_codes_for_values(value, self.categories)
+            indexer = np.where(codes == -1)
+            codes = codes.copy()
+            codes[indexer] = values_codes[indexer]
+
+        # If value is not a dict or Series it should be a scalar
+        elif is_hashable(value):
+            if not isna(value) and value not in self.categories:
+                raise ValueError(""fill value must be in categories"")
+
+            mask = codes == -1
+            if mask.any():
+                codes = codes.copy()
+                if isna(value):
+                    codes[mask] = -1
+                else:
+                    codes[mask] = self.categories.get_loc(value)
+
+        else:
+            raise TypeError(
+                '""value"" parameter must be a scalar, dict '
+                ""or Series, but you passed a ""
+                '""{0}""'.format(type(value).__name__)
+            )
+
+    return self._constructor(codes, dtype=self.dtype, fastpath=True)
+```",
+pandas-161-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+@deprecate_kwarg(old_arg_name=""fill_value"", new_arg_name=""value"")
+def fillna(self, value=None, method=None, limit=None):
+    """"""
+    Fill NA/NaN values using the specified method.
+
+    Parameters
+    ----------
+    value : scalar, dict, Series
+        If a scalar value is passed it is used to fill all missing values.
+        Alternatively, a Series or dict can be used to fill in different
+        values for each index. The value should not be a list. The
+        value(s) passed should either be in the categories or should be
+        NaN.
+    method : {'backfill', 'bfill', 'pad', 'ffill', None}, default None
+        Method to use for filling holes in reindexed Series
+        pad / ffill: propagate last valid observation forward to next valid
+        backfill / bfill: use NEXT valid observation to fill gap
+    limit : int, default None
+        (Not implemented yet for Categorical!)
+        If method is specified, this is the maximum number of consecutive
+        NaN values to forward/backward fill. In other words, if there is
+        a gap with more than this number of consecutive NaNs, it will only
+        be partially filled. If method is not specified, this is the
+        maximum number of entries along the entire axis where NaNs will be
+        filled.
+
+    Returns
+    -------
+    filled : Categorical with NA/NaN filled
+    """"""
+    value, method = validate_fillna_kwargs(
+        value, method, validate_scalar_dict_value=False
+    )
+
+    if value is None:
+        value = np.nan
+    if limit is not None:
+        raise NotImplementedError(
+            ""specifying a limit for fillna has not been implemented yet""
+        )
+
+    codes = self._codes
+
+    # pad / bfill
+    if method is not None:
+
+        values = self.to_dense().reshape(-1, len(self))
+        values = interpolate_2d(values, method, 0, None, value).astype(
+            self.categories.dtype
+        )[0]
+        codes = _get_codes_for_values(values, self.categories)
+
+    else:
+
+        # If value is a dict or a Series (a dict value has already
+        # been converted to a Series)
+        if isinstance(value, ABCSeries):
+            if not value[~value.isin(self.categories)].isna().all():
+                raise ValueError(""fill value must be in categories"")
+
+            values_codes = _get_codes_for_values(value, self.categories)
+            indexer = np.where(self._codes == -1)
+            codes = codes.copy()
+            codes[indexer] = values_codes[indexer]
+
+        # If value is not a dict or Series it should be a scalar
+        elif is_hashable(value):
+            if not isna(value) and value not in self.categories:
+                raise ValueError(""fill value must be in categories"")
+
+            mask = codes == -1
+            if mask.any():
+                codes = codes.copy()
+                if isna(value):
+                    codes[mask] = -1
+                else:
+                    codes[mask] = self.categories.get_loc(value)
+
+        else:
+            raise TypeError(
+                '""value"" parameter must be a scalar, dict '
+                ""or Series, but you passed a ""
+                '""{0}""'.format(type(value).__name__)
+            )
+
+    return self._constructor(codes, dtype=self.dtype, fastpath=True)
+```",
+pandas-161-v0_llama-6,UNKNOWN,UNKNOWN,"```python
+@deprecate_kwarg(old_arg_name=""fill_value"", new_arg_name=""value"")
+def fillna(self, value=None, method=None, limit=None):
+    """"""
+    Fill NA/NaN values using the specified method.
+
+    Parameters
+    ----------
+    value : scalar, dict, Series
+        If a scalar value is passed it is used to fill all missing values.
+        Alternatively, a Series or dict can be used to fill in different
+        values for each index. The value should not be a list. The
+        value(s) passed should either be in the categories or should be
+        NaN.
+    method : {'backfill', 'bfill', 'pad', 'ffill', None}, default None
+        Method to use for filling holes in reindexed Series
+        pad / ffill: propagate last valid observation forward to next valid
+        backfill / bfill: use NEXT valid observation to fill gap
+    limit : int, default None
+        (Not implemented yet for Categorical!)
+        If method is specified, this is the maximum number of consecutive
+        NaN values to forward/backward fill. In other words, if there is
+        a gap with more than this number of consecutive NaNs, it will only
+        be partially filled. If method is not specified, this is the
+        maximum number of entries along the entire axis where NaNs will be
+        filled.
+
+    Returns
+    -------
+    filled : Categorical with NA/NaN filled
+    """"""
+    value, method = validate_fillna_kwargs(
+        value, method, validate_scalar_dict_value=False
+    )
+
+    if value is None:
+        value = np.nan
+    if limit is not None:
+        raise NotImplementedError(
+            ""specifying a limit for fillna has not been implemented yet""
+        )
+
+    codes = self._codes
+
+    # pad / bfill
+    if method is not None:
+
+        values = self.to_dense().reshape(-1, len(self))
+        values = interpolate_2d(values, method, 0, None, value).astype(
+            self.categories.dtype
+        )[0]
+        codes = _get_codes_for_values(values, self.categories)
+
+    else:
+
+        # If value is a dict or a Series (a dict value has already
+        # been converted to a Series)
+        if isinstance(value, ABCSeries):
+            if not value[~value.isin(self.categories)].isna().all():
+                raise ValueError(""fill value must be in categories"")
+
+            values_codes = _get_codes_for_values(value, self.categories)
+            indexer = np.where(self._codes == -1)
+            codes = self._codes.copy()
+            codes[indexer] = values_codes[indexer]
+
+        # If value is not a dict or Series it should be a scalar
+        elif is_hashable(value):
+            if not isna(value) and value not in self.categories:
+                raise ValueError(""fill value must be in categories"")
+
+            mask = self._codes == -1
+            if mask.any():
+                codes = self._codes.copy()
+                if isna(value):
+                    codes[mask] = -1
+                else:
+                    codes[mask] = self.categories.get_loc(value)
+
+        else:
+            raise TypeError(
+                '""value"" parameter must be a scalar, dict '
+                ""or Series, but you passed a ""
+                '""{0}""'.format(type(value).__name__)
+            )
+
+    return self._constructor(codes, dtype=self.dtype, fastpath=True)
+```",
+pandas-161-v0_llama-7,UNKNOWN,UNKNOWN,"```python
+@deprecate_kwarg(old_arg_name=""fill_value"", new_arg_name=""value"")
+def fillna(self, value=None, method=None, limit=None):
+    """"""
+    Fill NA/NaN values using the specified method.
+
+    Parameters
+    ----------
+    value : scalar, dict, Series
+        If a scalar value is passed it is used to fill all missing values.
+        Alternatively, a Series or dict can be used to fill in different
+        values for each index. The value should not be a list. The
+        value(s) passed should either be in the categories or should be
+        NaN.
+    method : {'backfill', 'bfill', 'pad', 'ffill', None}, default None
+        Method to use for filling holes in reindexed Series
+        pad / ffill: propagate last valid observation forward to next valid
+        backfill / bfill: use NEXT valid observation to fill gap
+    limit : int, default None
+        (Not implemented yet for Categorical!)
+        If method is specified, this is the maximum number of consecutive
+        NaN values to forward/backward fill. In other words, if there is
+        a gap with more than this number of consecutive NaNs, it will only
+        be partially filled. If method is not specified, this is the
+        maximum number of entries along the entire axis where NaNs will be
+        filled.
+
+    Returns
+    -------
+    filled : Categorical with NA/NaN filled
+    """"""
+    value, method = validate_fillna_kwargs(
+        value, method, validate_scalar_dict_value=False
+    )
+
+    if value is None:
+        value = np.nan
+    if limit is not None:
+        raise NotImplementedError(
+            ""specifying a limit for fillna has not been implemented yet""
+        )
+
+    codes = self._codes
+
+    # pad / bfill
+    if method is not None:
+
+        values = self.to_dense().reshape(-1, len(self))
+        values = interpolate_2d(values, method, 0, None, value).astype(
+            self.categories.dtype
+        )[0]
+        codes = _get_codes_for_values(values, self.categories)
+
+    else:
+
+        # If value is a dict or a Series (a dict value has already
+        # been converted to a Series)
+        if isinstance(value, ABCSeries):
+            if not value[~value.isin(self.categories)].isna().all():
+                raise ValueError(""fill value must be in categories"")
+
+            values_codes = _get_codes_for_values(value, self.categories)
+            indexer = np.where(self._codes == -1)
+            codes = self._codes.copy()
+            codes[indexer] = values_codes[indexer]
+
+        # If value is not a dict or Series it should be a scalar
+        elif is_hashable(value):
+            if not isna(value) and value not in self.categories:
+                raise ValueError(""fill value must be in categories"")
+
+            mask = codes == -1
+            if mask.any():
+                codes = codes.copy()
+                if isna(value):
+                    codes[mask] = -1
+                else:
+                    codes[mask] = self.categories.get_loc(value)
+
+        else:
+            raise TypeError(
+                '""value"" parameter must be a scalar, dict '
+                ""or Series, but you passed a ""
+                '""{0}""'.format(type(value).__name__)
+            )
+
+    return self._constructor(codes, dtype=self.dtype, fastpath=True)
+```",
+pandas-161-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+@deprecate_kwarg(old_arg_name=""fill_value"", new_arg_name=""value"")
+def fillna(self, value=None, method=None, limit=None):
+    """"""
+    Fill NA/NaN values using the specified method.
+
+    Parameters
+    ----------
+    value : scalar, dict, Series
+        If a scalar value is passed it is used to fill all missing values.
+        Alternatively, a Series or dict can be used to fill in different
+        values for each index. The value should not be a list. The
+        value(s) passed should either be in the categories or should be
+        NaN.
+    method : {'backfill', 'bfill', 'pad', 'ffill', None}, default None
+        Method to use for filling holes in reindexed Series
+        pad / ffill: propagate last valid observation forward to next valid
+        backfill / bfill: use NEXT valid observation to fill gap
+    limit : int, default None
+        (Not implemented yet for Categorical!)
+        If method is specified, this is the maximum number of consecutive
+        NaN values to forward/backward fill. In other words, if there is
+        a gap with more than this number of consecutive NaNs, it will only
+        be partially filled. If method is not specified, this is the
+        maximum number of entries along the entire axis where NaNs will be
+        filled.
+
+    Returns
+    -------
+    filled : Categorical with NA/NaN filled
+    """"""
+    value, method = validate_fillna_kwargs(
+        value, method, validate_scalar_dict_value=False
+    )
+
+    if value is None:
+        value = np.nan
+    if limit is not None:
+        raise NotImplementedError(
+            ""specifying a limit for fillna has not been implemented yet""
+        )
+
+    codes = self._codes
+
+    # pad / bfill
+    if method is not None:
+
+        values = self.to_dense().reshape(-1, len(self))
+        values = interpolate_2d(values, method, 0, None, value).astype(
+            self.categories.dtype
+        )[0]
+        codes = _get_codes_for_values(values, self.categories)
+
+    else:
+
+        # If value is a dict or a Series (a dict value has already
+        # been converted to a Series)
+        if isinstance(value, ABCSeries):
+            if not value[~value.isin(self.categories)].isna().all():
+                raise ValueError(""fill value must be in categories"")
+
+            values_codes = _get_codes_for_values(value, self.categories)
+            indexer = np.where(self._codes == -1)
+            codes = codes.copy()
+            codes[indexer] = values_codes[indexer]
+
+        # If value is not a dict or Series it should be a scalar
+        elif is_hashable(value):
+            if not isna(value) and value not in self.categories:
+                raise ValueError(""fill value must be in categories"")
+
+            mask = codes == -1
+            if mask.any():
+                codes = codes.copy()
+                if isna(value):
+                    codes[mask] = -1
+                else:
+                    codes[mask] = self.categories.get_loc(value)
+
+        else:
+            raise TypeError(
+                '""value"" parameter must be a scalar, dict '
+                ""or Series, but you passed a ""
+                '""{0}""'.format(type(value).__name__)
+            )
+
+    return self._constructor(codes, dtype=self.dtype, fastpath=True)
+```",
+pandas-161-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+@deprecate_kwarg(old_arg_name=""fill_value"", new_arg_name=""value"")
+def fillna(self, value=None, method=None, limit=None):
+    """"""
+    Fill NA/NaN values using the specified method.
+
+    Parameters
+    ----------
+    value : scalar, dict, Series
+        If a scalar value is passed it is used to fill all missing values.
+        Alternatively, a Series or dict can be used to fill in different
+        values for each index. The value should not be a list. The
+        value(s) passed should either be in the categories or should be
+        NaN.
+    method : {'backfill', 'bfill', 'pad', 'ffill', None}, default None
+        Method to use for filling holes in reindexed Series
+        pad / ffill: propagate last valid observation forward to next valid
+        backfill / bfill: use NEXT valid observation to fill gap
+    limit : int, default None
+        (Not implemented yet for Categorical!)
+        If method is specified, this is the maximum number of consecutive
+        NaN values to forward/backward fill. In other words, if there is
+        a gap with more than this number of consecutive NaNs, it will only
+        be partially filled. If method is not specified, this is the
+        maximum number of entries along the entire axis where NaNs will be
+        filled.
+
+    Returns
+    -------
+    filled : Categorical with NA/NaN filled
+    """"""
+    value, method = validate_fillna_kwargs(
+        value, method, validate_scalar_dict_value=False
+    )
+
+    if value is None:
+        value = np.nan
+    if limit is not None:
+        raise NotImplementedError(
+            ""specifying a limit for fillna has not been implemented yet""
+        )
+
+    codes = self._codes
+
+    # pad / bfill
+    if method is not None:
+
+        values = self.to_dense().reshape(-1, len(self))
+        values = interpolate_2d(values, method, 0, None, value).astype(
+            self.categories.dtype
+        )[0]
+        codes = _get_codes_for_values(values, self.categories)
+
+    else:
+
+        # If value is a dict or a Series (a dict value has already
+        # been converted to a Series)
+        if isinstance(value, ABCSeries):
+            if not value[~value.isin(self.categories)].isna().all():
+                raise ValueError(""fill value must be in categories"")
+
+            values_codes = _get_codes_for_values(value, self.categories)
+            indexer = np.where((self._codes == -1))
+            codes = self._codes.copy()
+            codes[indexer] = values_codes[indexer]
+
+        # If value is not a dict or Series it should be a scalar
+        elif is_hashable(value):
+            if not isna(value) and value not in self.categories:
+                raise ValueError(""fill value must be in categories"")
+
+            mask = codes == -1
+            if mask.any():
+                codes = codes.copy()
+                if isna(value):
+                    codes[mask] = -1
+                else:
+                    codes[mask] = self.categories.get_loc(value)
+
+        else:
+            raise TypeError(
+                '""value"" parameter must be a scalar, dict '
+                ""or Series, but you passed a ""
+                '""{0}""'.format(type(value).__name__)
+            )
+
+    return self._constructor(codes, dtype=self.dtype, fastpath=True)
+```",

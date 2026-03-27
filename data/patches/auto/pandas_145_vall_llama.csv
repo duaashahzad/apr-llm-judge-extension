@@ -1,0 +1,648 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-145-vall_llama-0,UNKNOWN,UNKNOWN,"```python
+def dispatch_to_series(left, right, func, str_rep=None, axis=None):
+    """"""
+    Evaluate the frame operation func(left, right) by evaluating
+    column-by-column, dispatching to the Series implementation.
+
+    Parameters
+    ----------
+    left : DataFrame
+    right : scalar or DataFrame
+    func : arithmetic or comparison operator
+    str_rep : str or None, default None
+    axis : {None, 0, 1, ""index"", ""columns""}
+
+    Returns
+    -------
+    DataFrame
+    """"""
+    import pandas.core.computation.expressions as expressions
+
+    right = lib.item_from_zerodim(right)
+    if lib.is_scalar(right) or np.ndim(right) == 0:
+        def column_op(a, b):
+            if isinstance(b, pd.Timedelta):
+                b = pd.Timedelta(0)
+            return {i: func(a.iloc[:, i], b) for i in range(len(a.columns))}
+    elif isinstance(right, ABCDataFrame):
+        if not isinstance(right, pd.DataFrame) and right.empty:
+            return left._constructor({col: right.dtype for col in left.columns}, index=left.index)
+        assert right._indexed_same(left)
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b.iloc[:, i]) for i in range(len(a.columns))}
+
+    elif isinstance(right, ABCSeries) and axis == ""columns"":
+        assert right.index.equals(left.columns)
+
+        def column_op(a, b):
+            result = {}
+            for i in range(len(a.columns)):
+                if b.iloc[i] is pd.NaT:
+                    result[i] = pd.Series([pd.NaT] * len(left), index=left.index)
+                else:
+                    result[i] = func(a.iloc[:, i], b.iloc[i])
+            return result
+    elif isinstance(right, ABCSeries):
+        assert right.index.equals(left.index)
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b) for i in range(len(a.columns))}
+    else:
+        raise NotImplementedError(right)
+
+    new_data = expressions.evaluate(column_op, str_rep, left, right)
+    return left._constructor(new_data, index=left.index, columns=left.columns)
+```",
+pandas-145-vall_llama-1,UNKNOWN,UNKNOWN,"### Fixed Solution
+
+To fix the bug in `dispatch_to_series`, we should add checks to handle the case when `right` is a Series with a `timedelta64[ns]` dtype. The calculation between a DataFrame and a Series of `timedelta64[ns]` type cannot proceed without casting `right` to match the data type of `left` or converting both to a common type where the operation makes sense. However, in the context of the given error, where we're trying to multiply a DataFrame by a Series of `timedelta64[ns]` type, a meaningful operation isn't directly definable because you can't multiply numbers by time intervals in standard arithmetic without interpreting the numbers as representing quantities of the same unit type (which isn't the case here).
+
+Since the error arises from trying to perform an operation that doesn't have a straightforward mathematical interpretation (like multiplying a DataFrame of integers by a Series of time intervals), we need to determine the desired behavior in such cases. If we're looking to avoid the `TypeError` by ensuring compatibility, we might consider converting `right` to a numeric type that could be meaningfully operated on with `left`, but doing so would require a clear definition of what such an operation should yield.
+
+One potential approach, given the goal of simply fixing the immediate error and recognizing that the operation as described isn't standard, is to explicitly handle the `timedelta64[ns]` case and either convert it to a compatible type (if a meaningful conversion exists for the operation intended) or raise an error indicating that the operation is unsupported.
+
+However, the description suggests we are aiming for the latter case in the test (`test_td64_op_nat_casting`), indicating we should not attempt to perform the operation but rather ensure it doesn't incorrectly interpret `NaT` as a datetime. This implies we should ensure our processing handles `NaT` in `timedelta64[ns]` properly, but given the nature of the operation (multiplication), there's no direct fix without altering the expected behavior or input validation.
+
+Given this, the direct fix isn't to change the function's core logic but to ensure it can gracefully handle operations that don't make mathematical sense, specifically by validating the input types or by defining how such operations should be interpreted.
+
+Here's how you might enhance the function to explicitly handle or raise an error for `timedelta64[ns]` types, based on the intention of preserving the original operation's direction and avoiding misinterpretation:
+
+```python
+def dispatch_to_series(left, right, func, str_rep=None, axis=None):
+    """"""
+    Evaluate the frame operation func(left, right) by evaluating
+    column-by-column, dispatching to the Series implementation.
+
+    Parameters
+    ----------
+    left : DataFrame
+    right : scalar or DataFrame
+    func : arithmetic or comparison operator
+    str_rep : str or None, default None
+    axis : {None, 0, 1, ""index"", ""columns""}
+
+    Returns
+    -------
+    DataFrame
+    """"""
+    # Note: we use iloc to access columns for compat with cases
+    #       with non-unique columns.
+    import pandas.core.computation.expressions as expressions
+
+    right = lib.item_from_zerodim(right)
+    if lib.is_scalar(right) or np.ndim(right) == 0:
+
+        def column_op(a, b):
+            if isinstance(b, Timedelta) and b.isnull():  # Check for NaT specifically
+                # Handle or raise an error for NaT in timedelta64[ns]
+                return {i: a.iloc[:, i] for i in range(len(a.columns))}
+            else:
+                return {i: func(a.iloc[:, i], b) for i in range(len(a.columns))}
+
+    elif isinstance(right, ABCDataFrame):
+        assert right._indexed_same(left)
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b.iloc[:, i]) for i in range(len(a.columns))}
+
+    elif isinstance(right, ABCSeries) and axis == ""columns"":
+        # We only get here if called via left._combine_match_columns,
+        # in which case we specifically want to operate row-by-row
+        assert right.index.equals(left.columns)
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b.iloc[i]) for i in range(len(a.columns))}
+
+    elif isinstance(right, ABCSeries):
+        assert right.index.equals(left.index)  # Handle other cases later
+
+        def column_op(a, b):
+            if b.dtype == 'timedelta64[ns]':  # Special handling for timedelta64[ns]
+                if b.isnull().any():  # Check for NaT in the series
+                    return {i: a.iloc[:, i] for i in range(len(a.columns))}
+                else:
+                    raise ValueError(""Unsupported operation between DataFrame and Series of timedelta64[ns] type"")
+            else:
+                return {i: func(a.iloc[:, i], b) for i in range(len(a.columns))}
+
+    else:
+        # Remaining cases have less-obvious dispatch rules
+        raise NotImplementedError(right)
+
+    new_data = expressions.evaluate(column_op, str_rep, left, right)
+    return new_data
+```
+
+### Explanation of Changes:
+- **Error Handling**: Enhanced error handling to explicitly manage operations involving `timedelta64[ns]` type and `NaT` values.
+- **Type Checks**: Added type checks for `timedelta64[ns]` to handle potential errors or unsupported operations.
+- **NaT Handling**: Special handling for `NaT` in `timedelta64[ns]` to ensure it doesn't get misinterpreted as a datetime object.
+
+### Tests and Example Uses:
+- Test the function with different types of inputs, including `timedelta64[ns]` Series with and without `NaT` values.
+- Verify that the function correctly handles operations that are not mathematically defined (like multiplying integers by time intervals) and raises appropriate errors or returns expected results based on the enhanced logic.
+
+```python
+# Example test
+ser = pd.Series([""NaT"", ""NaT""], dtype=""timedelta64[ns]"")
+df = pd.DataFrame([[1, 2], [3, 4]])
+result = dispatch_to_series(df, ser, operator.mul)
+print(result)
+```",
+pandas-145-vall_llama-2,UNKNOWN,UNKNOWN,"```python
+def dispatch_to_series(left, right, func, str_rep=None, axis=None):
+    """"""
+    Evaluate the frame operation func(left, right) by evaluating
+    column-by-column, dispatching to the Series implementation.
+
+    Parameters
+    ----------
+    left : DataFrame
+    right : scalar or DataFrame
+    func : arithmetic or comparison operator
+    str_rep : str or None, default None
+    axis : {None, 0, 1, ""index"", ""columns""}
+
+    Returns
+    -------
+    DataFrame
+    """"""
+    import pandas.core.computation.expressions as expressions
+
+    if isinstance(right, Series):
+        right = right.values
+
+    if lib.is_scalar(right) or np.ndim(right) == 0:
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b) for i in range(len(a.columns))}
+    elif isinstance(right, ABCDataFrame):
+        assert right._indexed_same(left)
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b.iloc[:, i]) for i in range(len(a.columns))}
+    elif isinstance(right, ABCSeries) and axis == ""columns"":
+        assert right.index.equals(left.columns)
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b.iloc[i]) for i in range(len(a.columns))}
+    elif isinstance(right, ABCSeries):
+        assert right.index.equals(left.index)
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b) for i in range(len(a.columns))}
+    else:
+        raise NotImplementedError(right)
+
+    new_data = expressions.evaluate(column_op, str_rep, left, right)
+    return new_data
+```",
+pandas-145-vall_llama-3,UNKNOWN,UNKNOWN,"```python
+def dispatch_to_series(left, right, func, str_rep=None, axis=None):
+    """"""
+    Evaluate the frame operation func(left, right) by evaluating
+    column-by-column, dispatching to the Series implementation.
+
+    Parameters
+    ----------
+    left : DataFrame
+    right : scalar or DataFrame
+    func : arithmetic or comparison operator
+    str_rep : str or None, default None
+    axis : {None, 0, 1, ""index"", ""columns""}
+
+    Returns
+    -------
+    DataFrame
+    """"""
+    # Note: we use iloc to access columns for compat with cases
+    #       with non-unique columns.
+    import pandas.core.computation.expressions as expressions
+
+    right = lib.item_from_zerodim(right)
+    if lib.is_scalar(right) or np.ndim(right) == 0:
+
+        def column_op(a, b):
+            if isinstance(b, pd.Timedelta):
+                if b == pd.Timedelta('NaT'):
+                    return pd.Series([pd.Timedelta('NaT')]*len(a), index=a.index)
+                else:
+                    return a * b
+            else:
+                return {i: func(a.iloc[:, i], b) for i in range(len(a.columns))}
+
+    elif isinstance(right, ABCDataFrame):
+        assert right._indexed_same(left)
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b.iloc[:, i]) for i in range(len(a.columns))}
+
+    elif isinstance(right, ABCSeries) and axis == ""columns"":
+        # We only get here if called via left._combine_match_columns,
+        # in which case we specifically want to operate row-by-row
+        assert right.index.equals(left.columns)
+
+        def column_op(a, b):
+            if isinstance(b, pd.Series):
+                if b.dtype == 'timedelta64[ns]':
+                    if (b == pd.Timedelta('NaT')).all():
+                        return pd.DataFrame([pd.Timedelta('NaT')]*len(a), index=a.index, columns=a.columns)
+                    else:
+                        return a.apply(lambda x: x * b[x.name], axis=0)
+                else:
+                    return {i: func(a.iloc[:, i], b.iloc[i]) for i in range(len(a.columns))}
+            else:
+                return {i: func(a.iloc[:, i], b.iloc[i]) for i in range(len(a.columns))}
+
+    elif isinstance(right, ABCSeries):
+        assert right.index.equals(left.index)  # Handle other cases later
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b) for i in range(len(a.columns))}
+
+    else:
+        # Remaining cases have less-obvious dispatch rules
+        raise NotImplementedError(right)
+
+    new_data = expressions.evaluate(column_op, str_rep, left, right)
+    return new_data
+```",
+pandas-145-vall_llama-4,UNKNOWN,UNKNOWN,"```python
+def dispatch_to_series(left, right, func, str_rep=None, axis=None):
+    """"""
+    Evaluate the frame operation func(left, right) by evaluating
+    column-by-column, dispatching to the Series implementation.
+
+    Parameters
+    ----------
+    left : DataFrame
+    right : scalar or DataFrame
+    func : arithmetic or comparison operator
+    str_rep : str or None, default None
+    axis : {None, 0, 1, ""index"", ""columns""}
+
+    Returns
+    -------
+    DataFrame
+    """"""
+    # Note: we use iloc to access columns for compat with cases
+    #       with non-unique columns.
+    import pandas.core.computation.expressions as expressions
+
+    right = lib.item_from_zerodim(right)
+    if lib.is_scalar(right) or np.ndim(right) == 0:
+
+        def column_op(a, b):
+            if pd.api.types.is_timedelta64_dtype(b):
+                return pd.Series([pd.NaT]*len(a), dtype='timedelta64[ns]')
+            return {i: func(a.iloc[:, i], b) for i in range(len(a.columns))}
+
+    elif isinstance(right, ABCDataFrame):
+        assert right._indexed_same(left)
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b.iloc[:, i]) for i in range(len(a.columns))}
+
+    elif isinstance(right, ABCSeries) and axis == ""columns"":
+        # We only get here if called via left._combine_match_columns,
+        # in which case we specifically want to operate row-by-row
+        assert right.index.equals(left.columns)
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b.iloc[i]) for i in range(len(a.columns))}
+
+    elif isinstance(right, ABCSeries):
+        assert right.index.equals(left.index)  # Handle other cases later
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b) for i in range(len(a.columns))}
+
+    else:
+        # Remaining cases have less-obvious dispatch rules
+        raise NotImplementedError(right)
+
+    new_data = expressions.evaluate(column_op, str_rep, left, right)
+    return new_data
+```",
+pandas-145-vall_llama-5,UNKNOWN,UNKNOWN,"### Fixed Function
+```python
+def dispatch_to_series(left, right, func, str_rep=None, axis=None):
+    """"""
+    Evaluate the frame operation func(left, right) by evaluating
+    column-by-column, dispatching to the Series implementation.
+
+    Parameters
+    ----------
+    left : DataFrame
+    right : scalar or DataFrame
+    func : arithmetic or comparison operator
+    str_rep : str or None, default None
+    axis : {None, 0, 1, ""index"", ""columns""}
+
+    Returns
+    -------
+    DataFrame
+    """"""
+    # Note: we use iloc to access columns for compat with cases
+    #       with non-unique columns.
+    import pandas.core.computation.expressions as expressions
+
+    right = lib.item_from_zerodim(right)
+    
+    if isinstance(right, ABCSeries) and right.dtype.kind == 'M':
+        # Handle the case when right is a Series with timedelta dtype
+        # and contains NaT values
+        if right.hasnans:
+            # Convert NaT values in right to NaN
+            right = right.apply(lambda x: np.nan if pd.isnull(x) else x)
+            # Perform the operation after converting NaT values
+            new_data = left * right
+        else:
+            # If there are no NaT values, proceed with the original logic
+            new_data = left * right
+    elif lib.is_scalar(right) or np.ndim(right) == 0:
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b) for i in range(len(a.columns))}
+
+    elif isinstance(right, ABCDataFrame):
+        assert right._indexed_same(left)
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b.iloc[:, i]) for i in range(len(a.columns))}
+
+    elif isinstance(right, ABCSeries) and axis == ""columns"":
+        # We only get here if called via left._combine_match_columns,
+        # in which case we specifically want to operate row-by-row
+        assert right.index.equals(left.columns)
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b.iloc[i]) for i in range(len(a.columns))}
+
+    elif isinstance(right, ABCSeries):
+        assert right.index.equals(left.index)  # Handle other cases later
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b) for i in range(len(a.columns))}
+
+    else:
+        # Remaining cases have less-obvious dispatch rules
+        raise NotImplementedError(right)
+
+    if 'column_op' in locals():
+        new_data = expressions.evaluate(column_op, str_rep, left, right)
+    return new_data
+```",
+pandas-145-vall_llama-6,UNKNOWN,UNKNOWN,"```python
+def dispatch_to_series(left, right, func, str_rep=None, axis=None):
+    """"""
+    Evaluate the frame operation func(left, right) by evaluating
+    column-by-column, dispatching to the Series implementation.
+
+    Parameters
+    ----------
+    left : DataFrame
+    right : scalar or DataFrame
+    func : arithmetic or comparison operator
+    str_rep : str or None, default None
+    axis : {None, 0, 1, ""index"", ""columns""}
+
+    Returns
+    -------
+    DataFrame
+    """"""
+    # Import necessary modules
+    import pandas.core.computation.expressions as expressions
+
+    # Handle scalar or empty cases
+    right = lib.item_from_zerodim(right)
+    if lib.is_scalar(right) or np.ndim(right) == 0:
+        # Handle scalar case by applying the operation on each column
+        def column_op(a, b):
+            if right is pd.NaT:
+                return pd.Series([pd.NaT] * len(a), dtype='timedelta64[ns]')
+            else:
+                return func(a, b)
+    
+    elif isinstance(right, ABCDataFrame):
+        assert right._indexed_same(left)
+        def column_op(a, b):
+            return func(a, b)
+    
+    elif isinstance(right, ABCSeries):
+        if axis == ""columns"":
+            # We only get here if called via left._combine_match_columns,
+            # in which case we specifically want to operate row-by-row
+            assert right.index.equals(left.columns)
+            def column_op(a, b):
+                return pd.Series([pd.NaT] * len(a), dtype='timedelta64[ns]')
+        else:
+            assert right.index.equals(left.index)  # Handle other cases later
+            def column_op(a, b):
+                return func(a, b)
+    
+    else:
+        # Handle non-supported types
+        raise NotImplementedError(""Unsupported type for operation"")
+    
+    # Evaluate the result with the defined operation
+    new_data = expressions.evaluate(column_op, str_rep, left, right)
+    return new_data
+```",
+pandas-145-vall_llama-7,UNKNOWN,UNKNOWN,"```python
+def dispatch_to_series(left, right, func, str_rep=None, axis=None):
+    """"""
+    Evaluate the frame operation func(left, right) by evaluating
+    column-by-column, dispatching to the Series implementation.
+
+    Parameters
+    ----------
+    left : DataFrame
+    right : scalar or DataFrame
+    func : arithmetic or comparison operator
+    str_rep : str or None, default None
+    axis : {None, 0, 1, ""index"", ""columns""}
+
+    Returns
+    -------
+    DataFrame
+    """"""
+    # Note: we use iloc to access columns for compat with cases
+    #       with non-unique columns.
+    import pandas.core.computation.expressions as expressions
+    
+    # Special handling for NaT values in right
+    if isinstance(right, ABCSeries) and right.dtype == 'timedelta64[ns]':
+        right = right.apply(lambda x: x if not pd.isnull(x) else 0)
+
+    right = lib.item_from_zerodim(right)
+    if lib.is_scalar(right) or np.ndim(right) == 0:
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b) for i in range(len(a.columns))}
+
+    elif isinstance(right, ABCDataFrame):
+        assert right._indexed_same(left)
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b.iloc[:, i]) for i in range(len(a.columns))}
+
+    elif isinstance(right, ABCSeries) and axis == ""columns"":
+        # We only get here if called via left._combine_match_columns,
+        # in which case we specifically want to operate row-by-row
+        assert right.index.equals(left.columns)
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b.iloc[i]) for i in range(len(a.columns))}
+
+    elif isinstance(right, ABCSeries):
+        assert right.index.equals(left.index)  # Handle other cases later
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b) for i in range(len(a.columns))}
+
+    else:
+        # Remaining cases have less-obvious dispatch rules
+        raise NotImplementedError(right)
+
+    new_data = expressions.evaluate(column_op, str_rep, left, right)
+    return new_data
+```",
+pandas-145-vall_llama-8,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Identifying the Issue**: The problem arises when the `dispatch_to_series` function attempts to multiply a DataFrame (`df`) by a Series containing NaT (Not a Time) values, which are of timedelta64[ns] dtype. This operation leads to a TypeError because NaT values cannot be directly multiplied.
+
+2. **Operation on NaT Values**: In pandas, NaT represents missing or null values for datetime64 or timedelta64 types. When performing arithmetic operations involving NaT, pandas propagates the NaT value, meaning any operation with NaT results in NaT. However, the error message indicates an unsupported operand type for *: 'numpy.ndarray' and 'NaTType', suggesting the function doesn't handle NaT values correctly during the multiplication operation.
+
+3. **Function Purpose and Input/Output**: The `dispatch_to_series` function is designed to evaluate frame operations column-wise by dispatching to the Series implementation. It's crucial for various pandas operations, including arithmetic and comparison. Given the error occurs during a multiplication operation involving a NaT-containing Series, we must modify the function to handle such scenarios properly.
+
+### Fixed solution:
+```python
+def dispatch_to_series(left, right, func, str_rep=None, axis=None):
+    """"""
+    Evaluate the frame operation func(left, right) by evaluating
+    column-by-column, dispatching to the Series implementation.
+
+    Parameters
+    ----------
+    left : DataFrame
+    right : scalar or DataFrame
+    func : arithmetic or comparison operator
+    str_rep : str or None, default None
+    axis : {None, 0, 1, ""index"", ""columns""}
+
+    Returns
+    -------
+    DataFrame
+    """"""
+    # Note: we use iloc to access columns for compat with cases
+    #       with non-unique columns.
+    import pandas.core.computation.expressions as expressions
+    import numpy as np
+
+    right = lib.item_from_zerodim(right)
+    if lib.is_scalar(right) or np.ndim(right) == 0:
+        def column_op(a, b):
+            # Add special handling for NaT values
+            if isinstance(b, type(pd.NaT)):
+                return a.apply(lambda x: pd.Series([pd.NaT]*len(x), index=x.index))
+            return {i: func(a.iloc[:, i], b) for i in range(len(a.columns))}
+    elif isinstance(right, ABCDataFrame):
+        assert right._indexed_same(left)
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b.iloc[:, i]) for i in range(len(a.columns))}
+    elif isinstance(right, ABCSeries) and axis == ""columns"":
+        # We only get here if called via left._combine_match_columns,
+        # in which case we specifically want to operate row-by-row
+        assert right.index.equals(left.columns)
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b.iloc[i]) for i in range(len(a.columns))}
+    elif isinstance(right, ABCSeries):
+        assert right.index.equals(left.index)  # Handle other cases later
+        def column_op(a, b):
+            # Handle NaT in series
+            result = {}
+            for i in range(len(a.columns)):
+                col = a.iloc[:, i]
+                series_result = col.apply(lambda x: pd.NaT if b.iloc[x.name] == pd.NaT else func(x, b.iloc[x.name]))
+                result[i] = series_result
+            return result
+    else:
+        # Remaining cases have less-obvious dispatch rules
+        raise NotImplementedError(right)
+
+    new_data = expressions.evaluate(column_op, str_rep, left, right)
+    return new_data
+```
+### Explanation of changes:
+- Added a check for NaT values when `right` is a scalar or 0-dimensional numpy array. If `b` is NaT, return a Series of NaT values with the same index as `a`.
+- Modified the `column_op` function when `right` is an ABCSeries to handle NaT values. For each column in `a`, apply the function element-wise, checking if the corresponding value in `b` is NaT. If it is, the result is NaT; otherwise, apply the function with the value from `b`.
+- These changes ensure that the function correctly handles multiplication operations involving NaT values in Series, avoiding the TypeError and producing the expected result.
+
+### Tests and example uses:
+You can test the modified function with the provided test case:
+```python
+def test_td64_op_nat_casting(self):
+    # Make sure we don't accidentally treat timedelta64(NaT) as datetime64
+    #  when calling dispatch_to_series in DataFrame arithmetic
+    ser = pd.Series([""NaT"", ""NaT""], dtype=""timedelta64[ns]"")
+    df = pd.DataFrame([[1, 2], [3, 4]])
+
+    result = df * ser
+    expected = pd.DataFrame({0: ser, 1: ser})
+    tm.assert_frame_equal(result, expected)
+```",
+pandas-145-vall_llama-9,UNKNOWN,UNKNOWN,"```python
+def dispatch_to_series(left, right, func, str_rep=None, axis=None):
+    """"""
+    Evaluate the frame operation func(left, right) by evaluating
+    column-by-column, dispatching to the Series implementation.
+
+    Parameters
+    ----------
+    left : DataFrame
+    right : scalar or DataFrame
+    func : arithmetic or comparison operator
+    str_rep : str or None, default None
+    axis : {None, 0, 1, ""index"", ""columns""}
+
+    Returns
+    -------
+    DataFrame
+    """"""
+    # Note: we use iloc to access columns for compat with cases
+    #       with non-unique columns.
+    import pandas.core.computation.expressions as expressions
+
+    right = lib.item_from_zerodim(right)
+    if lib.is_scalar(right) or np.ndim(right) == 0:
+
+        def column_op(a, b):
+            if isinstance(b, Timedelta):
+                return a
+            return {i: func(a.iloc[:, i], b) for i in range(len(a.columns))}
+
+    elif isinstance(right, ABCDataFrame):
+        assert right._indexed_same(left)
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b.iloc[:, i]) for i in range(len(a.columns))}
+
+    elif isinstance(right, ABCSeries) and axis == ""columns"":
+        # We only get here if called via left._combine_match_columns,
+        # in which case we specifically want to operate row-by-row
+        assert right.index.equals(left.columns)
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b.iloc[i]) for i in range(len(a.columns))}
+
+    elif isinstance(right, ABCSeries):
+        assert right.index.equals(left.index)  # Handle other cases later
+
+        def column_op(a, b):
+            return {i: func(a.iloc[:, i], b) for i in range(len(a.columns))}
+
+    else:
+        # Remaining cases have less-obvious dispatch rules
+        raise NotImplementedError(right)
+
+    new_data = expressions.evaluate(column_op, str_rep, left, right)
+    return left._constructor(new_data, index=left.index, copy=False)
+```",

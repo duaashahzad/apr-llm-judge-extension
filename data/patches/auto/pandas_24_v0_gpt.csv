@@ -1,0 +1,348 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-24-v0_gpt-0,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+    if nonexistent not in nonexistent_options and not isinstance(
+        nonexistent, timedelta
+    ):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object""
+        )
+
+    if self.tz is not None:
+        if tz is None:
+            new_dates = tzconversion.tz_convert(self.asi8, timezones.UTC, self.tz)
+        else:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+    
+    # Drop frequency if new dates have duplicates or missing timestamps
+    if nonexistent == ""shift_forward"" or nonexistent == ""shift_backward"":
+        self.freq = None
+
+    new_dates = new_dates.view(DT64NS_DTYPE)
+    dtype = tz_to_dtype(tz)
+
+    return self._simple_new(new_dates, dtype=dtype, freq=self.freq)
+```",
+pandas-24-v0_gpt-1,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+    if nonexistent not in nonexistent_options and not isinstance(
+        nonexistent, timedelta
+    ):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object""
+        )
+
+    if self.tz is not None:
+        if tz is None:
+            new_dates = tzconversion.tz_convert(self.asi8, timezones.UTC, self.tz)
+        else:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+        
+    new_dates = new_dates.view(DT64NS_DTYPE)
+    dtype = tz_to_dtype(tz)
+    result = self._simple_new(new_dates, dtype=dtype, freq=None)
+
+    # Reset frequency if necessary
+    if self.freq is not None and nonexistent in [""NaT"", ""raise""]:
+        result.freq = None
+
+    return result
+```",
+pandas-24-v0_gpt-2,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+    if nonexistent not in nonexistent_options and not isinstance(nonexistent, timedelta):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object""
+        )
+
+    if self.tz is not None:
+        if tz is None:
+            new_dates = tzconversion.tz_convert(self.asi8, timezones.UTC, self.tz)
+        else:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+
+    # Invalidate frequency if there are DST transitions or other issues
+    if isinstance(tz, DstTzInfo) and self.freq is not None:
+        new_dates_freq = new_dates.view(DT64NS_DTYPE).freq
+        if not new_dates_freq.is_unique or new_dates_freq != self.freq:
+            new_freq = None  # Invalidate frequency due to DST transition
+        else:
+            new_freq = self.freq
+    else:
+        new_freq = self.freq
+    
+    new_dates = new_dates.view(DT64NS_DTYPE)
+    dtype = tz_to_dtype(tz)
+    return self._simple_new(new_dates, dtype=dtype, freq=new_freq)
+```",
+pandas-24-v0_gpt-3,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+    if nonexistent not in nonexistent_options and not isinstance(
+        nonexistent, timedelta
+    ):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object""
+        )
+
+    if self.tz is not None:
+        if tz is None:
+            new_dates = tzconversion.tz_convert(self.asi8, timezones.UTC, self.tz)
+        else:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+    
+    new_dates = new_dates.view(DT64NS_DTYPE)
+    dtype = tz_to_dtype(tz)
+
+    # Adjust frequency based on whether the new dates have duplicates or missing values
+    if nonexistent in ('raise', 'shift_forward', 'shift_backward'):
+        if self.freq is not None:
+            return self._simple_new(new_dates, dtype=dtype, freq=None)
+        
+    return self._simple_new(new_dates, dtype=dtype, freq=self.freq)
+```",
+pandas-24-v0_gpt-4,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+    if nonexistent not in nonexistent_options and not isinstance(
+        nonexistent, timedelta
+    ):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object""
+        )
+
+    if self.tz is not None:
+        if tz is None:
+            new_dates = tzconversion.tz_convert(self.asi8, timezones.UTC, self.tz)
+        else:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+
+    # Adjusting the frequency based on the new dates
+    new_dates = new_dates.view(DT64NS_DTYPE)
+    dtype = tz_to_dtype(tz)
+
+    # NOTE: Here we ensure that if we are crossing a DST boundary,
+    #       we drop the frequency as expected.
+    if nonexistent in [""shift_forward"", ""shift_backward""] and self.freq is not None:
+        freq = None
+    else:
+        freq = self.freq
+
+    return self._simple_new(new_dates, dtype=dtype, freq=freq)
+```",
+pandas-24-v0_gpt-5,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+    if nonexistent not in nonexistent_options and not isinstance(
+        nonexistent, timedelta
+    ):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object""
+        )
+
+    if self.tz is not None:
+        if tz is None:
+            new_dates = tzconversion.tz_convert(self.asi8, timezones.UTC, self.tz)
+        else:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+
+    new_dates = new_dates.view(DT64NS_DTYPE)
+    dtype = tz_to_dtype(tz)
+    result = self._simple_new(new_dates, dtype=dtype, freq=self.freq)
+    
+    # Adjust the freq if it may not be consistent
+    if nonexistent == 'shift_forward' or nonexistent == 'shift_backward':
+        result.freq = None
+    elif not result.inferred_freq and not isinstance(result.freq, pd.DateOffset):
+        result.freq = None
+            
+    return result
+```",
+pandas-24-v0_gpt-6,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+    if nonexistent not in nonexistent_options and not isinstance(
+        nonexistent, timedelta
+    ):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object""
+        )
+
+    if self.tz is not None:
+        if tz is None:
+            new_dates = tzconversion.tz_convert(self.asi8, timezones.UTC, self.tz)
+        else:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+        # Convert to UTC
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+
+    new_dates = new_dates.view(DT64NS_DTYPE)
+    dtype = tz_to_dtype(tz)
+    result = self._simple_new(new_dates, dtype=dtype, freq=self.freq)
+
+    # If we localized from a timezone with DST changes, we set freq to None
+    if isinstance(tz, str) and 'UTC' not in tz:
+        result.freq = None  # Invalidate frequency
+    else:
+        if self.freq is not None:
+            result.freq = result.inferred_freq  # Preserve frequency if possible
+
+    return result
+```",
+pandas-24-v0_gpt-7,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+    if nonexistent not in nonexistent_options and not isinstance(
+        nonexistent, timedelta
+    ):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object""
+        )
+
+    if self.tz is not None:
+        if tz is None:
+            new_dates = tzconversion.tz_convert(self.asi8, timezones.UTC, self.tz)
+        else:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+        # Convert to UTC
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+    
+    new_dates = new_dates.view(DT64NS_DTYPE)
+    dtype = tz_to_dtype(tz)
+
+    # Check if there were timestamps that were lost due to DST changes
+    if self.freq and self.tz and tz and tz != timezones.UTC:
+        new_freq = self.freq if not self.has_duplicates() else None
+        return self._simple_new(new_dates, dtype=dtype, freq=new_freq)
+    
+    return self._simple_new(new_dates, dtype=dtype, freq=None)
+```",
+pandas-24-v0_gpt-8,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+    if nonexistent not in nonexistent_options and not isinstance(nonexistent, timedelta):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object""
+        )
+
+    if self.tz is not None:
+        if tz is None:
+            new_dates = tzconversion.tz_convert(self.asi8, timezones.UTC, self.tz)
+        else:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+        new_dates = new_dates.view(DT64NS_DTYPE)
+        dtype = tz_to_dtype(tz)
+        self.freq = None  # Reset frequency when localizing
+        return self._simple_new(new_dates, dtype=dtype, freq=self.freq)
+
+    # Ensure to check inferred frequency after timezone is changed
+    new_dates_inferred_freq = self.inferred_freq
+    if new_dates_inferred_freq is None:
+        self.freq = None  # Drop frequency if not inferrable
+    else:
+        self.freq = new_dates_inferred_freq
+    
+    return self._simple_new(new_dates, dtype=dtype, freq=self.freq)
+```",
+pandas-24-v0_gpt-9,UNKNOWN,UNKNOWN,"```python
+def tz_localize(self, tz, ambiguous=""raise"", nonexistent=""raise""):
+    nonexistent_options = (""raise"", ""NaT"", ""shift_forward"", ""shift_backward"")
+    
+    if nonexistent not in nonexistent_options and not isinstance(nonexistent, timedelta):
+        raise ValueError(
+            ""The nonexistent argument must be one of 'raise', ""
+            ""'NaT', 'shift_forward', 'shift_backward' or ""
+            ""a timedelta object""
+        )
+
+    if self.tz is not None:
+        if tz is None:
+            new_dates = tzconversion.tz_convert(self.asi8, timezones.UTC, self.tz)
+        else:
+            raise TypeError(""Already tz-aware, use tz_convert to convert."")
+    else:
+        tz = timezones.maybe_get_tz(tz)
+        # Convert to UTC
+        new_dates = conversion.tz_localize_to_utc(
+            self.asi8, tz, ambiguous=ambiguous, nonexistent=nonexistent
+        )
+    
+    new_dates = new_dates.view(DT64NS_DTYPE)
+    dtype = tz_to_dtype(tz)
+    
+    # Explicitly drop frequency for DST transitions or non-inferable frequencies
+    if nonexistent in [""shift_forward"", ""shift_backward""] or self.freq is not None:
+        inferred_freq = new_dates.inferred_freq
+        if inferred_freq is None:
+            freq = None
+        else:
+            freq = self.freq
+    else:
+        freq = self.freq
+    
+    return self._simple_new(new_dates, dtype=dtype, freq=freq)
+```",

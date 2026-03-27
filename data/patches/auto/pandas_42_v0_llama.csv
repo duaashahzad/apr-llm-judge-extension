@@ -1,0 +1,1721 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-42-v0_llama-0,UNKNOWN,UNKNOWN,"```python
+def assert_series_equal(
+    left,
+    right,
+    check_dtype=True,
+    check_index_type=""equiv"",
+    check_series_type=True,
+    check_less_precise=False,
+    check_names=True,
+    check_exact=False,
+    check_datetimelike_compat=False,
+    check_categorical=True,
+    check_category_order=True,
+    obj=""Series"",
+):
+    """"""
+    Check that left and right Series are equal.
+
+    Parameters
+    ----------
+    left : Series
+    right : Series
+    check_dtype : bool, default True
+        Whether to check the Series dtype is identical.
+    check_index_type : bool or {'equiv'}, default 'equiv'
+        Whether to check the Index class, dtype and inferred_type
+        are identical.
+    check_series_type : bool, default True
+         Whether to check the Series class is identical.
+    check_less_precise : bool or int, default False
+        Specify comparison precision. Only used when check_exact is False.
+        5 digits (False) or 3 digits (True) after decimal points are compared.
+        If int, then specify the digits to compare.
+
+        When comparing two numbers, if the first number has magnitude less
+        than 1e-5, we compare the two numbers directly and check whether
+        they are equivalent within the specified precision. Otherwise, we
+        compare the **ratio** of the second number to the first number and
+        check whether it is equivalent to 1 within the specified precision.
+    check_names : bool, default True
+        Whether to check the Series and Index names attribute.
+    check_exact : bool, default False
+        Whether to compare number exactly.
+    check_datetimelike_compat : bool, default False
+        Compare datetime-like which is comparable ignoring dtype.
+    check_categorical : bool, default True
+        Whether to compare internal Categorical exactly.
+    check_category_order : bool, default True
+        Whether to compare category order of internal Categoricals.
+
+       .. versionadded:: 1.0.2
+    obj : str, default 'Series'
+        Specify object name being compared, internally used to show appropriate
+        assertion message.
+    """"""
+    __tracebackhide__ = True
+
+    # instance validation
+    _check_isinstance(left, right, Series)
+
+    if check_series_type:
+        assert_class_equal(left, right, obj=obj)
+
+    # length comparison
+    if len(left)!= len(right):
+        msg1 = f""{len(left)}, {left.index}""
+        msg2 = f""{len(right)}, {right.index}""
+        raise_assert_detail(obj, ""Series length are different"", msg1, msg2)
+
+    # index comparison
+    assert_index_equal(
+        left.index,
+        right.index,
+        exact=check_index_type,
+        check_names=check_names,
+        check_less_precise=check_less_precise,
+        check_exact=check_exact,
+        check_categorical=check_categorical,
+        obj=f""{obj}.index"",
+    )
+
+    if check_dtype:
+        # We want to skip exact dtype checking when `check_categorical`
+        # is False. We'll still raise if only one is a `Categorical`,
+        # regardless of `check_categorical`
+        if (
+            is_categorical_dtype(left.dtype)
+            and is_categorical_dtype(right.dtype)
+            and not check_categorical
+        ):
+            pass
+        else:
+            assert_attr_equal(""dtype"", left, right, obj=f""Attributes of {obj}"")
+
+    if check_exact:
+        if not is_numeric_dtype(left.dtype):
+            raise AssertionError(""check_exact may only be used with numeric Series"")
+
+        assert_numpy_array_equal(
+            left._values, right._values, check_dtype=check_dtype, obj=str(obj)
+        )
+    elif check_datetimelike_compat and (
+        needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype)
+    ):
+        # we want to check only if we have compat dtypes
+        # e.g. integer and M|m are NOT compat, but we can simply check
+        # the values in that case
+
+        # datetimelike may have different objects (e.g. datetime.datetime
+        # vs Timestamp) but will compare equal
+        if not Index(left._values).equals(Index(right._values)):
+            msg = (
+                f""[datetimelike_compat=True] {left._values} ""
+                f""is not equal to {right._values}.""
+            )
+            raise AssertionError(msg)
+    elif is_interval_dtype(left.dtype) or is_interval_dtype(right.dtype):
+        # modified here
+        if is_interval_dtype(left.dtype) and not is_interval_dtype(right.dtype):
+            left_array = left.array
+            right_array = pd.array([x for x in right], dtype=left.dtype)
+        elif not is_interval_dtype(left.dtype) and is_interval_dtype(right.dtype):
+            left_array = pd.array([x for x in left], dtype=right.dtype)
+            right_array = right.array
+        else:
+            left_array = left.array
+            right_array = right.array
+        assert_interval_array_equal(left_array, right_array)
+    elif is_categorical_dtype(left.dtype) or is_categorical_dtype(right.dtype):
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+    elif is_extension_array_dtype(left.dtype) or is_extension_array_dtype(right.dtype):
+        # modified here
+        if is_extension_array_dtype(left.dtype) and not is_extension_array_dtype(right.dtype):
+            left_array = left._values
+            right_array = pd.array(right, dtype=left.dtype)
+        elif not is_extension_array_dtype(left.dtype) and is_extension_array_dtype(right.dtype):
+            left_array = pd.array(left, dtype=right.dtype)
+            right_array = right._values
+        else:
+            left_array = left._values
+            right_array = right._values
+        assert_extension_array_equal(left_array, right_array, check_dtype=check_dtype)
+    elif needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype):
+        # DatetimeArray or TimedeltaArray
+        assert_extension_array_equal(left._values, right._values)
+    else:
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+
+    # metadata comparison
+    if check_names:
+        assert_attr_equal(""name"", left, right, obj=obj)
+
+    if check_categorical:
+        if is_categorical_dtype(left) or is_categorical_dtype(right):
+            assert_categorical_equal(
+                left._values,
+                right._values,
+                obj=f""{obj} category"",
+                check_category_order=check_category_order,
+            )
+```",
+pandas-42-v0_llama-1,UNKNOWN,UNKNOWN,"```python
+def assert_series_equal(
+    left,
+    right,
+    check_dtype=True,
+    check_index_type=""equiv"",
+    check_series_type=True,
+    check_less_precise=False,
+    check_names=True,
+    check_exact=False,
+    check_datetimelike_compat=False,
+    check_categorical=True,
+    check_category_order=True,
+    obj=""Series"",
+):
+    """"""
+    Check that left and right Series are equal.
+
+    Parameters
+    ----------
+    left : Series
+    right : Series
+    check_dtype : bool, default True
+        Whether to check the Series dtype is identical.
+    check_index_type : bool or {'equiv'}, default 'equiv'
+        Whether to check the Index class, dtype and inferred_type
+        are identical.
+    check_series_type : bool, default True
+         Whether to check the Series class is identical.
+    check_less_precise : bool or int, default False
+        Specify comparison precision. Only used when check_exact is False.
+        5 digits (False) or 3 digits (True) after decimal points are compared.
+        If int, then specify the digits to compare.
+
+        When comparing two numbers, if the first number has magnitude less
+        than 1e-5, we compare the two numbers directly and check whether
+        they are equivalent within the specified precision. Otherwise, we
+        compare the **ratio** of the second number to the first number and
+        check whether it is equivalent to 1 within the specified precision.
+    check_names : bool, default True
+        Whether to check the Series and Index names attribute.
+    check_exact : bool, default False
+        Whether to compare number exactly.
+    check_datetimelike_compat : bool, default False
+        Compare datetime-like which is comparable ignoring dtype.
+    check_categorical : bool, default True
+        Whether to compare internal Categorical exactly.
+    check_category_order : bool, default True
+        Whether to compare category order of internal Categoricals.
+
+       .. versionadded:: 1.0.2
+    obj : str, default 'Series'
+        Specify object name being compared, internally used to show appropriate
+        assertion message.
+    """"""
+    __tracebackhide__ = True
+
+    # instance validation
+    _check_isinstance(left, right, Series)
+
+    if check_series_type:
+        assert_class_equal(left, right, obj=obj)
+
+    # length comparison
+    if len(left)!= len(right):
+        msg1 = f""{len(left)}, {left.index}""
+        msg2 = f""{len(right)}, {right.index}""
+        raise_assert_detail(obj, ""Series length are different"", msg1, msg2)
+
+    # index comparison
+    assert_index_equal(
+        left.index,
+        right.index,
+        exact=check_index_type,
+        check_names=check_names,
+        check_less_precise=check_less_precise,
+        check_exact=check_exact,
+        check_categorical=check_categorical,
+        obj=f""{obj}.index"",
+    )
+
+    if check_dtype:
+        # We want to skip exact dtype checking when `check_categorical`
+        # is False. We'll still raise if only one is a `Categorical`,
+        # regardless of `check_categorical`
+        if (
+            is_categorical_dtype(left.dtype)
+            and is_categorical_dtype(right.dtype)
+            and not check_categorical
+        ):
+            pass
+        else:
+            assert_attr_equal(""dtype"", left, right, obj=f""Attributes of {obj}"")
+
+    if check_exact:
+        if not is_numeric_dtype(left.dtype):
+            raise AssertionError(""check_exact may only be used with numeric Series"")
+
+        assert_numpy_array_equal(
+            left._values, right._values, check_dtype=check_dtype, obj=str(obj)
+        )
+    elif check_datetimelike_compat and (
+        needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype)
+    ):
+        # we want to check only if we have compat dtypes
+        # e.g. integer and M|m are NOT compat, but we can simply check
+        # the values in that case
+
+        # datetimelike may have different objects (e.g. datetime.datetime
+        # vs Timestamp) but will compare equal
+        if not Index(left._values).equals(Index(right._values)):
+            msg = (
+                f""[datetimelike_compat=True] {left._values} ""
+                f""is not equal to {right._values}.""
+            )
+            raise AssertionError(msg)
+    elif is_interval_dtype(left.dtype) or is_interval_dtype(right.dtype):
+        assert_interval_array_equal(left.array, right.array)
+    elif is_categorical_dtype(left.dtype) or is_categorical_dtype(right.dtype):
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+    elif is_extension_array_dtype(left.dtype) or is_extension_array_dtype(right.dtype):
+        if not check_dtype:
+            left_array = left.array
+            right_array = right.array
+            if is_extension_array_dtype(left.dtype):
+                left_array = left_array.astype(object)
+            if is_extension_array_dtype(right.dtype):
+                right_array = right_array.astype(object)
+            assert_numpy_array_equal(
+                left_array, right_array, check_dtype=False, obj=str(obj)
+            )
+        else:
+            assert_extension_array_equal(left._values, right._values)
+    elif needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype):
+        # DatetimeArray or TimedeltaArray
+        if not check_dtype:
+            left_array = left.array
+            right_array = right.array
+            if needs_i8_conversion(left.dtype):
+                left_array = left_array.astype(object)
+            if needs_i8_conversion(right.dtype):
+                right_array = right_array.astype(object)
+            assert_numpy_array_equal(
+                left_array, right_array, check_dtype=False, obj=str(obj)
+            )
+        else:
+            assert_extension_array_equal(left._values, right._values)
+    else:
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+
+    # metadata comparison
+    if check_names:
+        assert_attr_equal(""name"", left, right, obj=obj)
+
+    if check_categorical:
+        if is_categorical_dtype(left) or is_categorical_dtype(right):
+            assert_categorical_equal(
+                left._values,
+                right._values,
+                obj=f""{obj} category"",
+                check_category_order=check_category_order,
+            )
+```",
+pandas-42-v0_llama-2,UNKNOWN,UNKNOWN,"```python
+def assert_series_equal(
+    left,
+    right,
+    check_dtype=True,
+    check_index_type=""equiv"",
+    check_series_type=True,
+    check_less_precise=False,
+    check_names=True,
+    check_exact=False,
+    check_datetimelike_compat=False,
+    check_categorical=True,
+    check_category_order=True,
+    obj=""Series"",
+):
+    """"""
+    Check that left and right Series are equal.
+
+    Parameters
+    ----------
+    left : Series
+    right : Series
+    check_dtype : bool, default True
+        Whether to check the Series dtype is identical.
+    check_index_type : bool or {'equiv'}, default 'equiv'
+        Whether to check the Index class, dtype and inferred_type
+        are identical.
+    check_series_type : bool, default True
+         Whether to check the Series class is identical.
+    check_less_precise : bool or int, default False
+        Specify comparison precision. Only used when check_exact is False.
+        5 digits (False) or 3 digits (True) after decimal points are compared.
+        If int, then specify the digits to compare.
+
+        When comparing two numbers, if the first number has magnitude less
+        than 1e-5, we compare the two numbers directly and check whether
+        they are equivalent within the specified precision. Otherwise, we
+        compare the **ratio** of the second number to the first number and
+        check whether it is equivalent to 1 within the specified precision.
+    check_names : bool, default True
+        Whether to check the Series and Index names attribute.
+    check_exact : bool, default False
+        Whether to compare number exactly.
+    check_datetimelike_compat : bool, default False
+        Compare datetime-like which is comparable ignoring dtype.
+    check_categorical : bool, default True
+        Whether to compare internal Categorical exactly.
+    check_category_order : bool, default True
+        Whether to compare category order of internal Categoricals.
+
+       .. versionadded:: 1.0.2
+    obj : str, default 'Series'
+        Specify object name being compared, internally used to show appropriate
+        assertion message.
+    """"""
+    __tracebackhide__ = True
+
+    # instance validation
+    _check_isinstance(left, right, Series)
+
+    if check_series_type:
+        assert_class_equal(left, right, obj=obj)
+
+    # length comparison
+    if len(left)!= len(right):
+        msg1 = f""{len(left)}, {left.index}""
+        msg2 = f""{len(right)}, {right.index}""
+        raise_assert_detail(obj, ""Series length are different"", msg1, msg2)
+
+    # index comparison
+    assert_index_equal(
+        left.index,
+        right.index,
+        exact=check_index_type,
+        check_names=check_names,
+        check_less_precise=check_less_precise,
+        check_exact=check_exact,
+        check_categorical=check_categorical,
+        obj=f""{obj}.index"",
+    )
+
+    if check_dtype:
+        # We want to skip exact dtype checking when `check_categorical`
+        # is False. We'll still raise if only one is a `Categorical`,
+        # regardless of `check_categorical`
+        if (
+            is_categorical_dtype(left.dtype)
+            and is_categorical_dtype(right.dtype)
+            and not check_categorical
+        ):
+            pass
+        else:
+            assert_attr_equal(""dtype"", left, right, obj=f""Attributes of {obj}"")
+
+    if check_exact:
+        if not is_numeric_dtype(left.dtype):
+            raise AssertionError(""check_exact may only be used with numeric Series"")
+
+        assert_numpy_array_equal(
+            left._values, right._values, check_dtype=check_dtype, obj=str(obj)
+        )
+    elif check_datetimelike_compat and (
+        needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype)
+    ):
+        # we want to check only if we have compat dtypes
+        # e.g. integer and M|m are NOT compat, but we can simply check
+        # the values in that case
+
+        # datetimelike may have different objects (e.g. datetime.datetime
+        # vs Timestamp) but will compare equal
+        if not Index(left._values).equals(Index(right._values)):
+            msg = (
+                f""[datetimelike_compat=True] {left._values} ""
+                f""is not equal to {right._values}.""
+            )
+            raise AssertionError(msg)
+    elif is_interval_dtype(left.dtype) or is_interval_dtype(right.dtype):
+        if is_interval_dtype(left.dtype) and is_object_dtype(right.dtype):
+            right = right.apply(lambda x: x if pd.isnull(x) else pd.Interval(x.left, x.right, closed=x.closed))
+            right = right.astype('interval')
+        elif is_object_dtype(left.dtype) and is_interval_dtype(right.dtype):
+            left = left.apply(lambda x: x if pd.isnull(x) else pd.Interval(x.left, x.right, closed=x.closed))
+            left = left.astype('interval')
+        assert_interval_array_equal(left.array, right.array)
+    elif is_categorical_dtype(left.dtype) or is_categorical_dtype(right.dtype):
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+    elif is_extension_array_dtype(left.dtype) or is_extension_array_dtype(right.dtype):
+        if is_extension_array_dtype(left.dtype) and not is_extension_array_dtype(right.dtype):
+            right = pd.array(right, dtype=left.dtype)
+        elif not is_extension_array_dtype(left.dtype) and is_extension_array_dtype(right.dtype):
+            left = pd.array(left, dtype=right.dtype)
+        assert_extension_array_equal(left._values, right._values, check_dtype=check_dtype)
+    elif needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype):
+        # DatetimeArray or TimedeltaArray
+        assert_extension_array_equal(left._values, right._values)
+    else:
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+
+    # metadata comparison
+    if check_names:
+        assert_attr_equal(""name"", left, right, obj=obj)
+
+    if check_categorical:
+        if is_categorical_dtype(left) or is_categorical_dtype(right):
+            assert_categorical_equal(
+                left._values,
+                right._values,
+                obj=f""{obj} category"",
+                check_category_order=check_category_order,
+            )
+
+```",
+pandas-42-v0_llama-3,UNKNOWN,UNKNOWN,"```python
+def assert_series_equal(
+    left,
+    right,
+    check_dtype=True,
+    check_index_type=""equiv"",
+    check_series_type=True,
+    check_less_precise=False,
+    check_names=True,
+    check_exact=False,
+    check_datetimelike_compat=False,
+    check_categorical=True,
+    check_category_order=True,
+    obj=""Series"",
+):
+    """"""
+    Check that left and right Series are equal.
+
+    Parameters
+    ----------
+    left : Series
+    right : Series
+    check_dtype : bool, default True
+        Whether to check the Series dtype is identical.
+    check_index_type : bool or {'equiv'}, default 'equiv'
+        Whether to check the Index class, dtype and inferred_type
+        are identical.
+    check_series_type : bool, default True
+         Whether to check the Series class is identical.
+    check_less_precise : bool or int, default False
+        Specify comparison precision. Only used when check_exact is False.
+        5 digits (False) or 3 digits (True) after decimal points are compared.
+        If int, then specify the digits to compare.
+
+        When comparing two numbers, if the first number has magnitude less
+        than 1e-5, we compare the two numbers directly and check whether
+        they are equivalent within the specified precision. Otherwise, we
+        compare the **ratio** of the second number to the first number and
+        check whether it is equivalent to 1 within the specified precision.
+    check_names : bool, default True
+        Whether to check the Series and Index names attribute.
+    check_exact : bool, default False
+        Whether to compare number exactly.
+    check_datetimelike_compat : bool, default False
+        Compare datetime-like which is comparable ignoring dtype.
+    check_categorical : bool, default True
+        Whether to compare internal Categorical exactly.
+    check_category_order : bool, default True
+        Whether to compare category order of internal Categoricals.
+
+       .. versionadded:: 1.0.2
+    obj : str, default 'Series'
+        Specify object name being compared, internally used to show appropriate
+        assertion message.
+    """"""
+    __tracebackhide__ = True
+
+    # instance validation
+    _check_isinstance(left, right, Series)
+
+    if check_series_type:
+        assert_class_equal(left, right, obj=obj)
+
+    # length comparison
+    if len(left)!= len(right):
+        msg1 = f""{len(left)}, {left.index}""
+        msg2 = f""{len(right)}, {right.index}""
+        raise_assert_detail(obj, ""Series length are different"", msg1, msg2)
+
+    # index comparison
+    assert_index_equal(
+        left.index,
+        right.index,
+        exact=check_index_type,
+        check_names=check_names,
+        check_less_precise=check_less_precise,
+        check_exact=check_exact,
+        check_categorical=check_categorical,
+        obj=f""{obj}.index"",
+    )
+
+    if check_dtype:
+        # We want to skip exact dtype checking when `check_categorical`
+        # is False. We'll still raise if only one is a `Categorical`,
+        # regardless of `check_categorical`
+        if (
+            is_categorical_dtype(left.dtype)
+            and is_categorical_dtype(right.dtype)
+            and not check_categorical
+        ):
+            pass
+        else:
+            assert_attr_equal(""dtype"", left, right, obj=f""Attributes of {obj}"")
+
+    if check_exact:
+        if not is_numeric_dtype(left.dtype):
+            raise AssertionError(""check_exact may only be used with numeric Series"")
+
+        assert_numpy_array_equal(
+            left._values, right._values, check_dtype=check_dtype, obj=str(obj)
+        )
+    elif check_datetimelike_compat and (
+        needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype)
+    ):
+        # we want to check only if we have compat dtypes
+        # e.g. integer and M|m are NOT compat, but we can simply check
+        # the values in that case
+
+        # datetimelike may have different objects (e.g. datetime.datetime
+        # vs Timestamp) but will compare equal
+        if not Index(left._values).equals(Index(right._values)):
+            msg = (
+                f""[datetimelike_compat=True] {left._values} ""
+                f""is not equal to {right._values}.""
+            )
+            raise AssertionError(msg)
+    elif is_interval_dtype(left.dtype) or is_interval_dtype(right.dtype):
+        if is_interval_dtype(left.dtype) and is_object_dtype(right.dtype):
+            right_array = pd.array([x for x in right], dtype=left.dtype)
+            assert_interval_array_equal(left.array, right_array)
+        elif is_interval_dtype(right.dtype) and is_object_dtype(left.dtype):
+            left_array = pd.array([x for x in left], dtype=right.dtype)
+            assert_interval_array_equal(left_array, right.array)
+        else:
+            assert_interval_array_equal(left.array, right.array)
+    elif is_categorical_dtype(left.dtype) or is_categorical_dtype(right.dtype):
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+    elif is_extension_array_dtype(left.dtype) or is_extension_array_dtype(right.dtype):
+        if is_extension_array_dtype(left.dtype) and not is_extension_array_dtype(
+            right.dtype
+        ):
+            right_array = pd.array(right, dtype=left.dtype)
+            assert_extension_array_equal(left._values, right_array)
+        elif is_extension_array_dtype(right.dtype) and not is_extension_array_dtype(
+            left.dtype
+        ):
+            left_array = pd.array(left, dtype=right.dtype)
+            assert_extension_array_equal(left_array, right._values)
+        else:
+            assert_extension_array_equal(left._values, right._values)
+    elif needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype):
+        # DatetimeArray or TimedeltaArray
+        if needs_i8_conversion(left.dtype) and not needs_i8_conversion(right.dtype):
+            right_array = pd.array(right, dtype=left.dtype)
+            assert_extension_array_equal(left._values, right_array)
+        elif needs_i8_conversion(right.dtype) and not needs_i8_conversion(left.dtype):
+            left_array = pd.array(left, dtype=right.dtype)
+            assert_extension_array_equal(left_array, right._values)
+        else:
+            assert_extension_array_equal(left._values, right._values)
+    else:
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+
+    # metadata comparison
+    if check_names:
+        assert_attr_equal(""name"", left, right, obj=obj)
+
+    if check_categorical:
+        if is_categorical_dtype(left) or is_categorical_dtype(right):
+            assert_categorical_equal(
+                left._values,
+                right._values,
+                obj=f""{obj} category"",
+                check_category_order=check_category_order,
+            )
+```",
+pandas-42-v0_llama-4,UNKNOWN,UNKNOWN,"```python
+def assert_series_equal(
+    left,
+    right,
+    check_dtype=True,
+    check_index_type=""equiv"",
+    check_series_type=True,
+    check_less_precise=False,
+    check_names=True,
+    check_exact=False,
+    check_datetimelike_compat=False,
+    check_categorical=True,
+    check_category_order=True,
+    obj=""Series"",
+):
+    """"""
+    Check that left and right Series are equal.
+
+    Parameters
+    ----------
+    left : Series
+    right : Series
+    check_dtype : bool, default True
+        Whether to check the Series dtype is identical.
+    check_index_type : bool or {'equiv'}, default 'equiv'
+        Whether to check the Index class, dtype and inferred_type
+        are identical.
+    check_series_type : bool, default True
+         Whether to check the Series class is identical.
+    check_less_precise : bool or int, default False
+        Specify comparison precision. Only used when check_exact is False.
+        5 digits (False) or 3 digits (True) after decimal points are compared.
+        If int, then specify the digits to compare.
+
+        When comparing two numbers, if the first number has magnitude less
+        than 1e-5, we compare the two numbers directly and check whether
+        they are equivalent within the specified precision. Otherwise, we
+        compare the **ratio** of the second number to the first number and
+        check whether it is equivalent to 1 within the specified precision.
+    check_names : bool, default True
+        Whether to check the Series and Index names attribute.
+    check_exact : bool, default False
+        Whether to compare number exactly.
+    check_datetimelike_compat : bool, default False
+        Compare datetime-like which is comparable ignoring dtype.
+    check_categorical : bool, default True
+        Whether to compare internal Categorical exactly.
+    check_category_order : bool, default True
+        Whether to compare category order of internal Categoricals.
+
+       .. versionadded:: 1.0.2
+    obj : str, default 'Series'
+        Specify object name being compared, internally used to show appropriate
+        assertion message.
+    """"""
+    __tracebackhide__ = True
+
+    # instance validation
+    _check_isinstance(left, right, Series)
+
+    if check_series_type:
+        assert_class_equal(left, right, obj=obj)
+
+    # length comparison
+    if len(left)!= len(right):
+        msg1 = f""{len(left)}, {left.index}""
+        msg2 = f""{len(right)}, {right.index}""
+        raise_assert_detail(obj, ""Series length are different"", msg1, msg2)
+
+    # index comparison
+    assert_index_equal(
+        left.index,
+        right.index,
+        exact=check_index_type,
+        check_names=check_names,
+        check_less_precise=check_less_precise,
+        check_exact=check_exact,
+        check_categorical=check_categorical,
+        obj=f""{obj}.index"",
+    )
+
+    if check_dtype:
+        # We want to skip exact dtype checking when `check_categorical`
+        # is False. We'll still raise if only one is a `Categorical`,
+        # regardless of `check_categorical`
+        if (
+            is_categorical_dtype(left.dtype)
+            and is_categorical_dtype(right.dtype)
+            and not check_categorical
+        ):
+            pass
+        else:
+            assert_attr_equal(""dtype"", left, right, obj=f""Attributes of {obj}"")
+
+    if check_exact:
+        if not is_numeric_dtype(left.dtype):
+            raise AssertionError(""check_exact may only be used with numeric Series"")
+
+        assert_numpy_array_equal(
+            left._values, right._values, check_dtype=check_dtype, obj=str(obj)
+        )
+    elif check_datetimelike_compat and (
+        needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype)
+    ):
+        # we want to check only if we have compat dtypes
+        # e.g. integer and M|m are NOT compat, but we can simply check
+        # the values in that case
+
+        # datetimelike may have different objects (e.g. datetime.datetime
+        # vs Timestamp) but will compare equal
+        if not Index(left._values).equals(Index(right._values)):
+            msg = (
+                f""[datetimelike_compat=True] {left._values} ""
+                f""is not equal to {right._values}.""
+            )
+            raise AssertionError(msg)
+    elif is_interval_dtype(left.dtype) or is_interval_dtype(right.dtype):
+        try:
+            assert_interval_array_equal(left.array, right.array)
+        except AssertionError as e:
+            if not check_dtype:
+                left_array = left.array
+                right_array = right.array.astype(object)
+                assert_numpy_array_equal(
+                    left_array.astype(object), right_array, obj=str(obj)
+                )
+            else:
+                raise e
+    elif is_categorical_dtype(left.dtype) or is_categorical_dtype(right.dtype):
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+    elif is_extension_array_dtype(left.dtype) or is_extension_array_dtype(right.dtype):
+        try:
+            assert_extension_array_equal(left._values, right._values, check_dtype=check_dtype)
+        except AssertionError as e:
+            if not check_dtype:
+                left_array = left._values
+                right_array = right._values.astype(object)
+                assert_numpy_array_equal(
+                    left_array.astype(object), right_array, obj=str(obj)
+                )
+            else:
+                raise e
+    elif needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype):
+        # DatetimeArray or TimedeltaArray
+        try:
+            assert_extension_array_equal(left._values, right._values, check_dtype=check_dtype)
+        except AssertionError as e:
+            if not check_dtype:
+                left_array = left._values
+                right_array = right._values.astype(object)
+                assert_numpy_array_equal(
+                    left_array.astype(object), right_array, obj=str(obj)
+                )
+            else:
+                raise e
+    else:
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+
+    # metadata comparison
+    if check_names:
+        assert_attr_equal(""name"", left, right, obj=obj)
+
+    if check_categorical:
+        if is_categorical_dtype(left) or is_categorical_dtype(right):
+            assert_categorical_equal(
+                left._values,
+                right._values,
+                obj=f""{obj} category"",
+                check_category_order=check_category_order,
+            )
+```",
+pandas-42-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+def assert_series_equal(
+    left,
+    right,
+    check_dtype=True,
+    check_index_type=""equiv"",
+    check_series_type=True,
+    check_less_precise=False,
+    check_names=True,
+    check_exact=False,
+    check_datetimelike_compat=False,
+    check_categorical=True,
+    check_category_order=True,
+    obj=""Series"",
+):
+    """"""
+    Check that left and right Series are equal.
+
+    Parameters
+    ----------
+    left : Series
+    right : Series
+    check_dtype : bool, default True
+        Whether to check the Series dtype is identical.
+    check_index_type : bool or {'equiv'}, default 'equiv'
+        Whether to check the Index class, dtype and inferred_type
+        are identical.
+    check_series_type : bool, default True
+         Whether to check the Series class is identical.
+    check_less_precise : bool or int, default False
+        Specify comparison precision. Only used when check_exact is False.
+        5 digits (False) or 3 digits (True) after decimal points are compared.
+        If int, then specify the digits to compare.
+
+        When comparing two numbers, if the first number has magnitude less
+        than 1e-5, we compare the two numbers directly and check whether
+        they are equivalent within the specified precision. Otherwise, we
+        compare the **ratio** of the second number to the first number and
+        check whether it is equivalent to 1 within the specified precision.
+    check_names : bool, default True
+        Whether to check the Series and Index names attribute.
+    check_exact : bool, default False
+        Whether to compare number exactly.
+    check_datetimelike_compat : bool, default False
+        Compare datetime-like which is comparable ignoring dtype.
+    check_categorical : bool, default True
+        Whether to compare internal Categorical exactly.
+    check_category_order : bool, default True
+        Whether to compare category order of internal Categoricals.
+
+       .. versionadded:: 1.0.2
+    obj : str, default 'Series'
+        Specify object name being compared, internally used to show appropriate
+        assertion message.
+    """"""
+    __tracebackhide__ = True
+
+    # instance validation
+    _check_isinstance(left, right, Series)
+
+    if check_series_type:
+        assert_class_equal(left, right, obj=obj)
+
+    # length comparison
+    if len(left)!= len(right):
+        msg1 = f""{len(left)}, {left.index}""
+        msg2 = f""{len(right)}, {right.index}""
+        raise_assert_detail(obj, ""Series length are different"", msg1, msg2)
+
+    # index comparison
+    assert_index_equal(
+        left.index,
+        right.index,
+        exact=check_index_type,
+        check_names=check_names,
+        check_less_precise=check_less_precise,
+        check_exact=check_exact,
+        check_categorical=check_categorical,
+        obj=f""{obj}.index"",
+    )
+
+    if check_dtype:
+        # We want to skip exact dtype checking when `check_categorical`
+        # is False. We'll still raise if only one is a `Categorical`,
+        # regardless of `check_categorical`
+        if (
+            is_categorical_dtype(left.dtype)
+            and is_categorical_dtype(right.dtype)
+            and not check_categorical
+        ):
+            pass
+        else:
+            assert_attr_equal(""dtype"", left, right, obj=f""Attributes of {obj}"")
+
+    if check_exact:
+        if not is_numeric_dtype(left.dtype):
+            raise AssertionError(""check_exact may only be used with numeric Series"")
+
+        assert_numpy_array_equal(
+            left._values, right._values, check_dtype=check_dtype, obj=str(obj)
+        )
+    elif check_datetimelike_compat and (
+        needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype)
+    ):
+        # we want to check only if we have compat dtypes
+        # e.g. integer and M|m are NOT compat, but we can simply check
+        # the values in that case
+
+        # datetimelike may have different objects (e.g. datetime.datetime
+        # vs Timestamp) but will compare equal
+        if not Index(left._values).equals(Index(right._values)):
+            msg = (
+                f""[datetimelike_compat=True] {left._values} ""
+                f""is not equal to {right._values}.""
+            )
+            raise AssertionError(msg)
+    elif is_interval_dtype(left.dtype) or is_interval_dtype(right.dtype):
+        try:
+            assert_interval_array_equal(left.array, right.array)
+        except AssertionError:
+            left_array = left.array
+            right_array = right.array.astype(object)
+            for x, y in zip(left_array, right_array):
+                assert x == y, f""Interval {x} is not equal to {y}""
+    elif is_categorical_dtype(left.dtype) or is_categorical_dtype(right.dtype):
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+    elif is_extension_array_dtype(left.dtype) or is_extension_array_dtype(right.dtype):
+        try:
+            assert_extension_array_equal(left._values, right._values, check_dtype=check_dtype)
+        except AssertionError:
+            left_array = left._values
+            right_array = right._values
+            if not check_dtype:
+                right_array = right_array.astype(object)
+                for x, y in zip(left_array, right_array):
+                    assert x == y, f""ExtensionArray {x} is not equal to {y}""
+            else:
+                raise
+    elif needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype):
+        # DatetimeArray or TimedeltaArray
+        try:
+            assert_extension_array_equal(left._values, right._values)
+        except AssertionError:
+            left_array = left._values
+            right_array = right._values.astype(object)
+            for x, y in zip(left_array, right_array):
+                assert x == y, f""ExtensionArray {x} is not equal to {y}""
+    else:
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+
+    # metadata comparison
+    if check_names:
+        assert_attr_equal(""name"", left, right, obj=obj)
+
+    if check_categorical:
+        if is_categorical_dtype(left) or is_categorical_dtype(right):
+            assert_categorical_equal(
+                left._values,
+                right._values,
+                obj=f""{obj} category"",
+                check_category_order=check_category_order,
+            )
+```",
+pandas-42-v0_llama-6,UNKNOWN,UNKNOWN,"```python
+def assert_series_equal(
+    left,
+    right,
+    check_dtype=True,
+    check_index_type=""equiv"",
+    check_series_type=True,
+    check_less_precise=False,
+    check_names=True,
+    check_exact=False,
+    check_datetimelike_compat=False,
+    check_categorical=True,
+    check_category_order=True,
+    obj=""Series"",
+):
+    """"""
+    Check that left and right Series are equal.
+
+    Parameters
+    ----------
+    left : Series
+    right : Series
+    check_dtype : bool, default True
+        Whether to check the Series dtype is identical.
+    check_index_type : bool or {'equiv'}, default 'equiv'
+        Whether to check the Index class, dtype and inferred_type
+        are identical.
+    check_series_type : bool, default True
+         Whether to check the Series class is identical.
+    check_less_precise : bool or int, default False
+        Specify comparison precision. Only used when check_exact is False.
+        5 digits (False) or 3 digits (True) after decimal points are compared.
+        If int, then specify the digits to compare.
+
+        When comparing two numbers, if the first number has magnitude less
+        than 1e-5, we compare the two numbers directly and check whether
+        they are equivalent within the specified precision. Otherwise, we
+        compare the **ratio** of the second number to the first number and
+        check whether it is equivalent to 1 within the specified precision.
+    check_names : bool, default True
+        Whether to check the Series and Index names attribute.
+    check_exact : bool, default False
+        Whether to compare number exactly.
+    check_datetimelike_compat : bool, default False
+        Compare datetime-like which is comparable ignoring dtype.
+    check_categorical : bool, default True
+        Whether to compare internal Categorical exactly.
+    check_category_order : bool, default True
+        Whether to compare category order of internal Categoricals.
+
+       .. versionadded:: 1.0.2
+    obj : str, default 'Series'
+        Specify object name being compared, internally used to show appropriate
+        assertion message.
+    """"""
+    __tracebackhide__ = True
+
+    # instance validation
+    _check_isinstance(left, right, Series)
+
+    if check_series_type:
+        assert_class_equal(left, right, obj=obj)
+
+    # length comparison
+    if len(left)!= len(right):
+        msg1 = f""{len(left)}, {left.index}""
+        msg2 = f""{len(right)}, {right.index}""
+        raise_assert_detail(obj, ""Series length are different"", msg1, msg2)
+
+    # index comparison
+    assert_index_equal(
+        left.index,
+        right.index,
+        exact=check_index_type,
+        check_names=check_names,
+        check_less_precise=check_less_precise,
+        check_exact=check_exact,
+        check_categorical=check_categorical,
+        obj=f""{obj}.index"",
+    )
+
+    if check_dtype:
+        # We want to skip exact dtype checking when `check_categorical`
+        # is False. We'll still raise if only one is a `Categorical`,
+        # regardless of `check_categorical`
+        if (
+            is_categorical_dtype(left.dtype)
+            and is_categorical_dtype(right.dtype)
+            and not check_categorical
+        ):
+            pass
+        else:
+            assert_attr_equal(""dtype"", left, right, obj=f""Attributes of {obj}"")
+
+    if check_exact:
+        if not is_numeric_dtype(left.dtype):
+            raise AssertionError(""check_exact may only be used with numeric Series"")
+
+        assert_numpy_array_equal(
+            left._values, right._values, check_dtype=check_dtype, obj=str(obj)
+        )
+    elif check_datetimelike_compat and (
+        needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype)
+    ):
+        # we want to check only if we have compat dtypes
+        # e.g. integer and M|m are NOT compat, but we can simply check
+        # the values in that case
+
+        # datetimelike may have different objects (e.g. datetime.datetime
+        # vs Timestamp) but will compare equal
+        if not Index(left._values).equals(Index(right._values)):
+            msg = (
+                f""[datetimelike_compat=True] {left._values} ""
+                f""is not equal to {right._values}.""
+            )
+            raise AssertionError(msg)
+    elif is_interval_dtype(left.dtype) or is_interval_dtype(right.dtype):
+        assert_interval_array_equal(left.array, right.array)
+    elif is_categorical_dtype(left.dtype) or is_categorical_dtype(right.dtype):
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+    elif is_extension_array_dtype(left.dtype) or is_extension_array_dtype(right.dtype):
+        if not check_dtype:
+            # If we're not checking dtype, we need to convert the right value
+            # to an ExtensionArray if it's not already one
+            if not is_extension_array_dtype(right.dtype):
+                right = pd.array(right, dtype=left.dtype)
+        assert_extension_array_equal(left._values, right._values, check_dtype=check_dtype)
+    elif needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype):
+        # DatetimeArray or TimedeltaArray
+        assert_extension_array_equal(left._values, right._values)
+    else:
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+
+    # metadata comparison
+    if check_names:
+        assert_attr_equal(""name"", left, right, obj=obj)
+
+    if check_categorical:
+        if is_categorical_dtype(left) or is_categorical_dtype(right):
+            assert_categorical_equal(
+                left._values,
+                right._values,
+                obj=f""{obj} category"",
+                check_category_order=check_category_order,
+            )
+```",
+pandas-42-v0_llama-7,UNKNOWN,UNKNOWN,"```python
+def assert_series_equal(
+    left,
+    right,
+    check_dtype=True,
+    check_index_type=""equiv"",
+    check_series_type=True,
+    check_less_precise=False,
+    check_names=True,
+    check_exact=False,
+    check_datetimelike_compat=False,
+    check_categorical=True,
+    check_category_order=True,
+    obj=""Series"",
+):
+    """"""
+    Check that left and right Series are equal.
+
+    Parameters
+    ----------
+    left : Series
+    right : Series
+    check_dtype : bool, default True
+        Whether to check the Series dtype is identical.
+    check_index_type : bool or {'equiv'}, default 'equiv'
+        Whether to check the Index class, dtype and inferred_type
+        are identical.
+    check_series_type : bool, default True
+         Whether to check the Series class is identical.
+    check_less_precise : bool or int, default False
+        Specify comparison precision. Only used when check_exact is False.
+        5 digits (False) or 3 digits (True) after decimal points are compared.
+        If int, then specify the digits to compare.
+
+        When comparing two numbers, if the first number has magnitude less
+        than 1e-5, we compare the two numbers directly and check whether
+        they are equivalent within the specified precision. Otherwise, we
+        compare the **ratio** of the second number to the first number and
+        check whether it is equivalent to 1 within the specified precision.
+    check_names : bool, default True
+        Whether to check the Series and Index names attribute.
+    check_exact : bool, default False
+        Whether to compare number exactly.
+    check_datetimelike_compat : bool, default False
+        Compare datetime-like which is comparable ignoring dtype.
+    check_categorical : bool, default True
+        Whether to compare internal Categorical exactly.
+    check_category_order : bool, default True
+        Whether to compare category order of internal Categoricals.
+
+       .. versionadded:: 1.0.2
+    obj : str, default 'Series'
+        Specify object name being compared, internally used to show appropriate
+        assertion message.
+    """"""
+    __tracebackhide__ = True
+
+    # instance validation
+    _check_isinstance(left, right, Series)
+
+    if check_series_type:
+        assert_class_equal(left, right, obj=obj)
+
+    # length comparison
+    if len(left)!= len(right):
+        msg1 = f""{len(left)}, {left.index}""
+        msg2 = f""{len(right)}, {right.index}""
+        raise_assert_detail(obj, ""Series length are different"", msg1, msg2)
+
+    # index comparison
+    assert_index_equal(
+        left.index,
+        right.index,
+        exact=check_index_type,
+        check_names=check_names,
+        check_less_precise=check_less_precise,
+        check_exact=check_exact,
+        check_categorical=check_categorical,
+        obj=f""{obj}.index"",
+    )
+
+    if check_dtype:
+        # We want to skip exact dtype checking when `check_categorical`
+        # is False. We'll still raise if only one is a `Categorical`,
+        # regardless of `check_categorical`
+        if (
+            is_categorical_dtype(left.dtype)
+            and is_categorical_dtype(right.dtype)
+            and not check_categorical
+        ):
+            pass
+        else:
+            assert_attr_equal(""dtype"", left, right, obj=f""Attributes of {obj}"")
+
+    if check_exact:
+        if not is_numeric_dtype(left.dtype):
+            raise AssertionError(""check_exact may only be used with numeric Series"")
+
+        assert_numpy_array_equal(
+            left._values, right._values, check_dtype=check_dtype, obj=str(obj)
+        )
+    elif check_datetimelike_compat and (
+        needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype)
+    ):
+        # we want to check only if we have compat dtypes
+        # e.g. integer and M|m are NOT compat, but we can simply check
+        # the values in that case
+
+        # datetimelike may have different objects (e.g. datetime.datetime
+        # vs Timestamp) but will compare equal
+        if not Index(left._values).equals(Index(right._values)):
+            msg = (
+                f""[datetimelike_compat=True] {left._values} ""
+                f""is not equal to {right._values}.""
+            )
+            raise AssertionError(msg)
+    elif is_interval_dtype(left.dtype) or is_interval_dtype(right.dtype):
+        assert_interval_array_equal(left.array, right.array)
+    elif is_categorical_dtype(left.dtype) or is_categorical_dtype(right.dtype):
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+    elif is_extension_array_dtype(left.dtype) or is_extension_array_dtype(right.dtype):
+        # Only check the dtype if check_dtype is True and both are ExtensionArrays
+        assert_extension_array_equal(
+            left._values, right._values, check_dtype=check_dtype and is_extension_array_dtype(right.dtype)
+        )
+    elif needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype):
+        # DatetimeArray or TimedeltaArray
+        assert_extension_array_equal(left._values, right._values)
+    else:
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+
+    # metadata comparison
+    if check_names:
+        assert_attr_equal(""name"", left, right, obj=obj)
+
+    if check_categorical:
+        if is_categorical_dtype(left) or is_categorical_dtype(right):
+            assert_categorical_equal(
+                left._values,
+                right._values,
+                obj=f""{obj} category"",
+                check_category_order=check_category_order,
+            )
+```",
+pandas-42-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+def assert_series_equal(
+    left,
+    right,
+    check_dtype=True,
+    check_index_type=""equiv"",
+    check_series_type=True,
+    check_less_precise=False,
+    check_names=True,
+    check_exact=False,
+    check_datetimelike_compat=False,
+    check_categorical=True,
+    check_category_order=True,
+    obj=""Series"",
+):
+    """"""
+    Check that left and right Series are equal.
+
+    Parameters
+    ----------
+    left : Series
+    right : Series
+    check_dtype : bool, default True
+        Whether to check the Series dtype is identical.
+    check_index_type : bool or {'equiv'}, default 'equiv'
+        Whether to check the Index class, dtype and inferred_type
+        are identical.
+    check_series_type : bool, default True
+         Whether to check the Series class is identical.
+    check_less_precise : bool or int, default False
+        Specify comparison precision. Only used when check_exact is False.
+        5 digits (False) or 3 digits (True) after decimal points are compared.
+        If int, then specify the digits to compare.
+
+        When comparing two numbers, if the first number has magnitude less
+        than 1e-5, we compare the two numbers directly and check whether
+        they are equivalent within the specified precision. Otherwise, we
+        compare the **ratio** of the second number to the first number and
+        check whether it is equivalent to 1 within the specified precision.
+    check_names : bool, default True
+        Whether to check the Series and Index names attribute.
+    check_exact : bool, default False
+        Whether to compare number exactly.
+    check_datetimelike_compat : bool, default False
+        Compare datetime-like which is comparable ignoring dtype.
+    check_categorical : bool, default True
+        Whether to compare internal Categorical exactly.
+    check_category_order : bool, default True
+        Whether to compare category order of internal Categoricals.
+
+       .. versionadded:: 1.0.2
+    obj : str, default 'Series'
+        Specify object name being compared, internally used to show appropriate
+        assertion message.
+    """"""
+    __tracebackhide__ = True
+
+    # instance validation
+    _check_isinstance(left, right, Series)
+
+    if check_series_type:
+        assert_class_equal(left, right, obj=obj)
+
+    # length comparison
+    if len(left)!= len(right):
+        msg1 = f""{len(left)}, {left.index}""
+        msg2 = f""{len(right)}, {right.index}""
+        raise_assert_detail(obj, ""Series length are different"", msg1, msg2)
+
+    # index comparison
+    assert_index_equal(
+        left.index,
+        right.index,
+        exact=check_index_type,
+        check_names=check_names,
+        check_less_precise=check_less_precise,
+        check_exact=check_exact,
+        check_categorical=check_categorical,
+        obj=f""{obj}.index"",
+    )
+
+    if check_dtype:
+        # We want to skip exact dtype checking when `check_categorical`
+        # is False. We'll still raise if only one is a `Categorical`,
+        # regardless of `check_categorical`
+        if (
+            is_categorical_dtype(left.dtype)
+            and is_categorical_dtype(right.dtype)
+            and not check_categorical
+        ):
+            pass
+        else:
+            assert_attr_equal(""dtype"", left, right, obj=f""Attributes of {obj}"")
+
+    if check_exact:
+        if not is_numeric_dtype(left.dtype):
+            raise AssertionError(""check_exact may only be used with numeric Series"")
+
+        assert_numpy_array_equal(
+            left._values, right._values, check_dtype=check_dtype, obj=str(obj)
+        )
+    elif check_datetimelike_compat and (
+        needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype)
+    ):
+        # we want to check only if we have compat dtypes
+        # e.g. integer and M|m are NOT compat, but we can simply check
+        # the values in that case
+
+        # datetimelike may have different objects (e.g. datetime.datetime
+        # vs Timestamp) but will compare equal
+        if not Index(left._values).equals(Index(right._values)):
+            msg = (
+                f""[datetimelike_compat=True] {left._values} ""
+                f""is not equal to {right._values}.""
+            )
+            raise AssertionError(msg)
+    elif is_interval_dtype(left.dtype) or is_interval_dtype(right.dtype):
+        if is_interval_dtype(left.dtype) and is_object_dtype(right.dtype):
+            right_interval = IntervalArray([x for x in right._values])
+            assert_interval_array_equal(left._values, right_interval)
+        elif is_object_dtype(left.dtype) and is_interval_dtype(right.dtype):
+            left_interval = IntervalArray([x for x in left._values])
+            assert_interval_array_equal(left_interval, right._values)
+        else:
+            assert_interval_array_equal(left._values, right._values)
+    elif is_categorical_dtype(left.dtype) or is_categorical_dtype(right.dtype):
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+    elif is_extension_array_dtype(left.dtype) or is_extension_array_dtype(right.dtype):
+        if is_extension_array_dtype(left.dtype) and not is_extension_array_dtype(right.dtype):
+            right_extension = pd.array(right._values, dtype=left.dtype)
+            assert_extension_array_equal(left._values, right_extension, check_dtype=check_dtype)
+        elif not is_extension_array_dtype(left.dtype) and is_extension_array_dtype(right.dtype):
+            left_extension = pd.array(left._values, dtype=right.dtype)
+            assert_extension_array_equal(left_extension, right._values, check_dtype=check_dtype)
+        else:
+            assert_extension_array_equal(left._values, right._values, check_dtype=check_dtype)
+    elif needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype):
+        # DatetimeArray or TimedeltaArray
+        assert_extension_array_equal(left._values, right._values)
+    else:
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+
+    # metadata comparison
+    if check_names:
+        assert_attr_equal(""name"", left, right, obj=obj)
+
+    if check_categorical:
+        if is_categorical_dtype(left) or is_categorical_dtype(right):
+            assert_categorical_equal(
+                left._values,
+                right._values,
+                obj=f""{obj} category"",
+                check_category_order=check_category_order,
+            )
+```",
+pandas-42-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+def assert_series_equal(
+    left,
+    right,
+    check_dtype=True,
+    check_index_type=""equiv"",
+    check_series_type=True,
+    check_less_precise=False,
+    check_names=True,
+    check_exact=False,
+    check_datetimelike_compat=False,
+    check_categorical=True,
+    check_category_order=True,
+    obj=""Series"",
+):
+    """"""
+    Check that left and right Series are equal.
+
+    Parameters
+    ----------
+    left : Series
+    right : Series
+    check_dtype : bool, default True
+        Whether to check the Series dtype is identical.
+    check_index_type : bool or {'equiv'}, default 'equiv'
+        Whether to check the Index class, dtype and inferred_type
+        are identical.
+    check_series_type : bool, default True
+         Whether to check the Series class is identical.
+    check_less_precise : bool or int, default False
+        Specify comparison precision. Only used when check_exact is False.
+        5 digits (False) or 3 digits (True) after decimal points are compared.
+        If int, then specify the digits to compare.
+
+        When comparing two numbers, if the first number has magnitude less
+        than 1e-5, we compare the two numbers directly and check whether
+        they are equivalent within the specified precision. Otherwise, we
+        compare the **ratio** of the second number to the first number and
+        check whether it is equivalent to 1 within the specified precision.
+    check_names : bool, default True
+        Whether to check the Series and Index names attribute.
+    check_exact : bool, default False
+        Whether to compare number exactly.
+    check_datetimelike_compat : bool, default False
+        Compare datetime-like which is comparable ignoring dtype.
+    check_categorical : bool, default True
+        Whether to compare internal Categorical exactly.
+    check_category_order : bool, default True
+        Whether to compare category order of internal Categoricals.
+
+       .. versionadded:: 1.0.2
+    obj : str, default 'Series'
+        Specify object name being compared, internally used to show appropriate
+        assertion message.
+    """"""
+    __tracebackhide__ = True
+
+    # instance validation
+    _check_isinstance(left, right, Series)
+
+    if check_series_type:
+        assert_class_equal(left, right, obj=obj)
+
+    # length comparison
+    if len(left)!= len(right):
+        msg1 = f""{len(left)}, {left.index}""
+        msg2 = f""{len(right)}, {right.index}""
+        raise_assert_detail(obj, ""Series length are different"", msg1, msg2)
+
+    # index comparison
+    assert_index_equal(
+        left.index,
+        right.index,
+        exact=check_index_type,
+        check_names=check_names,
+        check_less_precise=check_less_precise,
+        check_exact=check_exact,
+        check_categorical=check_categorical,
+        obj=f""{obj}.index"",
+    )
+
+    if check_dtype:
+        # We want to skip exact dtype checking when `check_categorical`
+        # is False. We'll still raise if only one is a `Categorical`,
+        # regardless of `check_categorical`
+        if (
+            is_categorical_dtype(left.dtype)
+            and is_categorical_dtype(right.dtype)
+            and not check_categorical
+        ):
+            pass
+        else:
+            assert_attr_equal(""dtype"", left, right, obj=f""Attributes of {obj}"")
+
+    if check_exact:
+        if not is_numeric_dtype(left.dtype):
+            raise AssertionError(""check_exact may only be used with numeric Series"")
+
+        assert_numpy_array_equal(
+            left._values, right._values, check_dtype=check_dtype, obj=str(obj)
+        )
+    elif check_datetimelike_compat and (
+        needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype)
+    ):
+        # we want to check only if we have compat dtypes
+        # e.g. integer and M|m are NOT compat, but we can simply check
+        # the values in that case
+
+        # datetimelike may have different objects (e.g. datetime.datetime
+        # vs Timestamp) but will compare equal
+        if not Index(left._values).equals(Index(right._values)):
+            msg = (
+                f""[datetimelike_compat=True] {left._values} ""
+                f""is not equal to {right._values}.""
+            )
+            raise AssertionError(msg)
+    elif is_interval_dtype(left.dtype) or is_interval_dtype(right.dtype):
+        assert_interval_array_equal(left.array, right.array)
+    elif is_categorical_dtype(left.dtype) or is_categorical_dtype(right.dtype):
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+    elif is_extension_array_dtype(left.dtype) or is_extension_array_dtype(right.dtype):
+        if check_dtype:
+            assert_extension_array_equal(left._values, right._values, check_dtype=check_dtype)
+        else:
+            if is_extension_array_dtype(left.dtype):
+                left_compare = left.astype(object)
+            else:
+                left_compare = left
+            
+            if is_extension_array_dtype(right.dtype):
+                right_compare = right.astype(object)
+            else:
+                right_compare = right
+
+            _testing.assert_almost_equal(
+                left_compare._values,
+                right_compare._values,
+                check_less_precise=check_less_precise,
+                check_dtype=False,
+                obj=str(obj),
+            )
+    elif needs_i8_conversion(left.dtype) or needs_i8_conversion(right.dtype):
+        # DatetimeArray or TimedeltaArray
+        if check_dtype:
+            assert_extension_array_equal(left._values, right._values)
+        else:
+            if needs_i8_conversion(left.dtype):
+                left_compare = left.astype(object)
+            else:
+                left_compare = left
+            
+            if needs_i8_conversion(right.dtype):
+                right_compare = right.astype(object)
+            else:
+                right_compare = right
+
+            _testing.assert_almost_equal(
+                left_compare._values,
+                right_compare._values,
+                check_less_precise=check_less_precise,
+                check_dtype=False,
+                obj=str(obj),
+            )
+    else:
+        _testing.assert_almost_equal(
+            left._values,
+            right._values,
+            check_less_precise=check_less_precise,
+            check_dtype=check_dtype,
+            obj=str(obj),
+        )
+
+    # metadata comparison
+    if check_names:
+        assert_attr_equal(""name"", left, right, obj=obj)
+
+    if check_categorical:
+        if is_categorical_dtype(left) or is_categorical_dtype(right):
+            assert_categorical_equal(
+                left._values,
+                right._values,
+                obj=f""{obj} category"",
+                check_category_order=check_category_order,
+            )
+```",

@@ -1,0 +1,223 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+black-9-vall_llama-0,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. The **get_grammars** function is designed to return a list of grammar objects based on the provided target Python versions.
+2. The function checks if **target_versions** is empty and returns **GRAMMARS** in this case.
+3. If **target_versions** is not empty, the function checks if all versions are not Python 2 and returns specific grammars if true.
+4. Otherwise, the function returns the general Python grammar (**pygram.python_grammar**).
+5. The issue with the function is that it doesn't handle the case when **target_versions** contains only Python 2 versions correctly.
+
+### Fixed solution:
+```python
+def get_grammars(target_versions: Set[TargetVersion]) -> List[Grammar]:
+    if not target_versions:
+        return GRAMMARS
+    elif all(version.is_python2() for version in target_versions):
+        # Return grammars compatible with Python 2
+        return [
+            pygram.python_grammar_no_print_statement_no_exec_statement,
+            pygram.python_grammar_no_print_statement,
+        ]
+    else:
+        return [pygram.python_grammar]
+```
+
+### Explanation of changes:
+*   **Fixed condition for Python 2 versions**: Changed `all(not version.is_python2() for version in target_versions)` to `all(version.is_python2() for version in target_versions)` to correctly handle cases where all target versions are Python 2.
+*   **Improved grammar selection for Python 2**: When all target versions are Python 2, the function now returns grammars compatible with Python 2.
+
+### Tests and example uses:
+To ensure the correctness of the **get_grammars** function, you can write test cases that cover different scenarios, such as:
+
+```python
+import unittest
+from unittest.mock import MagicMock
+
+class TestGetGrammars(unittest.TestCase):
+    def test_empty_target_versions(self):
+        target_versions = set()
+        expected_grammars = GRAMMARS
+        self.assertEqual(get_grammars(target_versions), expected_grammars)
+
+    def test_python2_target_versions(self):
+        target_versions = {TargetVersion.PY27}
+        expected_grammars = [
+            pygram.python_grammar_no_print_statement_no_exec_statement,
+            pygram.python_grammar_no_print_statement,
+        ]
+        self.assertEqual(get_grammars(target_versions), expected_grammars)
+
+    def test_python3_target_versions(self):
+        target_versions = {TargetVersion.PY36}
+        expected_grammars = [pygram.python_grammar]
+        self.assertEqual(get_grammars(target_versions), expected_grammars)
+
+if __name__ == ""__main__"":
+    unittest.main()
+```
+
+These tests will help verify that the **get_grammars** function behaves correctly for different input scenarios.",
+black-9-vall_llama-1,UNKNOWN,UNKNOWN,"```python
+def get_grammars(target_versions: Set[TargetVersion]) -> List[Grammar]:
+    if not target_versions:
+        return GRAMMARS
+    elif all(not version.is_python2() for version in target_versions):
+        # Python 2-compatible code, so don't try Python 3 grammar.
+        return [
+            pygram.python_grammar_no_print_statement_no_exec_statement,
+            pygram.python_grammar_no_print_statement,
+        ]
+    else:
+        # Modify this line to handle the PY27 version correctly
+        if TargetVersion.PY27 in target_versions:
+            return [pygram.python_grammar_no_print_statement]
+        else:
+            return [pygram.python_grammar]
+```",
+black-9-vall_llama-2,UNKNOWN,UNKNOWN,"```python
+def get_grammars(target_versions: Set[TargetVersion]) -> List[Grammar]:
+    if not target_versions:
+        return GRAMMARS
+    elif all(not version.is_python2() for version in target_versions):
+        # Return a list of grammars that are compatible with the target versions
+        grammars = [pygram.python_grammar_no_print_statement_no_exec_statement, pygram.python_grammar_no_print_statement]
+        # Check the target versions and filter the grammars accordingly
+        if any(version == TargetVersion.PY36 for version in target_versions):
+            grammars.append(pygram.python_grammar)
+        return grammars
+    else:
+        # If there are Python 2 versions in target_versions, return a list of grammars that are compatible with Python 2
+        return [pygram.python_grammar_no_print_statement_no_exec_statement, pygram.python_grammar_no_print_statement]
+```",
+black-9-vall_llama-3,UNKNOWN,UNKNOWN,"```python
+def get_grammars(target_versions: Set[TargetVersion]) -> List[Grammar]:
+    if not target_versions:
+        return GRAMMARS
+    elif TargetVersion.PY27 in target_versions:
+        # Python 2-compatible code, so don't try Python 3 grammar.
+        return [
+            pygram.python_grammar_no_print_statement_no_exec_statement,
+            pygram.python_grammar_no_print_statement,
+        ]
+    else:
+        return [pygram.python_grammar]
+```",
+black-9-vall_llama-4,UNKNOWN,UNKNOWN,"```python
+def get_grammars(target_versions: Set[TargetVersion]) -> List[Grammar]:
+    if not target_versions:
+        return GRAMMARS
+    elif any(version.is_python2() for version in target_versions):
+        # Python 2-compatible code, so don't try Python 3 grammar.
+        return [
+            pygram.python_grammar_no_print_statement_no_exec_statement,
+            pygram.python_grammar_no_print_statement,
+        ]
+    else:
+        return [pygram.python_grammar]
+```",
+black-9-vall_llama-5,UNKNOWN,UNKNOWN,"### Fixed Solution
+```python
+def get_grammars(target_versions: Set[TargetVersion]) -> List[Grammar]:
+    if not target_versions:
+        return GRAMMARS
+    elif all(version is TargetVersion.PY27 for version in target_versions):
+        # Return a grammar suitable for Python 2.7
+        return [pygram.python_grammar_no_print_statement]
+    elif all(not version.is_python2() for version in target_versions):
+        # Python 3-compatible code, so don't try Python 2 grammar.
+        return [
+            pygram.python_grammar_no_print_statement_no_exec_statement,
+            pygram.python_grammar_no_print_statement,
+        ]
+    else:
+        return [pygram.python_grammar]
+```
+
+### Explanation of Changes
+The main change to `get_grammars` involves directly checking for `TargetVersion.PY27` to ensure the correct grammar is returned for Python 2.7 targets. The previous version of the function did not handle this case correctly, which led to the incorrect grammar being used.
+
+- **New Condition for Python 2.7**: The function now checks if all versions in `target_versions` are `TargetVersion.PY27`. If so, it returns a grammar suitable for Python 2.7 (`pygram.python_grammar_no_print_statement`).
+- **Consistent Handling of Python Versions**: The logic for handling Python 3 versions remains unchanged, ensuring consistency in how different Python versions are treated.
+- **Default Behavior**: If the `target_versions` set is empty or contains a mix of versions, the function falls back to its default behavior, returning either the complete set of grammars (`GRAMMARS`) or the Python 3 grammar, respectively. 
+
+### Tests and Example Uses
+To validate the corrected `get_grammars` function, you can write test cases that cover different scenarios:
+```python
+import unittest
+from your_module import get_grammars, TargetVersion
+from blib2to3.pgen2.grammar import Grammar
+
+class TestGetGrammars(unittest.TestCase):
+    def test_empty_target_versions(self):
+        self.assertEqual(get_grammars(set()), GRAMMARS)
+
+    def test_python27(self):
+        target_versions = {TargetVersion.PY27}
+        self.assertIn(pygram.python_grammar_no_print_statement, get_grammars(target_versions))
+
+    def test_python3(self):
+        target_versions = {TargetVersion.PY37}
+        self.assertIn(pygram.python_grammar_no_print_statement_no_exec_statement, get_grammars(target_versions))
+
+if __name__ == '__main__':
+    unittest.main()
+```
+These tests verify that the function behaves as expected for different inputs, ensuring that it returns the correct grammars based on the target Python versions.",
+black-9-vall_llama-6,UNKNOWN,UNKNOWN,"```python
+def get_grammars(target_versions: Set[TargetVersion]) -> List[Grammar]:
+    if not target_versions:
+        return GRAMMARS
+    elif all(not version.is_python2() for version in target_versions):
+        # Python 2-compatible code, so don't try Python 3 grammar.
+        return [
+            pygram.python_grammar_no_print_statement_no_exec_statement,
+            pygram.python_grammar_no_print_statement,
+        ]
+    else:
+        # If any of the target versions is Python 2, include the Python 2 grammar.
+        return [
+            pygram.python_grammar_no_print_statement_no_exec_statement,
+            pygram.python_grammar,
+        ]
+```",
+black-9-vall_llama-7,UNKNOWN,UNKNOWN,"```python
+def get_grammars(target_versions: Set[TargetVersion]) -> List[Grammar]:
+    if not target_versions:
+        return GRAMMARS
+    elif any(version.is_python2() for version in target_versions):
+        return [pygram.python_grammar]
+    else:
+        return [
+            pygram.python_grammar_no_print_statement_no_exec_statement,
+            pygram.python_grammar_no_print_statement,
+        ]
+```",
+black-9-vall_llama-8,UNKNOWN,UNKNOWN,"```python
+def get_grammars(target_versions: Set[TargetVersion]) -> List[Grammar]:
+    if not target_versions:
+        return GRAMMARS
+    elif all(version.is_python2() for version in target_versions):
+        return [
+            pygram.python_grammar_no_print_statement_no_exec_statement,
+            pygram.python_grammar_no_print_statement,
+        ]
+    else:
+        return [pygram.python_grammar]
+```",
+black-9-vall_llama-9,UNKNOWN,UNKNOWN,"```python
+def get_grammars(target_versions: Set[TargetVersion]) -> List[Grammar]:
+    if not target_versions:
+        return GRAMMARS
+    elif all(version == TargetVersion.PY27 for version in target_versions):
+        # If the target version is Python 2.7, return a specific grammar
+        return [
+            pygram.python_grammar_no_print_statement_no_exec_statement,
+        ]
+    elif all(not version.is_python2() for version in target_versions):
+        # Python 2-compatible code, so don't try Python 3 grammar.
+        return [
+            pygram.python_grammar_no_print_statement_no_exec_statement,
+            pygram.python_grammar_no_print_statement,
+        ]
+    else:
+        return [pygram.python_grammar]
+```",

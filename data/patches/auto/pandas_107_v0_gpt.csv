@@ -1,0 +1,863 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-107-v0_gpt-0,UNKNOWN,UNKNOWN,"```python
+def append(self, other, ignore_index=False, verify_integrity=False, sort=False):
+    if isinstance(other, (Series, dict)):
+        if isinstance(other, dict):
+            other = Series(other)
+        if other.name is None and not ignore_index:
+            raise TypeError(
+                ""Can only append a Series if ignore_index=True""
+                "" or if the Series has a name""
+            )
+
+        if other.name is None:
+            index = None
+        else:
+            index = Index([other.name], name=self.index.name)
+
+        idx_diff = other.index.difference(self.columns)
+        try:
+            combined_columns = self.columns.append(idx_diff)
+        except TypeError:
+            combined_columns = self.columns.astype(object).append(idx_diff)
+        
+        # Ensure the timezone awareness is preserved
+        other = other.reindex(combined_columns, fill_value=pd.NaT, copy=False)
+        if other.dtype == 'O':  # if dtype is object, we should convert
+            # Recreate a Timestamp with the correct timezone
+            other = other.apply(lambda x: pd.Timestamp(x) if pd.notna(x) else pd.NaT)
+
+        other = DataFrame(
+            other.values.reshape((1, len(other))),
+            index=index,
+            columns=combined_columns,
+        )
+        other = other._convert(datetime=True, timedelta=True)
+        if not self.columns.equals(combined_columns):
+            self = self.reindex(columns=combined_columns)
+    elif isinstance(other, list):
+        if not other:
+            pass
+        elif not isinstance(other[0], DataFrame):
+            other = DataFrame(other)
+            if (self.columns.get_indexer(other.columns) >= 0).all():
+                other = other.reindex(columns=self.columns)
+
+    from pandas.core.reshape.concat import concat
+
+    if isinstance(other, (list, tuple)):
+        to_concat = [self] + other
+    else:
+        to_concat = [self, other]
+    return concat(
+        to_concat,
+        ignore_index=ignore_index,
+        verify_integrity=verify_integrity,
+        sort=sort,
+    )
+```",
+pandas-107-v0_gpt-1,UNKNOWN,UNKNOWN,"```python
+def append(self, other, ignore_index=False, verify_integrity=False, sort=False):
+    if isinstance(other, (Series, dict)):
+        if isinstance(other, dict):
+            other = Series(other)
+        if other.name is None and not ignore_index:
+            raise TypeError(
+                ""Can only append a Series if ignore_index=True""
+                "" or if the Series has a name""
+            )
+
+        if other.name is None:
+            index = None
+        else:
+            # Retain the index name to preserve timezone information
+            index = Index([other.name], name=self.index.name)
+
+        idx_diff = other.index.difference(self.columns)
+        try:
+            combined_columns = self.columns.append(idx_diff)
+        except TypeError:
+            combined_columns = self.columns.astype(object).append(idx_diff)
+
+        # Ensure we preserve the timezone of the original timestamp
+        other = other.reindex(combined_columns, copy=False)
+        if other.dtype == 'object' and isinstance(other[0], pd.Timestamp):
+            other = other.astype('datetime64[ns, tz=UTC]')  # Force tz-aware datetime
+
+        # Prepare the dataframe to append
+        other = DataFrame(
+            other.values.reshape((1, len(other))),
+            index=index,
+            columns=combined_columns,
+        )
+        other = other._convert(datetime=True, timedelta=True)
+        
+        if not self.columns.equals(combined_columns):
+            self = self.reindex(columns=combined_columns)
+    elif isinstance(other, list):
+        if not other:
+            pass
+        elif not isinstance(other[0], DataFrame):
+            other = DataFrame(other)
+            if (self.columns.get_indexer(other.columns) >= 0).all():
+                other = other.reindex(columns=self.columns)
+
+    from pandas.core.reshape.concat import concat
+
+    if isinstance(other, (list, tuple)):
+        to_concat = [self] + other
+    else:
+        to_concat = [self, other]
+    return concat(
+        to_concat,
+        ignore_index=ignore_index,
+        verify_integrity=verify_integrity,
+        sort=sort,
+    )
+```",
+pandas-107-v0_gpt-2,UNKNOWN,UNKNOWN,"```python
+def append(self, other, ignore_index=False, verify_integrity=False, sort=False):
+    """"""
+    Append rows of `other` to the end of caller, returning a new object.
+
+    Columns in `other` that are not in the caller are added as new columns.
+
+    Parameters
+    ----------
+    other : DataFrame or Series/dict-like object, or list of these
+        The data to append.
+    ignore_index : bool, default False
+        If True, do not use the index labels.
+    verify_integrity : bool, default False
+        If True, raise ValueError on creating index with duplicates.
+    sort : bool, default False
+        Sort columns if the columns of `self` and `other` are not aligned.
+
+        .. versionadded:: 0.23.0
+        .. versionchanged:: 1.0.0
+
+            Changed to not sort by default.
+
+    Returns
+    -------
+    DataFrame
+
+    See Also
+    --------
+    concat : General function to concatenate DataFrame or Series objects.
+
+    Notes
+    -----
+    If a list of dict/series is passed and the keys are all contained in
+    the DataFrame's index, the order of the columns in the resulting
+    DataFrame will be unchanged.
+
+    Iteratively appending rows to a DataFrame can be more computationally
+    intensive than a single concatenate. A better solution is to append
+    those rows to a list and then concatenate the list with the original
+    DataFrame all at once.
+
+    Examples
+    --------
+
+    >>> df = pd.DataFrame([[1, 2], [3, 4]], columns=list('AB'))
+    >>> df
+       A  B
+    0  1  2
+    1  3  4
+    >>> df2 = pd.DataFrame([[5, 6], [7, 8]], columns=list('AB'))
+    >>> df.append(df2)
+       A  B
+    0  1  2
+    1  3  4
+    0  5  6
+    1  7  8
+
+    With `ignore_index` set to True:
+
+    >>> df.append(df2, ignore_index=True)
+       A  B
+    0  1  2
+    1  3  4
+    2  5  6
+    3  7  8
+
+    The following, while not recommended methods for generating DataFrames,
+    show two ways to generate a DataFrame from multiple data sources.
+
+    Less efficient:
+
+    >>> df = pd.DataFrame(columns=['A'])
+    >>> for i in range(5):
+    ...     df = df.append({'A': i}, ignore_index=True)
+    >>> df
+       A
+    0  0
+    1  1
+    2  2
+    3  3
+    4  4
+
+    More efficient:
+
+    >>> pd.concat([pd.DataFrame([i], columns=['A']) for i in range(5)],
+    ...           ignore_index=True)
+       A
+    0  0
+    1  1
+    2  2
+    3  3
+    4  4
+    """"""
+    from pandas.core.indexes.api import Index
+    from pandas.core.series import Series
+    from pandas.core.frame import DataFrame
+    from pandas.core.reshape.concat import concat
+
+    if isinstance(other, (Series, dict)):
+        if isinstance(other, dict):
+            other = Series(other)
+        if other.name is None and not ignore_index:
+            raise TypeError(
+                ""Can only append a Series if ignore_index=True""
+                "" or if the Series has a name""
+            )
+
+        if other.name is None:
+            index = None
+        else:
+            # other must have the same index name as self, otherwise
+            # index name will be reset
+            index = Index([other.name], name=self.index.name)
+
+        idx_diff = other.index.difference(self.columns)
+        try:
+            combined_columns = self.columns.append(idx_diff)
+        except TypeError:
+            combined_columns = self.columns.astype(object).append(idx_diff)
+
+        # Ensure timezone-awareness is preserved
+        other = other.reindex(combined_columns, copy=False)
+        other = DataFrame(
+            other.values.reshape((1, len(other))),
+            index=index,
+            columns=combined_columns,
+        )
+        other = other._convert(datetime=True, timedelta=True)
+        
+        # Ensure we keep the timezone info from original self DataFrame
+        if other.index.nlevels > 1:
+            other.index = other.index.droplevels(1)
+
+        if not self.columns.equals(combined_columns):
+            self = self.reindex(columns=combined_columns)
+    elif isinstance(other, list):
+        if not other:
+            pass
+        elif not isinstance(other[0], DataFrame):
+            other = DataFrame(other)
+            if (self.columns.get_indexer(other.columns) >= 0).all():
+                other = other.reindex(columns=self.columns)
+
+    if isinstance(other, (list, tuple)):
+        to_concat = [self] + other
+    else:
+        to_concat = [self, other]
+    return concat(
+        to_concat,
+        ignore_index=ignore_index,
+        verify_integrity=verify_integrity,
+        sort=sort,
+    )
+```",
+pandas-107-v0_gpt-3,UNKNOWN,UNKNOWN,"```python
+def append(self, other, ignore_index=False, verify_integrity=False, sort=False):
+    if isinstance(other, (Series, dict)):
+        if isinstance(other, dict):
+            other = Series(other)
+        if other.name is None and not ignore_index:
+            raise TypeError(
+                ""Can only append a Series if ignore_index=True""
+                "" or if the Series has a name""
+            )
+
+        if other.name is None:
+            index = None
+        else:
+            index = Index([other.name], name=self.index.name)
+        
+        idx_diff = other.index.difference(self.columns)
+        
+        if len(idx_diff) > 0:
+            combined_columns = self.columns.append(idx_diff)  
+        else:
+            combined_columns = self.columns
+        
+        other = other.reindex(combined_columns, copy=False)
+        
+        # Ensure the timezone information is retained
+        other = DataFrame(
+            other.values.reshape((1, len(other))),
+            index=index,
+            columns=combined_columns,
+        )
+        
+        # Set the dtype back to datetime with tz awareness if applicable
+        if pd.api.types.is_datetime64_any_dtype(other.values):
+            other = other.astype({col: 'datetime64[ns, UTC]' for col in other.columns if pd.api.types.is_datetime64_any_dtype(other[col])})
+
+        if not self.columns.equals(combined_columns):
+            self = self.reindex(columns=combined_columns)
+    elif isinstance(other, list):
+        if not other:
+            pass
+        elif not isinstance(other[0], DataFrame):
+            other = DataFrame(other)
+            if (self.columns.get_indexer(other.columns) >= 0).all():
+                other = other.reindex(columns=self.columns)
+
+    from pandas.core.reshape.concat import concat
+
+    if isinstance(other, (list, tuple)):
+        to_concat = [self] + other
+    else:
+        to_concat = [self, other]
+    
+    return concat(
+        to_concat,
+        ignore_index=ignore_index,
+        verify_integrity=verify_integrity,
+        sort=sort,
+    )
+```",
+pandas-107-v0_gpt-4,UNKNOWN,UNKNOWN,"```python
+def append(self, other, ignore_index=False, verify_integrity=False, sort=False):
+    """"""
+    Append rows of `other` to the end of caller, returning a new object.
+
+    Columns in `other` that are not in the caller are added as new columns.
+
+    Parameters
+    ----------
+    other : DataFrame or Series/dict-like object, or list of these
+        The data to append.
+    ignore_index : bool, default False
+        If True, do not use the index labels.
+    verify_integrity : bool, default False
+        If True, raise ValueError on creating index with duplicates.
+    sort : bool, default False
+        Sort columns if the columns of `self` and `other` are not aligned.
+
+        .. versionadded:: 0.23.0
+        .. versionchanged:: 1.0.0
+
+            Changed to not sort by default.
+
+    Returns
+    -------
+    DataFrame
+
+    See Also
+    --------
+    concat : General function to concatenate DataFrame or Series objects.
+
+    Notes
+    -----
+    If a list of dict/series is passed and the keys are all contained in
+    the DataFrame's index, the order of the columns in the resulting
+    DataFrame will be unchanged.
+
+    Iteratively appending rows to a DataFrame can be more computationally
+    intensive than a single concatenate. A better solution is to append
+    those rows to a list and then concatenate the list with the original
+    DataFrame all at once.
+
+    Examples
+    --------
+
+    >>> df = pd.DataFrame([[1, 2], [3, 4]], columns=list('AB'))
+    >>> df
+       A  B
+    0  1  2
+    1  3  4
+    >>> df2 = pd.DataFrame([[5, 6], [7, 8]], columns=list('AB'))
+    >>> df.append(df2)
+       A  B
+    0  1  2
+    1  3  4
+    0  5  6
+    1  7  8
+
+    With `ignore_index` set to True:
+
+    >>> df.append(df2, ignore_index=True)
+       A  B
+    0  1  2
+    1  3  4
+    2  5  6
+    3  7  8
+
+    The following, while not recommended methods for generating DataFrames,
+    show two ways to generate a DataFrame from multiple data sources.
+
+    Less efficient:
+
+    >>> df = pd.DataFrame(columns=['A'])
+    >>> for i in range(5):
+    ...     df = df.append({'A': i}, ignore_index=True)
+    >>> df
+       A
+    0  0
+    1  1
+    2  2
+    3  3
+    4  4
+
+    More efficient:
+
+    >>> pd.concat([pd.DataFrame([i], columns=['A']) for i in range(5)],
+    ...           ignore_index=True)
+       A
+    0  0
+    1  1
+    2  2
+    3  3
+    4  4
+    """"""
+    if isinstance(other, (Series, dict)):
+        if isinstance(other, dict):
+            other = Series(other)
+        if other.name is None and not ignore_index:
+            raise TypeError(
+                ""Can only append a Series if ignore_index=True""
+                "" or if the Series has a name""
+            )
+
+        if other.name is None:
+            index = None
+        else:
+            # other must have the same index name as self, otherwise
+            # index name will be reset
+            index = Index([other.name], name=self.index.name)
+
+        idx_diff = other.index.difference(self.columns)
+        try:
+            combined_columns = self.columns.append(idx_diff)
+        except TypeError:
+            combined_columns = self.columns.astype(object).append(idx_diff)
+        other = other.reindex(combined_columns, copy=False)
+        # Ensure that the timezones are preserved
+        if isinstance(other, Series) and hasattr(other, 'tz'):
+            other = other.tz_localize(None).tz_localize(other.tz)
+
+        other = DataFrame(
+            other.values.reshape((1, len(other))),
+            index=index,
+            columns=combined_columns,
+        )
+        if not self.columns.equals(combined_columns):
+            self = self.reindex(columns=combined_columns)
+    elif isinstance(other, list):
+        if not other:
+            pass
+        elif not isinstance(other[0], DataFrame):
+            other = DataFrame(other)
+            if (self.columns.get_indexer(other.columns) >= 0).all():
+                other = other.reindex(columns=self.columns)
+
+    from pandas.core.reshape.concat import concat
+
+    if isinstance(other, (list, tuple)):
+        to_concat = [self] + other
+    else:
+        to_concat = [self, other]
+        
+    return concat(
+        to_concat,
+        ignore_index=ignore_index,
+        verify_integrity=verify_integrity,
+        sort=sort,
+    )
+```",
+pandas-107-v0_gpt-5,UNKNOWN,UNKNOWN,"```python
+def append(self, other, ignore_index=False, verify_integrity=False, sort=False):
+    """"""
+    Append rows of `other` to the end of caller, returning a new object.
+
+    Columns in `other` that are not in the caller are added as new columns.
+
+    Parameters
+    ----------
+    other : DataFrame or Series/dict-like object, or list of these
+        The data to append.
+    ignore_index : bool, default False
+        If True, do not use the index labels.
+    verify_integrity : bool, default False
+        If True, raise ValueError on creating index with duplicates.
+    sort : bool, default False
+        Sort columns if the columns of `self` and `other` are not aligned.
+
+    Returns
+    -------
+    DataFrame
+    """"""
+    if isinstance(other, (Series, dict)):
+        if isinstance(other, dict):
+            other = Series(other)
+        if other.name is None and not ignore_index:
+            raise TypeError(
+                ""Can only append a Series if ignore_index=True""
+                "" or if the Series has a name""
+            )
+
+        if other.name is None:
+            index = None
+        else:
+            # other must have the same index name as self, otherwise
+            # index name will be reset
+            index = Index([other.name], name=self.index.name)
+
+        idx_diff = other.index.difference(self.columns)
+        try:
+            combined_columns = self.columns.append(idx_diff)
+        except TypeError:
+            combined_columns = self.columns.astype(object).append(idx_diff)
+        
+        other = other.reindex(combined_columns, copy=False)
+        other = DataFrame(
+            other.values.reshape((1, len(other))),
+            index=index,
+            columns=combined_columns,
+        )
+        
+        other = other._convert(datetime=True, timedelta=True)
+
+        if not self.columns.equals(combined_columns):
+            self = self.reindex(columns=combined_columns)
+
+        # Correctly ensure timezone awareness
+        for col in combined_columns:
+            if pd.api.types.is_datetime64_any_dtype(self[col]):
+                self[col] = self[col].dt.tz_localize(None)
+                self[col] = self[col].dt.tz_localize(other[col].dt.tz)
+
+    elif isinstance(other, list):
+        if not other:
+            pass
+        elif not isinstance(other[0], DataFrame):
+            other = DataFrame(other)
+            if (self.columns.get_indexer(other.columns) >= 0).all():
+                other = other.reindex(columns=self.columns)
+
+    from pandas.core.reshape.concat import concat
+
+    if isinstance(other, (list, tuple)):
+        to_concat = [self] + other
+    else:
+        to_concat = [self, other]
+
+    return concat(
+        to_concat,
+        ignore_index=ignore_index,
+        verify_integrity=verify_integrity,
+        sort=sort,
+    )
+```",
+pandas-107-v0_gpt-6,UNKNOWN,UNKNOWN,"```python
+def append(self, other, ignore_index=False, verify_integrity=False, sort=False):
+    """"""
+    Append rows of `other` to the end of caller, returning a new object.
+
+    Columns in `other` that are not in the caller are added as new columns.
+    ...
+
+    Returns
+    -------
+    DataFrame
+    ...
+    """"""
+    if isinstance(other, (Series, dict)):
+        if isinstance(other, dict):
+            other = Series(other)
+        if other.name is None and not ignore_index:
+            raise TypeError(
+                ""Can only append a Series if ignore_index=True""
+                "" or if the Series has a name""
+            )
+
+        index = Index([other.name], name=self.index.name) if other.name is not None else None
+        idx_diff = other.index.difference(self.columns)
+
+        combined_columns = self.columns.append(idx_diff) if not isinstance(self.columns, Index) else self.columns.astype(object).append(idx_diff)
+
+        # Ensuring DataFrame created with the correct timezone awareness
+        other = other.reindex(combined_columns, copy=False)
+        other = DataFrame(
+            other.values.reshape((1, len(other))),
+            index=index,
+            columns=combined_columns,
+        )
+        
+        # Maintain timezone awareness if applicable
+        if hasattr(other, 'dt') and other.dt.tz is not None:
+            other[other.columns[0]] = other[other.columns[0]].dt.tz_localize(tz=other[other.columns[0]].dt.tz)
+
+        if not self.columns.equals(combined_columns):
+            self = self.reindex(columns=combined_columns)
+
+    elif isinstance(other, list):
+        if not other:
+            pass
+        elif not isinstance(other[0], DataFrame):
+            other = DataFrame(other)
+            if (self.columns.get_indexer(other.columns) >= 0).all():
+                other = other.reindex(columns=self.columns)
+
+    from pandas.core.reshape.concat import concat
+
+    if isinstance(other, (list, tuple)):
+        to_concat = [self] + other
+    else:
+        to_concat = [self, other]
+    return concat(
+        to_concat,
+        ignore_index=ignore_index,
+        verify_integrity=verify_integrity,
+        sort=sort,
+    )
+```",
+pandas-107-v0_gpt-7,UNKNOWN,UNKNOWN,"```python
+def append(self, other, ignore_index=False, verify_integrity=False, sort=False):
+    """"""
+    Append rows of `other` to the end of caller, returning a new object.
+
+    Columns in `other` that are not in the caller are added as new columns.
+
+    Parameters
+    ----------
+    other : DataFrame or Series/dict-like object, or list of these
+        The data to append.
+    ignore_index : bool, default False
+        If True, do not use the index labels.
+    verify_integrity : bool, default False
+        If True, raise ValueError on creating index with duplicates.
+    sort : bool, default False
+        Sort columns if the columns of `self` and `other` are not aligned.
+
+    Returns
+    -------
+    DataFrame
+    """"""
+    if isinstance(other, (Series, dict)):
+        if isinstance(other, dict):
+            other = Series(other)
+        if other.name is None and not ignore_index:
+            raise TypeError(
+                ""Can only append a Series if ignore_index=True""
+                "" or if the Series has a name""
+            )
+
+        if other.name is None:
+            index = None
+        else:
+            # other must have the same index name as self, otherwise
+            # index name will be reset
+            index = Index([other.name], name=self.index.name)
+
+        idx_diff = other.index.difference(self.columns)
+        try:
+            combined_columns = self.columns.append(idx_diff)
+        except TypeError:
+            combined_columns = self.columns.astype(object).append(idx_diff)
+        other = other.reindex(combined_columns, copy=False)
+        other = DataFrame(
+            other.values.reshape((1, len(other))),
+            index=index,
+            columns=combined_columns,
+        )
+        other = other._convert(datetime=True, timedelta=True)
+        
+        # Fix: Ensure the timezone is preserved after appending
+        if other.index.name is None:
+            other.index.name = self.index.name
+        
+        if not self.columns.equals(combined_columns):
+            self = self.reindex(columns=combined_columns)
+    elif isinstance(other, list):
+        if not other:
+            pass
+        elif not isinstance(other[0], DataFrame):
+            other = DataFrame(other)
+            if (self.columns.get_indexer(other.columns) >= 0).all():
+                other = other.reindex(columns=self.columns)
+
+    from pandas.core.reshape.concat import concat
+
+    if isinstance(other, (list, tuple)):
+        to_concat = [self] + other
+    else:
+        to_concat = [self, other]
+    return concat(
+        to_concat,
+        ignore_index=ignore_index,
+        verify_integrity=verify_integrity,
+        sort=sort,
+    )
+```",
+pandas-107-v0_gpt-8,UNKNOWN,UNKNOWN,"```python
+def append(self, other, ignore_index=False, verify_integrity=False, sort=False):
+    """"""
+    Append rows of `other` to the end of caller, returning a new object.
+
+    Columns in `other` that are not in the caller are added as new columns.
+
+    Parameters
+    ----------
+    other : DataFrame or Series/dict-like object, or list of these
+        The data to append.
+    ignore_index : bool, default False
+        If True, do not use the index labels.
+    verify_integrity : bool, default False
+        If True, raise ValueError on creating index with duplicates.
+    sort : bool, default False
+        Sort columns if the columns of `self` and `other` are not aligned.
+
+    Returns
+    -------
+    DataFrame
+    """"""
+    if isinstance(other, (Series, dict)):
+        if isinstance(other, dict):
+            other = Series(other)
+        if other.name is None and not ignore_index:
+            raise TypeError(
+                ""Can only append a Series if ignore_index=True""
+                "" or if the Series has a name""
+            )
+
+        if other.name is None:
+            index = None
+        else:
+            # other must have the same index name as self, otherwise
+            # index name will be reset
+            index = Index([other.name], name=self.index.name)
+
+        idx_diff = other.index.difference(self.columns)
+        try:
+            combined_columns = self.columns.append(idx_diff)
+        except TypeError:
+            combined_columns = self.columns.astype(object).append(idx_diff)
+        
+        # Ensure the timezone info is preserved
+        other = other.reindex(combined_columns, copy=False)
+        other_values = other.values.reshape((1, len(other)))
+        if other.dtype.kind == 'M':  # dtype is datetime
+            other_values = pd.Series(other_values.flatten(), index=combined_columns, dtype=other.dtype)
+        else:
+            other_values = DataFrame(other_values, index=index, columns=combined_columns)
+        
+        if not self.columns.equals(combined_columns):
+            self = self.reindex(columns=combined_columns)
+    elif isinstance(other, list):
+        if not other:
+            pass
+        elif not isinstance(other[0], DataFrame):
+            other = DataFrame(other)
+            if (self.columns.get_indexer(other.columns) >= 0).all():
+                other = other.reindex(columns=self.columns)
+
+    from pandas.core.reshape.concat import concat
+
+    if isinstance(other, (list, tuple)):
+        to_concat = [self] + other
+    else:
+        to_concat = [self, other]
+    return concat(
+        to_concat,
+        ignore_index=ignore_index,
+        verify_integrity=verify_integrity,
+        sort=sort,
+    )
+```",
+pandas-107-v0_gpt-9,UNKNOWN,UNKNOWN,"```python
+def append(self, other, ignore_index=False, verify_integrity=False, sort=False):
+    """"""
+    Append rows of `other` to the end of caller, returning a new object.
+
+    Columns in `other` that are not in the caller are added as new columns.
+
+    Parameters
+    ----------
+    other : DataFrame or Series/dict-like object, or list of these
+        The data to append.
+    ignore_index : bool, default False
+        If True, do not use the index labels.
+    verify_integrity : bool, default False
+        If True, raise ValueError on creating index with duplicates.
+    sort : bool, default False
+        Sort columns if the columns of `self` and `other` are not aligned.
+
+    Returns
+    -------
+    DataFrame
+
+    See Also
+    --------
+    concat : General function to concatenate DataFrame or Series objects.
+    """"""
+    if isinstance(other, (Series, dict)):
+        if isinstance(other, dict):
+            other = Series(other)
+        if other.name is None and not ignore_index:
+            raise TypeError(
+                ""Can only append a Series if ignore_index=True""
+                "" or if the Series has a name""
+            )
+
+        if other.name is None:
+            index = None
+        else:
+            # other must have the same index name as self, otherwise
+            # index name will be reset
+            index = Index([other.name], name=self.index.name)
+
+        idx_diff = other.index.difference(self.columns)
+        try:
+            combined_columns = self.columns.append(idx_diff)
+        except TypeError:
+            combined_columns = self.columns.astype(object).append(idx_diff)
+        other = other.reindex(combined_columns, copy=False)
+
+        # Ensure timezone awareness is preserved
+        other = DataFrame(
+            other.values.reshape((1, len(other))),
+            index=index,
+            columns=combined_columns,
+        )
+        if isinstance(other.iloc[0, 0], pd.Timestamp) and other.iloc[0, 0].tz is not None:
+            other.iloc[0, 0] = other.iloc[0, 0].tz_localize(None)  # Remove timezone for Naive representation
+            other.iloc[0, 0] = pd.Timestamp(other.iloc[0, 0]).tz_localize(self.iloc[0, 0].tz)  # Localize with original timezone
+
+        if not self.columns.equals(combined_columns):
+            self = self.reindex(columns=combined_columns)
+    elif isinstance(other, list):
+        if not other:
+            pass
+        elif not isinstance(other[0], DataFrame):
+            other = DataFrame(other)
+            if (self.columns.get_indexer(other.columns) >= 0).all():
+                other = other.reindex(columns=self.columns)
+
+    from pandas.core.reshape.concat import concat
+
+    if isinstance(other, (list, tuple)):
+        to_concat = [self] + other
+    else:
+        to_concat = [self, other]
+    return concat(
+        to_concat,
+        ignore_index=ignore_index,
+        verify_integrity=verify_integrity,
+        sort=sort,
+    )
+```",

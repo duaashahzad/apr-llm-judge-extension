@@ -1,0 +1,858 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+keras-24-vall_gpt-0,UNKNOWN,UNKNOWN,"```python
+def set_model(self, model):
+    self.model = model
+    if K.backend() == 'tensorflow':
+        self.sess = K.get_session()
+
+    if self.histogram_freq and self.merged is None:
+        for layer in self.model.layers:
+            for weight in layer.weights:
+                mapped_weight_name = weight.name.replace(':', '_')
+                tf.summary.histogram(mapped_weight_name, weight)
+
+                if self.write_grads:
+                    grads = model.optimizer.get_gradients(model.total_loss, weight)
+
+                    def is_indexed_slices(grad):
+                        return type(grad).__name__ == 'IndexedSlices'
+                    
+                    grads = [
+                        grad.values if is_indexed_slices(grad) else grad
+                        for grad in grads
+                    ]
+                    tf.summary.histogram('{}_grad'.format(mapped_weight_name), grads)
+
+                if self.write_images:
+                    w_img = tf.squeeze(weight)
+                    shape = K.int_shape(w_img)
+
+                    if len(shape) == 2:  # dense layer kernel case
+                        if shape[0] > shape[1]:
+                            w_img = tf.transpose(w_img)
+                            shape = K.int_shape(w_img)
+                        w_img = tf.reshape(w_img, [1, shape[0], shape[1], 1])
+                    elif len(shape) == 3:  # convnet case
+                        if K.image_data_format() == 'channels_last':
+                            w_img = tf.transpose(w_img, perm=[2, 0, 1])
+                            shape = K.int_shape(w_img)
+                        w_img = tf.reshape(w_img, [shape[0], shape[1], shape[2], 1])
+                    elif len(shape) == 1:  # bias case
+                        w_img = tf.reshape(w_img, [1, shape[0], 1, 1])
+                    else:
+                        # not possible to handle 3D convnets etc.
+                        continue
+
+                    shape = K.int_shape(w_img)
+                    assert len(shape) == 4 and shape[-1] in [1, 3, 4]
+                    tf.summary.image(mapped_weight_name, w_img)
+
+            if hasattr(layer, 'output'):
+                if isinstance(layer.output, list):  # Handle list of outputs
+                    for i, output in enumerate(layer.output):
+                        tf.summary.histogram('{}_out_{}'.format(layer.name, i), output)
+                else:
+                    tf.summary.histogram('{}_out'.format(layer.name), layer.output)
+
+    self.merged = tf.summary.merge_all()
+
+    if self.write_graph:
+        self.writer = tf.summary.FileWriter(self.log_dir, self.sess.graph)
+    else:
+        self.writer = tf.summary.FileWriter(self.log_dir)
+
+    if self.embeddings_freq:
+        embeddings_layer_names = self.embeddings_layer_names
+
+        if not embeddings_layer_names:
+            embeddings_layer_names = [layer.name for layer in self.model.layers if type(layer).__name__ == 'Embedding']
+
+        embeddings = {layer.name: layer.weights[0] for layer in self.model.layers if layer.name in embeddings_layer_names}
+
+        self.saver = tf.train.Saver(list(embeddings.values()))
+
+        embeddings_metadata = {}
+
+        if not isinstance(self.embeddings_metadata, str):
+            embeddings_metadata = self.embeddings_metadata
+        else:
+            embeddings_metadata = {layer_name: self.embeddings_metadata for layer_name in embeddings.keys()}
+
+        config = projector.ProjectorConfig()
+        self.embeddings_ckpt_path = os.path.join(self.log_dir, 'keras_embedding.ckpt')
+
+        for layer_name, tensor in embeddings.items():
+            embedding = config.embeddings.add()
+            embedding.tensor_name = tensor.name
+
+            if layer_name in embeddings_metadata:
+                embedding.metadata_path = embeddings_metadata[layer_name]
+
+        projector.visualize_embeddings(self.writer, config)
+```",
+keras-24-vall_gpt-1,UNKNOWN,UNKNOWN,"```python
+def set_model(self, model):
+    self.model = model
+    if K.backend() == 'tensorflow':
+        self.sess = K.get_session()
+    
+    if self.histogram_freq and self.merged is None:
+        for layer in self.model.layers:
+            for weight in layer.weights:
+                mapped_weight_name = weight.name.replace(':', '_')
+                tf.summary.histogram(mapped_weight_name, weight)
+                if self.write_grads:
+                    grads = model.optimizer.get_gradients(model.total_loss, weight)
+
+                    def is_indexed_slices(grad):
+                        return type(grad).__name__ == 'IndexedSlices'
+                        
+                    grads = [
+                        grad.values if is_indexed_slices(grad) else grad
+                        for grad in grads]
+                    tf.summary.histogram('{}_grad'.format(mapped_weight_name), grads)
+
+                if self.write_images:
+                    w_img = tf.squeeze(weight)
+                    shape = K.int_shape(w_img)
+                    if len(shape) == 2:  # dense layer kernel case
+                        if shape[0] > shape[1]:
+                            w_img = tf.transpose(w_img)
+                        w_img = tf.reshape(w_img, [1, shape[0], shape[1], 1])
+                    elif len(shape) == 3:  # convnet case
+                        if K.image_data_format() == 'channels_last':
+                            w_img = tf.transpose(w_img, perm=[2, 0, 1])
+                        w_img = tf.reshape(w_img, [shape[0], shape[1], shape[2], 1])
+                    elif len(shape) == 1:  # bias case
+                        w_img = tf.reshape(w_img, [1, shape[0], 1, 1])
+                    else:
+                        continue
+
+                    shape = K.int_shape(w_img)
+                    assert len(shape) == 4 and shape[-1] in [1, 3, 4]
+                    tf.summary.image(mapped_weight_name, w_img)
+
+            if hasattr(layer, 'output'):
+                tf.summary.histogram('{}_out'.format(layer.name), layer.output)
+    
+    self.merged = tf.summary.merge_all()
+
+    if self.write_graph:
+        self.writer = tf.summary.FileWriter(this.log_dir, self.sess.graph)
+    else:
+        self.writer = tf.summary.FileWriter(this.log_dir)
+
+    if self.embeddings_freq:
+        embeddings_layer_names = self.embeddings_layer_names
+
+        if not embeddings_layer_names:
+            embeddings_layer_names = [layer.name for layer in self.model.layers
+                                      if type(layer).__name__ == 'Embedding']
+
+        embeddings = {layer.name: layer.weights[0]
+                      for layer in self.model.layers
+                      if layer.name in embeddings_layer_names}
+
+        self.saver = tf.train.Saver(list(embeddings.values()))
+
+        embeddings_metadata = {}
+
+        if not isinstance(self.embeddings_metadata, str):
+            embeddings_metadata = self.embeddings_metadata
+        else:
+            embeddings_metadata = {layer_name: self.embeddings_metadata
+                                   for layer_name in embeddings.keys()}
+
+        config = projector.ProjectorConfig()
+        self.embeddings_ckpt_path = os.path.join(self.log_dir, 'keras_embedding.ckpt')
+
+        for layer_name, tensor in embeddings.items():
+            embedding = config.embeddings.add()
+            embedding.tensor_name = tensor.name
+
+            if layer_name in embeddings_metadata:
+                embedding.metadata_path = embeddings_metadata[layer_name]
+
+        projector.visualize_embeddings(self.writer, config)
+```",
+keras-24-vall_gpt-2,UNKNOWN,UNKNOWN,"```python
+def set_model(self, model):
+    self.model = model
+    if K.backend() == 'tensorflow':
+        self.sess = K.get_session()
+    
+    if self.histogram_freq and self.merged is None:
+        for layer in self.model.layers:
+            for weight in layer.weights:
+                mapped_weight_name = weight.name.replace(':', '_')
+                tf.summary.histogram(mapped_weight_name, weight)
+                
+                if self.write_grads:
+                    grads = model.optimizer.get_gradients(model.total_loss, weight)
+
+                    def is_indexed_slices(grad):
+                        return type(grad).__name__ == 'IndexedSlices'
+                    
+                    grads = [
+                        grad.values if is_indexed_slices(grad) else grad
+                        for grad in grads
+                    ]
+                    tf.summary.histogram('{}_grad'.format(mapped_weight_name), grads)
+                
+                if self.write_images:
+                    w_img = tf.squeeze(weight)
+                    shape = K.int_shape(w_img)
+                    
+                    # Handle weight images based on shape
+                    if len(shape) == 2:  # Dense layer kernel case
+                        if shape[0] > shape[1]:
+                            w_img = tf.transpose(w_img)
+                        w_img = tf.reshape(w_img, [1] + list(shape) + [1])
+                    elif len(shape) == 3:  # Convnet case
+                        if K.image_data_format() == 'channels_last':
+                            w_img = tf.transpose(w_img, perm=[2, 0, 1])
+                        w_img = tf.reshape(w_img, [shape[0], shape[1], shape[2], 1])
+                    elif len(shape) == 1:  # Bias case
+                        w_img = tf.reshape(w_img, [1, shape[0], 1, 1])
+                    else:
+                        continue  # Unsuitable dimension
+
+                    shape = K.int_shape(w_img)
+                    assert len(shape) == 4 and shape[-1] in [1, 3, 4], f""Image shape must be 4D with last dimension as 1, 3, or 4. Got: {shape}""
+                    tf.summary.image(mapped_weight_name, w_img)
+            
+            if hasattr(layer, 'output'):
+                if isinstance(layer.output, (list, tuple)):
+                    for i, output in enumerate(layer.output):
+                        tf.summary.histogram('{}_out_{}'.format(layer.name, i), output)
+                else:
+                    tf.summary.histogram('{}_out'.format(layer.name), layer.output)
+    
+    self.merged = tf.summary.merge_all()
+
+    if self.write_graph:
+        self.writer = tf.summary.FileWriter(self.log_dir, self.sess.graph)
+    else:
+        self.writer = tf.summary.FileWriter(self.log_dir)
+
+    if self.embeddings_freq:
+        embeddings_layer_names = self.embeddings_layer_names or [
+            layer.name for layer in self.model.layers if type(layer).__name__ == 'Embedding'
+        ]
+
+        embeddings = {layer.name: layer.weights[0]
+                      for layer in self.model.layers if layer.name in embeddings_layer_names}
+
+        self.saver = tf.train.Saver(list(embeddings.values()))
+
+        embeddings_metadata = (self.embeddings_metadata
+                               if isinstance(self.embeddings_metadata, dict)
+                               else {layer_name: self.embeddings_metadata for layer_name in embeddings.keys()})
+
+        config = projector.ProjectorConfig()
+        self.embeddings_ckpt_path = os.path.join(self.log_dir, 'keras_embedding.ckpt')
+
+        for layer_name, tensor in embeddings.items():
+            embedding = config.embeddings.add()
+            embedding.tensor_name = tensor.name
+
+            if layer_name in embeddings_metadata:
+                embedding.metadata_path = embeddings_metadata[layer_name]
+
+        projector.visualize_embeddings(self.writer, config)
+```",
+keras-24-vall_gpt-3,UNKNOWN,UNKNOWN,"```python
+def set_model(self, model):
+    self.model = model
+    if K.backend() == 'tensorflow':
+        self.sess = K.get_session()
+
+    # Handle histogram logging
+    if self.histogram_freq > 0 and self.merged is None:
+        for layer in self.model.layers:
+            for weight in layer.weights:
+                mapped_weight_name = weight.name.replace(':', '_')
+                tf.summary.histogram(mapped_weight_name, weight)
+
+                if self.write_grads:
+                    grads = model.optimizer.get_gradients(model.total_loss, weight)
+
+                    def is_indexed_slices(grad):
+                        return type(grad).__name__ == 'IndexedSlices'
+                    
+                    grads = [
+                        grad.values if is_indexed_slices(grad) else grad
+                        for grad in grads
+                    ]
+                    
+                    # Ensure grads are also logged correctly, individually
+                    for grad in grads:
+                        if grad is not None:
+                            tf.summary.histogram('{}_grad'.format(mapped_weight_name), grad)
+
+                if self.write_images:
+                    w_img = tf.squeeze(weight)
+                    shape = K.int_shape(w_img)
+
+                    if len(shape) == 2:  # dense layer kernel case
+                        if shape[0] > shape[1]:
+                            w_img = tf.transpose(w_img)
+                        w_img = tf.reshape(w_img, [1, shape[0], shape[1], 1])
+                    elif len(shape) == 3:  # convnet case
+                        if K.image_data_format() == 'channels_last':
+                            w_img = tf.transpose(w_img, perm=[2, 0, 1])
+                        w_img = tf.reshape(w_img, [shape[0], shape[1], shape[2], 1])
+                    elif len(shape) == 1:  # bias case
+                        w_img = tf.reshape(w_img, [1, shape[0], 1, 1])
+                    else:
+                        continue  # Unsupported weight shape
+
+                    shape = K.int_shape(w_img)
+                    assert len(shape) == 4 and shape[-1] in [1, 3, 4], ""Weight images must have shape with 4 dimensions""
+
+                    tf.summary.image(mapped_weight_name, w_img)
+
+            # Handle layer outputs safely
+            if hasattr(layer, 'output'):
+                if isinstance(layer.output, (list, tuple)):
+                    for output in layer.output:
+                        tf.summary.histogram('{}_out'.format(layer.name), output)
+                else:
+                    tf.summary.histogram('{}_out'.format(layer.name), layer.output)
+
+    self.merged = tf.summary.merge_all()
+
+    # Manage the TensorBoard FileWriter for logging
+    if self.write_graph:
+        self.writer = tf.summary.FileWriter(self.log_dir, self.sess.graph)
+    else:
+        self.writer = tf.summary.FileWriter(self.log_dir)
+
+    # Setup embeddings handling
+    if self.embeddings_freq:
+        embeddings_layer_names = self.embeddings_layer_names
+
+        if not embeddings_layer_names:
+            embeddings_layer_names = [layer.name for layer in self.model.layers if isinstance(layer, KerasEmbeddingLayer)]
+
+        embeddings = {layer.name: layer.weights[0] for layer in self.model.layers if layer.name in embeddings_layer_names}
+        
+        # Handle embeddings metadata
+        embeddings_metadata = self.embeddings_metadata if isinstance(self.embeddings_metadata, dict) else {layer_name: self.embeddings_metadata for layer_name in embeddings.keys()}
+
+        config = projector.ProjectorConfig()
+        self.embeddings_ckpt_path = os.path.join(self.log_dir, 'keras_embedding.ckpt')
+
+        for layer_name, tensor in embeddings.items():
+            embedding = config.embeddings.add()
+            embedding.tensor_name = tensor.name
+
+            if layer_name in embeddings_metadata:
+                embedding.metadata_path = embeddings_metadata[layer_name]
+
+        projector.visualize_embeddings(self.writer, config)
+```",
+keras-24-vall_gpt-4,UNKNOWN,UNKNOWN,"```python
+def set_model(self, model):
+    self.model = model
+    if K.backend() == 'tensorflow':
+        self.sess = K.get_session()
+    
+    if self.histogram_freq and self.merged is None:
+        for layer in self.model.layers:
+            for weight in layer.weights:
+                mapped_weight_name = weight.name.replace(':', '_')
+                tf.summary.histogram(mapped_weight_name, weight)
+
+                if self.write_grads:
+                    grads = model.optimizer.get_gradients(model.total_loss, weight)
+
+                    def is_indexed_slices(grad):
+                        return type(grad).__name__ == 'IndexedSlices'
+                    grads = [grad.values if is_indexed_slices(grad) else grad for grad in grads]
+
+                    # Ensure grads are logged as separate histograms
+                    if isinstance(grads, (list, tuple)):
+                        for i, grad in enumerate(grads):
+                            tf.summary.histogram(f'{mapped_weight_name}_grad_{i}', grad)
+                    else:
+                        tf.summary.histogram(f'{mapped_weight_name}_grad', grads)
+
+                if self.write_images:
+                    w_img = tf.squeeze(weight)
+                    shape = K.int_shape(w_img)
+
+                    if len(shape) == 2:  # dense layer kernel case
+                        if shape[0] > shape[1]:
+                            w_img = tf.transpose(w_img)
+                        w_img = tf.reshape(w_img, [1, shape[0], shape[1], 1])
+                    elif len(shape) == 3:  # convnet case
+                        if K.image_data_format() == 'channels_last':
+                            w_img = tf.transpose(w_img, perm=[2, 0, 1])
+                        w_img = tf.reshape(w_img, [shape[0], shape[1], shape[2], 1])
+                    elif len(shape) == 1:  # bias case
+                        w_img = tf.reshape(w_img, [1, shape[0], 1, 1])
+                    else:
+                        continue
+
+                    assert len(K.int_shape(w_img)) == 4 and K.int_shape(w_img)[-1] in [1, 3, 4]
+                    tf.summary.image(mapped_weight_name, w_img)
+
+            if hasattr(layer, 'output'):
+                if isinstance(layer.output, (list, tuple)):
+                    for i, output in enumerate(layer.output):
+                        tf.summary.histogram(f'{layer.name}_out_{i}', output)
+                else:
+                    tf.summary.histogram(f'{layer.name}_out', layer.output)
+
+    self.merged = tf.summary.merge_all()
+
+    if self.write_graph:
+        self.writer = tf.summary.FileWriter(self.log_dir, self.sess.graph)
+    else:
+        self.writer = tf.summary.FileWriter(self.log_dir)
+
+    if self.embeddings_freq:
+        embeddings_layer_names = self.embeddings_layer_names
+
+        if not embeddings_layer_names:
+            embeddings_layer_names = [layer.name for layer in self.model.layers if type(layer).__name__ == 'Embedding']
+        
+        embeddings = {layer.name: layer.weights[0]
+                      for layer in self.model.layers
+                      if layer.name in embeddings_layer_names}
+
+        self.saver = tf.train.Saver(list(embeddings.values()))
+
+        embeddings_metadata = {}
+        if not isinstance(self.embeddings_metadata, str):
+            embeddings_metadata = self.embeddings_metadata
+        else:
+            embeddings_metadata = {layer_name: self.embeddings_metadata for layer_name in embeddings.keys()}
+
+        config = projector.ProjectorConfig()
+        self.embeddings_ckpt_path = os.path.join(self.log_dir, 'keras_embedding.ckpt')
+
+        for layer_name, tensor in embeddings.items():
+            embedding = config.embeddings.add()
+            embedding.tensor_name = tensor.name
+
+            if layer_name in embeddings_metadata:
+                embedding.metadata_path = embeddings_metadata[layer_name]
+
+        projector.visualize_embeddings(self.writer, config)
+```",
+keras-24-vall_gpt-5,UNKNOWN,UNKNOWN,"```python
+def set_model(self, model):
+    self.model = model
+    if K.backend() == 'tensorflow':
+        self.sess = K.get_session()
+
+    if self.histogram_freq > 0 and self.merged is None:
+        for layer in self.model.layers:
+            for weight in layer.weights:
+                mapped_weight_name = weight.name.replace(':', '_')
+                tf.summary.histogram(mapped_weight_name, weight)
+                if self.write_grads:
+                    grads = model.optimizer.get_gradients(model.total_loss, weight)
+
+                    def is_indexed_slices(grad):
+                        return isinstance(grad, tf.IndexedSlices)
+                    grads = [grad.values if is_indexed_slices(grad) else grad for grad in grads]
+                    tf.summary.histogram(f'{mapped_weight_name}_grad', grads)
+
+                if self.write_images:
+                    w_img = tf.squeeze(weight)
+                    shape = K.int_shape(w_img)
+                    if len(shape) == 2:  # dense layer kernel case
+                        if shape[0] > shape[1]:
+                            w_img = tf.transpose(w_img)
+                        w_img = tf.reshape(w_img, [1, *shape, 1])
+                    elif len(shape) == 3:  # convnet case
+                        if K.image_data_format() == 'channels_last':
+                            w_img = tf.transpose(w_img, perm=[2, 0, 1])
+                        w_img = tf.reshape(w_img, [*shape[:2], 1])
+                    elif len(shape) == 1:  # bias case
+                        w_img = tf.reshape(w_img, [1, shape[0], 1, 1])
+                    else:
+                        continue  # Unsupported layer type, skip handling
+
+                    shape = K.int_shape(w_img)
+                    assert len(shape) == 4 and shape[-1] in [1, 3, 4]
+                    tf.summary.image(mapped_weight_name, w_img)
+
+            # Adding the check for multiple outputs and handling them
+            if hasattr(layer, 'output'):
+                if isinstance(layer.output, list):
+                    for idx, output in enumerate(layer.output):
+                        tf.summary.histogram(f'{layer.name}_out_{idx}', output)
+                else:
+                    tf.summary.histogram(f'{layer.name}_out', layer.output)
+
+    self.merged = tf.summary.merge_all()
+
+    if self.write_graph:
+        self.writer = tf.summary.FileWriter(self.log_dir, self.sess.graph)
+    else:
+        self.writer = tf.summary.FileWriter(self.log_dir)
+
+    if self.embeddings_freq > 0:
+        embeddings_layer_names = self.embeddings_layer_names or [
+            layer.name for layer in self.model.layers if type(layer).__name__ == 'Embedding'
+        ]
+
+        embeddings = {layer.name: layer.weights[0] for layer in self.model.layers if layer.name in embeddings_layer_names}
+
+        self.saver = tf.train.Saver(list(embeddings.values()))
+
+        embeddings_metadata = {}
+        if not isinstance(self.embeddings_metadata, str):
+            embeddings_metadata = self.embeddings_metadata
+        else:
+            embeddings_metadata = {layer_name: self.embeddings_metadata for layer_name in embeddings.keys()}
+
+        config = projector.ProjectorConfig()
+        self.embeddings_ckpt_path = os.path.join(self.log_dir, 'keras_embedding.ckpt')
+
+        for layer_name, tensor in embeddings.items():
+            embedding = config.embeddings.add()
+            embedding.tensor_name = tensor.name
+
+            if layer_name in embeddings_metadata:
+                embedding.metadata_path = embeddings_metadata[layer_name]
+
+        projector.visualize_embeddings(self.writer, config)
+```",
+keras-24-vall_gpt-6,UNKNOWN,UNKNOWN,"```python
+def set_model(self, model):
+    self.model = model
+    if K.backend() == 'tensorflow':
+        self.sess = K.get_session()
+    
+    if self.histogram_freq and self.merged is None:
+        for layer in self.model.layers:
+            for weight in layer.weights:
+                mapped_weight_name = weight.name.replace(':', '_')
+                tf.summary.histogram(mapped_weight_name, weight)
+
+                if self.write_grads:
+                    grads = model.optimizer.get_gradients(model.total_loss, weight)
+                    grads = [grad.values if isinstance(grad, tf.IndexedSlices) else grad for grad in grads]
+                    tf.summary.histogram('{}_grad'.format(mapped_weight_name), grads)
+
+                if self.write_images:
+                    w_img = tf.squeeze(weight)
+                    shape = K.int_shape(w_img)
+                    if len(shape) == 2:  # dense layer kernel case
+                        if shape[0] > shape[1]:
+                            w_img = tf.transpose(w_img)
+                        w_img = tf.reshape(w_img, [1, shape[0], shape[1], 1])
+                    elif len(shape) == 3:  # convnet case
+                        if K.image_data_format() == 'channels_last':
+                            w_img = tf.transpose(w_img, perm=[2, 0, 1])
+                        w_img = tf.reshape(w_img, [shape[0], shape[1], shape[2], 1])
+                    elif len(shape) == 1:  # bias case
+                        w_img = tf.reshape(w_img, [1, shape[0], 1, 1])
+                    else:
+                        continue  # skip unsupported shapes
+
+                    tf.summary.image(mapped_weight_name, w_img)
+
+            if hasattr(layer, 'output'):
+                outputs = layer.output if isinstance(layer.output, list) else [layer.output]
+                for i, output in enumerate(outputs):
+                    tf.summary.histogram('{}_out_{}'.format(layer.name, i), output)
+
+    self.merged = tf.summary.merge_all()
+
+    if self.write_graph:
+        self.writer = tf.summary.FileWriter(self.log_dir, self.sess.graph)
+    else:
+        self.writer = tf.summary.FileWriter(self.log_dir)
+
+    if self.embeddings_freq:
+        embeddings_layer_names = self.embeddings_layer_names or [layer.name for layer in self.model.layers if isinstance(layer, tf.keras.layers.Embedding)]
+        embeddings = {layer.name: layer.weights[0] for layer in self.model.layers if layer.name in embeddings_layer_names}
+        
+        if embeddings:
+            self.saver = tf.train.Saver(list(embeddings.values()))
+            embeddings_metadata = self.embeddings_metadata if isinstance(self.embeddings_metadata, dict) else {layer_name: self.embeddings_metadata for layer_name in embeddings.keys()}
+
+            config = projector.ProjectorConfig()
+            self.embeddings_ckpt_path = os.path.join(self.log_dir, 'keras_embedding.ckpt')
+
+            for layer_name, tensor in embeddings.items():
+                embedding = config.embeddings.add()
+                embedding.tensor_name = tensor.name
+                if layer_name in embeddings_metadata:
+                    embedding.metadata_path = embeddings_metadata[layer_name]
+
+            projector.visualize_embeddings(self.writer, config)
+```",
+keras-24-vall_gpt-7,UNKNOWN,UNKNOWN,"```python
+def set_model(self, model):
+    self.model = model
+    if K.backend() == 'tensorflow':
+        self.sess = K.get_session()
+    
+    if self.histogram_freq and self.merged is None:
+        for layer in self.model.layers:
+            for weight in layer.weights:
+                mapped_weight_name = weight.name.replace(':', '_')
+                tf.summary.histogram(mapped_weight_name, weight)
+                
+                if self.write_grads:
+                    grads = model.optimizer.get_gradients(model.total_loss, weight)
+                    grads = [
+                        grad.values if isinstance(grad, tf.IndexedSlices) else grad
+                        for grad in grads
+                    ]
+                    tf.summary.histogram('{}_grad'.format(mapped_weight_name), grads)
+                
+                if self.write_images:
+                    w_img = tf.squeeze(weight)
+                    shape = K.int_shape(w_img)
+
+                    if len(shape) == 2:  # dense layer kernel case
+                        if shape[0] > shape[1]:
+                            w_img = tf.transpose(w_img)
+                            shape = K.int_shape(w_img)
+                        w_img = tf.reshape(w_img, [1, shape[0], shape[1], 1])
+                    elif len(shape) == 3:  # convnet case
+                        if K.image_data_format() == 'channels_last':
+                            w_img = tf.transpose(w_img, perm=[2, 0, 1])
+                        w_img = tf.reshape(w_img, [shape[0], shape[1], shape[2], 1])
+                    elif len(shape) == 1:  # bias case
+                        w_img = tf.reshape(w_img, [1, shape[0], 1, 1])
+                    else:
+                        continue
+
+                    shape = K.int_shape(w_img)
+                    assert len(shape) == 4 and shape[-1] in [1, 3, 4]
+                    tf.summary.image(mapped_weight_name, w_img)
+
+            if hasattr(layer, 'output'):
+                if isinstance(layer.output, list):
+                    for output in layer.output:
+                        tf.summary.histogram('{}_out'.format(layer.name), output)
+                else:
+                    tf.summary.histogram('{}_out'.format(layer.name), layer.output)
+    
+    self.merged = tf.summary.merge_all()
+
+    if self.write_graph:
+        self.writer = tf.summary.FileWriter(self.log_dir, self.sess.graph)
+    else:
+        self.writer = tf.summary.FileWriter(self.log_dir)
+
+    if self.embeddings_freq:
+        embeddings_layer_names = self.embeddings_layer_names
+        if not embeddings_layer_names:
+            embeddings_layer_names = [layer.name for layer in self.model.layers if isinstance(layer, tf.keras.layers.Embedding)]
+
+        embeddings = {layer.name: layer.weights[0] for layer in self.model.layers if layer.name in embeddings_layer_names}
+
+        self.saver = tf.train.Saver(list(embeddings.values()))
+        embeddings_metadata = {}
+
+        if not isinstance(self.embeddings_metadata, str):
+            embeddings_metadata = self.embeddings_metadata
+        else:
+            embeddings_metadata = {layer_name: self.embeddings_metadata for layer_name in embeddings.keys()}
+
+        config = projector.ProjectorConfig()
+        self.embeddings_ckpt_path = os.path.join(self.log_dir, 'keras_embedding.ckpt')
+
+        for layer_name, tensor in embeddings.items():
+            embedding = config.embeddings.add()
+            embedding.tensor_name = tensor.name
+
+            if layer_name in embeddings_metadata:
+                embedding.metadata_path = embeddings_metadata[layer_name]
+
+        projector.visualize_embeddings(self.writer, config)
+```",
+keras-24-vall_gpt-8,UNKNOWN,UNKNOWN,"```python
+def set_model(self, model):
+    self.model = model
+    if K.backend() == 'tensorflow':
+        self.sess = K.get_session()
+        
+    if self.histogram_freq and self.merged is None:
+        for layer in self.model.layers:
+            if hasattr(layer, 'weights'):
+                for weight in layer.weights:
+                    mapped_weight_name = weight.name.replace(':', '_')
+                    tf.summary.histogram(mapped_weight_name, weight)
+                    
+                    if self.write_grads:
+                        grads = model.optimizer.get_gradients(model.total_loss, weight)
+
+                        def is_indexed_slices(grad):
+                            return type(grad).__name__ == 'IndexedSlices'
+                            
+                        grads = [
+                            grad.values if is_indexed_slices(grad) else grad
+                            for grad in grads
+                        ]
+                        tf.summary.histogram('{}_grad'.format(mapped_weight_name), grads)
+                        
+                    if self.write_images:
+                        w_img = tf.squeeze(weight)
+                        shape = K.int_shape(w_img)
+
+                        if len(shape) == 2:  # dense layer kernel case
+                            if shape[0] > shape[1]:
+                                w_img = tf.transpose(w_img)
+                            w_img = tf.reshape(w_img, [1, shape[0], shape[1], 1])
+                        elif len(shape) == 3:  # convnet case
+                            if K.image_data_format() == 'channels_last':
+                                w_img = tf.transpose(w_img, perm=[2, 0, 1])
+                            w_img = tf.reshape(w_img, [shape[0], shape[1], shape[2], 1])
+                        elif len(shape) == 1:  # bias case
+                            w_img = tf.reshape(w_img, [1, shape[0], 1, 1])
+                        else:
+                            continue  # not supported shapes
+
+                        shape = K.int_shape(w_img)
+                        assert len(shape) == 4 and shape[-1] in [1, 3, 4]
+
+                        tf.summary.image(mapped_weight_name, w_img)
+
+            if hasattr(layer, 'output'):
+                # Process outputs separately for layers that return tensors of different ranks
+                if isinstance(layer.output, list):
+                    for i, output in enumerate(layer.output):
+                        tf.summary.histogram('{}_out_{}'.format(layer.name, i), output)
+                else:
+                    tf.summary.histogram('{}_out'.format(layer.name), layer.output)
+
+    self.merged = tf.summary.merge_all()
+
+    if self.write_graph:
+        self.writer = tf.summary.FileWriter(self.log_dir, self.sess.graph)
+    else:
+        self.writer = tf.summary.FileWriter(self.log_dir)
+
+    if self.embeddings_freq:
+        embeddings_layer_names = self.embeddings_layer_names
+
+        if not embeddings_layer_names:
+            embeddings_layer_names = [layer.name for layer in self.model.layers if isinstance(layer, tf.keras.layers.Embedding)]
+
+        embeddings = {layer.name: layer.weights[0] for layer in self.model.layers if layer.name in embeddings_layer_names}
+
+        self.saver = tf.train.Saver(list(embeddings.values()))
+
+        embeddings_metadata = {}
+
+        if not isinstance(self.embeddings_metadata, str):
+            embeddings_metadata = self.embeddings_metadata
+        else:
+            embeddings_metadata = {layer_name: self.embeddings_metadata for layer_name in embeddings.keys()}
+
+        config = projector.ProjectorConfig()
+        self.embeddings_ckpt_path = os.path.join(self.log_dir, 'keras_embedding.ckpt')
+
+        for layer_name, tensor in embeddings.items():
+            embedding = config.embeddings.add()
+            embedding.tensor_name = tensor.name
+
+            if layer_name in embeddings_metadata:
+                embedding.metadata_path = embeddings_metadata[layer_name]
+
+        projector.visualize_embeddings(self.writer, config)
+```",
+keras-24-vall_gpt-9,UNKNOWN,UNKNOWN,"```python
+def set_model(self, model):
+    self.model = model
+    if K.backend() == 'tensorflow':
+        self.sess = K.get_session()
+    if self.histogram_freq and self.merged is None:
+        for layer in self.model.layers:
+            for weight in layer.weights:
+                mapped_weight_name = weight.name.replace(':', '_')
+                tf.summary.histogram(mapped_weight_name, weight)
+                
+                if self.write_grads:
+                    grads = model.optimizer.get_gradients(model.total_loss, weight)
+
+                    def is_indexed_slices(grad):
+                        return isinstance(grad, tf.IndexedSlices)
+                    
+                    grads = [
+                        grad.values if is_indexed_slices(grad) else grad
+                        for grad in grads
+                    ]
+                    tf.summary.histogram('{}_grad'.format(mapped_weight_name), grads)
+                
+                if self.write_images:
+                    w_img = tf.squeeze(weight)
+                    shape = K.int_shape(w_img)
+
+                    if len(shape) == 2:  # dense layer kernel case
+                        if shape[0] > shape[1]:
+                            w_img = tf.transpose(w_img)
+                        w_img = tf.reshape(w_img, [1, shape[0], shape[1], 1])
+                    elif len(shape) == 3:  # convnet case
+                        if K.image_data_format() == 'channels_last':
+                            w_img = tf.transpose(w_img, perm=[2, 0, 1])
+                        w_img = tf.reshape(w_img, [shape[0], shape[1], shape[2], 1])
+                    elif len(shape) == 1:  # bias case
+                        w_img = tf.reshape(w_img, [1, shape[0], 1, 1])
+                    else:
+                        continue  # Unsupported shapes are skipped
+
+                    shape = K.int_shape(w_img)
+                    assert len(shape) == 4 and shape[-1] in [1, 3, 4], \
+                        ""Invalid shape for weight images: {}"".format(shape)
+                    tf.summary.image(mapped_weight_name, w_img)
+
+            if hasattr(layer, 'output'):
+                # Handle cases where layer.output might be a list of tensors
+                if isinstance(layer.output, (list, tuple)):
+                    for i, output in enumerate(layer.output):
+                        tf.summary.histogram('{}_out_{}'.format(layer.name, i), output)
+                else:
+                    tf.summary.histogram('{}_out'.format(layer.name), layer.output)
+
+    self.merged = tf.summary.merge_all()
+
+    if self.write_graph:
+        self.writer = tf.summary.FileWriter(self.log_dir, self.sess.graph)
+    else:
+        self.writer = tf.summary.FileWriter(self.log_dir)
+
+    if self.embeddings_freq:
+        embeddings_layer_names = self.embeddings_layer_names
+
+        if not embeddings_layer_names:
+            embeddings_layer_names = [layer.name for layer in self.model.layers
+                                      if isinstance(layer, tf.keras.layers.Embedding)]
+
+        embeddings = {layer.name: layer.weights[0]
+                      for layer in self.model.layers
+                      if layer.name in embeddings_layer_names}
+
+        self.saver = tf.train.Saver(list(embeddings.values()))
+
+        embeddings_metadata = {}
+
+        if not isinstance(self.embeddings_metadata, str):
+            embeddings_metadata = self.embeddings_metadata
+        else:
+            embeddings_metadata = {layer_name: self.embeddings_metadata
+                                   for layer_name in embeddings.keys()}
+
+        config = projector.ProjectorConfig()
+        self.embeddings_ckpt_path = os.path.join(self.log_dir, 'keras_embedding.ckpt')
+
+        for layer_name, tensor in embeddings.items():
+            embedding = config.embeddings.add()
+            embedding.tensor_name = tensor.name
+
+            if layer_name in embeddings_metadata:
+                embedding.metadata_path = embeddings_metadata[layer_name]
+
+        projector.visualize_embeddings(self.writer, config)
+```",

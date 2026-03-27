@@ -1,0 +1,281 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+black-2-v0_llama-0,UNKNOWN,UNKNOWN,"```python
+def generate_ignored_nodes(leaf: Leaf) -> Iterator[LN]:
+    """"""Starting from the container of `leaf`, generate all leaves until `# fmt: on`.
+
+    Stops at the end of the block.
+    """"""
+    container: Optional[LN] = container_of(leaf)
+    is_fmt_off = False
+    while container is not None and container.type!= token.ENDMARKER:
+        for comment in list_comments(container.prefix, is_endmarker=False):
+            if comment.value in FMT_OFF:
+                is_fmt_off = True
+            elif comment.value in FMT_ON:
+                is_fmt_off = False
+                break
+        if not is_fmt_off:
+            return
+
+        yield container
+
+        container = container.next_sibling
+```",
+black-2-v0_llama-1,UNKNOWN,UNKNOWN,"```python
+def generate_ignored_nodes(leaf: Leaf) -> Iterator[LN]:
+    """"""Starting from the container of `leaf`, generate all leaves until `# fmt: on`.
+
+    Stops at the end of the block.
+    """"""
+    container: Optional[LN] = container_of(leaf)
+    while container is not None and container.type!= token.ENDMARKER:
+        is_fmt_on = False
+        for comment in list_comments(container.prefix, is_endmarker=False):
+            if comment.value in FMT_ON:
+                is_fmt_on = True
+                # Reset the flag when we encounter `# fmt: on` to process the rest of the block
+                break
+            elif comment.value in FMT_OFF:
+                is_fmt_on = False
+        if is_fmt_on:
+            # Continue processing the block when `# fmt: on` is encountered
+            container = container.next_sibling
+            continue
+
+        yield container
+
+        # When we encounter the end of a block, stop processing
+        if container.type in (token.INDENT, token.DEDENT):
+            break
+
+        container = container.next_sibling
+```",
+black-2-v0_llama-2,UNKNOWN,UNKNOWN,"```python
+def generate_ignored_nodes(leaf: Leaf) -> Iterator[LN]:
+    """"""Starting from the container of `leaf`, generate all leaves until `# fmt: on`.
+
+    Stops at the end of the block or when a decorator or a block is encountered.
+    """"""
+    container: Optional[LN] = container_of(leaf)
+    while container is not None and container.type!= token.ENDMARKER:
+        is_fmt_on = False
+        for comment in list_comments(container.prefix, is_endmarker=False):
+            if comment.value in FMT_ON:
+                is_fmt_on = True
+            elif comment.value in FMT_OFF:
+                is_fmt_on = False
+        if is_fmt_on:
+            return
+
+        if container.type in (token.INDENT, token.DEDENT):
+            # Stop at block boundaries
+            return
+
+        yield container
+
+        # Also stop at decorators
+        if container.type == token.AT:
+            return
+
+        container = container.next_sibling
+```",
+black-2-v0_llama-3,UNKNOWN,UNKNOWN,"```python
+def generate_ignored_nodes(leaf: Leaf) -> Iterator[LN]:
+    """"""Starting from the container of `leaf`, generate all leaves until `# fmt: on`.
+
+    Stops at the end of the block or when the `# fmt: on` comment is encountered.
+    """"""
+    container: Optional[LN] = container_of(leaf)
+    while container is not None and container.type!= token.ENDMARKER:
+        is_fmt_on = False
+        for comment in list_comments(container.prefix, is_endmarker=False):
+            if comment.value in FMT_ON:
+                is_fmt_on = True
+                break  # stop checking comments once # fmt: on is found
+            elif comment.value in FMT_OFF:
+                is_fmt_on = False
+        if is_fmt_on:
+            return
+
+        yield container
+
+        # check all children for # fmt: on
+        if isinstance(container, Node):
+            for child in container.children:
+                if isinstance(child, Leaf) and child.type == token.COMMENT:
+                    if child.value.strip() in FMT_ON:
+                        return
+
+        container = container.next_sibling
+```",
+black-2-v0_llama-4,UNKNOWN,UNKNOWN,"```python
+def generate_ignored_nodes(leaf: Leaf) -> Iterator[LN]:
+    """"""Starting from the container of `leaf`, generate all leaves until `# fmt: on`.
+
+    Stops at the end of the block or when a function/method definition is encountered.
+    """"""
+    container: Optional[LN] = container_of(leaf)
+    while container is not None and container.type!= token.ENDMARKER:
+        is_fmt_on = False
+        for comment in list_comments(container.prefix, is_endmarker=False):
+            if comment.value in FMT_ON:
+                is_fmt_on = True
+            elif comment.value in FMT_OFF:
+                is_fmt_on = False
+        if is_fmt_on:
+            return
+
+        # Stop generating nodes when a function/method definition is encountered
+        if container.type in (token.DEF, token.ASYNC_DEF):
+            return
+
+        yield container
+
+        container = container.next_sibling
+```",
+black-2-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+def generate_ignored_nodes(leaf: Leaf) -> Iterator[LN]:
+    """"""Starting from the container of `leaf`, generate all leaves until `# fmt: on`.
+
+    Stops at the end of the block.
+    """"""
+    container: Optional[LN] = container_of(leaf)
+    while container is not None and container.type!= token.ENDMARKER:
+        is_fmt_on = False
+        for comment in list_comments(container.prefix, is_endmarker=False):
+            if comment.value in FMT_ON:
+                is_fmt_on = True
+            elif comment.value in FMT_OFF:
+                is_fmt_on = False
+        if is_fmt_on:
+            return
+
+        # Check if the current node is a decorator
+        if container.type == token.AT:
+            # If it's a decorator, check its children for `# fmt: on` comments
+            for child in container.children:
+                if child.type == token.COMMENT and child.value in FMT_ON:
+                    is_fmt_on = True
+                    break
+
+        yield container
+
+        container = container.next_sibling
+```",
+black-2-v0_llama-6,UNKNOWN,UNKNOWN,"```python
+def generate_ignored_nodes(leaf: Leaf) -> Iterator[LN]:
+    """"""Starting from the container of `leaf`, generate all leaves until `# fmt: on`.
+
+    Stops at the end of the block.
+    """"""
+    container: Optional[LN] = container_of(leaf)
+    is_fmt_off = False
+    while container is not None and container.type!= token.ENDMARKER:
+        for comment in list_comments(container.prefix, is_endmarker=False):
+            if comment.value in FMT_OFF:
+                is_fmt_off = True
+            elif comment.value in FMT_ON:
+                is_fmt_off = False
+                # Break the loop when '# fmt: on' is found
+                if not is_fmt_off:
+                    return
+
+        if is_fmt_off:
+            yield container
+
+        container = container.next_sibling
+```",
+black-2-v0_llama-7,UNKNOWN,UNKNOWN,"```python
+def generate_ignored_nodes(leaf: Leaf) -> Iterator[LN]:
+    """"""Starting from the container of `leaf`, generate all leaves until `# fmt: on`.
+
+    Stops at the end of the block.
+    """"""
+    container: Optional[LN] = container_of(leaf)
+    while container is not None and container.type!= token.ENDMARKER:
+        is_fmt_on = False
+        for comment in list_comments(container.prefix, is_endmarker=False):
+            if comment.value in FMT_ON:
+                is_fmt_on = True
+            elif comment.value in FMT_OFF:
+                is_fmt_on = False
+        if is_fmt_on:
+            return
+
+        yield container
+
+        # Check if the current node has any children that contain a '# fmt: on' comment
+        if hasattr(container, 'children'):
+            for child in container.children:
+                if isinstance(child, Leaf) and child.type == token.COMMENT and child.value.strip() in FMT_ON:
+                    return
+
+        container = container.next_sibling
+```",
+black-2-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+def generate_ignored_nodes(leaf: Leaf) -> Iterator[LN]:
+    """"""Starting from the container of `leaf`, generate all leaves until `# fmt: on`.
+
+    Stops at the end of the block.
+    """"""
+    container: Optional[LN] = container_of(leaf)
+    is_fmt_on = False
+    while container is not None and container.type!= token.ENDMARKER:
+        for comment in list_comments(container.prefix, is_endmarker=False):
+            if comment.value in FMT_ON:
+                is_fmt_on = True
+            elif comment.value in FMT_OFF:
+                is_fmt_on = False
+        if is_fmt_on:
+            return
+
+        yield container
+
+        # Move to the next sibling
+        container = container.next_sibling
+
+        # Check if the next sibling is a multi-line node
+        if hasattr(container, 'children'):
+            for child in container.children:
+                if child.type == token.INDENT:
+                    # If it's an INDENT node, move to the next child
+                    container = child.next_sibling
+                    break
+
+        # If we've reached the end of a block, stop
+        if container.type in [token.DEDENT, token.ENDMARKER]:
+            break
+```",
+black-2-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+def generate_ignored_nodes(leaf: Leaf) -> Iterator[LN]:
+    """"""Starting from the container of `leaf`, generate all leaves until `# fmt: on`.
+
+    Stops at the end of the block.
+    """"""
+    container: Optional[LN] = container_of(leaf)
+    is_fmt_on = False
+    while container is not None and container.type!= token.ENDMARKER:
+        for comment in list_comments(container.prefix, is_endmarker=False):
+            if comment.value in FMT_ON:
+                is_fmt_on = True
+            elif comment.value in FMT_OFF:
+                is_fmt_on = False
+        if is_fmt_on:
+            return
+
+        yield container
+
+        # Move to the next sibling, considering the block structure
+        if container.type == token.INDENT:
+            # If the current node is an indent, move to its parent
+            container = container.parent
+        else:
+            container = container.next_sibling
+
+        # If the current node is a decorator, move to the next decorator or the function definition
+        while container is not None and container.type == token.AT:
+            container = container.next_sibling
+        if container is not None and container.type == token.DEF:
+            # If the current node is a function definition, move to its first child
+            container = container.children[0]
+```",

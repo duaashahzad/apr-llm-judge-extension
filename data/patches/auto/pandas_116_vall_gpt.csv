@@ -1,0 +1,976 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-116-vall_gpt-0,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+    """"""
+    Note: has side effects (copy/delete key columns)
+
+    Parameters
+    ----------
+    left
+    right
+    on
+
+    Returns
+    -------
+    left_keys, right_keys
+    """"""
+    left_keys = []
+    right_keys = []
+    join_names = []
+    right_drop = []
+    left_drop = []
+
+    left, right = self.left, self.right
+
+    is_lkey = lambda x: is_array_like(x) and len(x) == len(left)
+    is_rkey = lambda x: is_array_like(x) and len(x) == len(right)
+
+    if _any(self.left_on) and _any(self.right_on):
+        for lk, rk in zip(self.left_on, self.right_on):
+            if is_lkey(lk):
+                left_keys.append(left._get_label_or_level_values(lk))
+                join_names.append(lk)
+                if is_rkey(rk):
+                    right_keys.append(right._get_label_or_level_values(rk))
+                else:
+                    right_keys.append(right.index)
+            else:
+                if is_rkey(rk):
+                    right_keys.append(right._get_label_or_level_values(rk))
+                    join_names.append(rk)
+                else:
+                    right_keys.append(right.index)
+                    if lk is not None and lk == rk:
+                        if len(left) > 0:
+                            right_drop.append(rk)
+                        else:
+                            left_drop.append(lk)
+                if lk is not None:
+                    left_keys.append(left._get_label_or_level_values(lk))
+                else:
+                    left_keys.append(left.index)
+
+    elif _any(self.left_on):
+        for k in self.left_on:
+            if is_lkey(k):
+                left_keys.append(k)
+                join_names.append(None)
+            else:
+                left_keys.append(left._get_label_or_level_values(k))
+                join_names.append(k)
+        right_keys = [right.index.values] if not isinstance(right.index, MultiIndex) else [
+            lev._values.take(lev_codes)
+            for lev, lev_codes in zip(right.index.levels, right.index.codes)
+        ]
+    
+    elif _any(self.right_on):
+        for k in self.right_on:
+            if is_rkey(k):
+                right_keys.append(k)
+                join_names.append(None)
+            else:
+                right_keys.append(right._get_label_or_level_values(k))
+                join_names.append(k)
+        left_keys = [left.index.values] if not isinstance(left.index, MultiIndex) else [
+            lev._values.take(lev_codes)
+            for lev, lev_codes in zip(left.index.levels, left.index.codes)
+        ]
+
+    if left_drop:
+        self.left = self.left._drop_labels_or_levels(left_drop)
+
+    if right_drop:
+        self.right = self.right._drop_labels_or_levels(right_drop)
+
+    return left_keys, right_keys, join_names
+```",
+pandas-116-vall_gpt-1,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+    """"""
+    Note: has side effects (copy/delete key columns)
+
+    Parameters
+    ----------
+    left
+    right
+    on
+
+    Returns
+    -------
+    left_keys, right_keys
+    """"""
+    left_keys = []
+    right_keys = []
+    join_names = []
+    right_drop = []
+    left_drop = []
+
+    left, right = self.left, self.right
+
+    is_lkey = lambda x: is_array_like(x) and len(x) == len(left)
+    is_rkey = lambda x: is_array_like(x) and len(x) == len(right)
+
+    if _any(self.left_on) and _any(self.right_on):
+        for lk, rk in zip(self.left_on, self.right_on):
+            if is_lkey(lk):
+                left_keys.append(left._get_label_or_level_values(lk))
+                join_names.append(None)  # join_names remains None if lk is valid
+                if is_rkey(rk):
+                    right_keys.append(right._get_label_or_level_values(rk))
+                else:
+                    right_keys.append(right.index)
+            else:
+                if not is_rkey(rk):
+                    right_keys.append(right._get_label_or_level_values(rk) if rk else right.index)
+                else:
+                    right_keys.append(rk)
+
+                if lk is not None:
+                    left_keys.append(left._get_label_or_level_values(lk))
+                    join_names.append(lk)  # Added valid lk to join_names
+                else:
+                    left_keys.append(left.index)
+                    join_names.append(left.index.name)
+
+    elif _any(self.left_on):
+        for k in self.left_on:
+            if is_lkey(k):
+                left_keys.append(left._get_label_or_level_values(k))
+                join_names.append(None)
+            else:
+                left_keys.append(left._get_label_or_level_values(k))
+                join_names.append(k)
+        if isinstance(self.right.index, MultiIndex):
+            right_keys = [
+                lev._values.take(lev_codes)
+                for lev, lev_codes in zip(self.right.index.levels, self.right.index.codes)
+            ]
+        else:
+            right_keys = [self.right.index._values]
+    elif _any(self.right_on):
+        for k in self.right_on:
+            if is_rkey(k):
+                right_keys.append(right._get_label_or_level_values(k))
+                join_names.append(None)
+            else:
+                right_keys.append(right._get_label_or_level_values(k))
+                join_names.append(k)
+        if isinstance(self.left.index, MultiIndex):
+            left_keys = [
+                lev._values.take(lev_codes)
+                for lev, lev_codes in zip(self.left.index.levels, self.left.index.codes)
+            ]
+        else:
+            left_keys = [self.left.index.values]
+
+    if left_drop:
+        self.left = self.left._drop_labels_or_levels(left_drop)
+
+    if right_drop:
+        self.right = self.right._drop_labels_or_levels(right_drop)
+
+    return left_keys, right_keys, join_names
+```",
+pandas-116-vall_gpt-2,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+    """"""
+    Note: has side effects (copy/delete key columns)
+
+    Parameters
+    ----------
+    left
+    right
+    on
+
+    Returns
+    -------
+    left_keys, right_keys
+    """"""
+    left_keys = []
+    right_keys = []
+    join_names = []
+    right_drop = []
+    left_drop = []
+
+    left, right = self.left, self.right
+
+    # Adjust lambda functions for clarity
+    is_lkey = lambda x: is_array_like(x) and len(x) == len(left)
+    is_rkey = lambda x: is_array_like(x) and len(x) == len(right)
+
+    if _any(self.left_on) and _any(self.right_on):
+        for lk, rk in zip(self.left_on, self.right_on):
+            if is_lkey(lk):
+                left_keys.append(left._get_label_or_level_values(lk))
+                if is_rkey(rk):
+                    right_keys.append(right._get_label_or_level_values(rk))
+                    join_names.append(rk)
+                else:
+                    if rk is not None:
+                        right_keys.append(right._get_label_or_level_values(rk))
+                        join_names.append(rk)
+                    else:
+                        right_keys.append(right.index)
+                        join_names.append(right.index.name)
+            else:
+                if not is_rkey(rk):
+                    if rk is not None:
+                        right_keys.append(right._get_label_or_level_values(rk))
+                    else:
+                        right_keys.append(right.index)
+                    if lk is not None and lk == rk:
+                        if len(left) > 0:
+                            right_drop.append(rk)
+                        else:
+                            left_drop.append(lk)
+                else:
+                    right_keys.append(rk)
+                if lk is not None:
+                    left_keys.append(left._get_label_or_level_values(lk))
+                    join_names.append(lk)
+                else:
+                    left_keys.append(left.index)
+                    join_names.append(left.index.name)
+    elif _any(self.left_on):
+        for k in self.left_on:
+            if is_lkey(k):
+                left_keys.append(k)
+                join_names.append(None)
+            else:
+                left_keys.append(left._get_label_or_level_values(k))
+                join_names.append(k)
+        if isinstance(self.right.index, MultiIndex):
+            right_keys = [
+                lev._values.take(lev_codes)
+                for lev, lev_codes in zip(self.right.index.levels, self.right.index.codes)
+            ]
+        else:
+            right_keys = [self.right.index._values]
+    elif _any(self.right_on):
+        for k in self.right_on:
+            if is_rkey(k):
+                right_keys.append(k)
+                join_names.append(None)
+            else:
+                right_keys.append(right._get_label_or_level_values(k))
+                join_names.append(k)
+        if isinstance(self.left.index, MultiIndex):
+            left_keys = [
+                lev._values.take(lev_codes)
+                for lev, lev_codes in zip(self.left.index.levels, self.left.index.codes)
+            ]
+        else:
+            left_keys = [self.left.index.values]
+
+    if left_drop:
+        self.left = self.left._drop_labels_or_levels(left_drop)
+
+    if right_drop:
+        self.right = self.right._drop_labels_or_levels(right_drop)
+
+    return left_keys, right_keys, join_names
+```",
+pandas-116-vall_gpt-3,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+    """"""
+    Note: has side effects (copy/delete key columns)
+
+    Parameters
+    ----------
+    left
+    right
+    on
+
+    Returns
+    -------
+    left_keys, right_keys
+    """"""
+    left_keys = []
+    right_keys = []
+    join_names = []
+    right_drop = []
+    left_drop = []
+
+    left, right = self.left, self.right
+
+    is_lkey = lambda x: is_array_like(x) and len(x) == len(left)
+    is_rkey = lambda x: is_array_like(x) and len(x) == len(right)
+
+    if _any(self.left_on) and _any(self.right_on):
+        for lk, rk in zip(self.left_on, self.right_on):
+            if is_lkey(lk):
+                left_keys.append(left._get_label_or_level_values(lk))
+                if is_rkey(rk):
+                    right_keys.append(right._get_label_or_level_values(rk))
+                    join_names.append(None)  # what to do when both sides are keys
+                else:
+                    if rk is not None:
+                        right_keys.append(right._get_label_or_level_values(rk))
+                        join_names.append(rk)
+                    else:
+                        right_keys.append(right.index)
+                        join_names.append(right.index.name)
+            else:
+                if not is_rkey(rk):
+                    if rk is not None:
+                        right_keys.append(right._get_label_or_level_values(rk))
+                    else:
+                        right_keys.append(right.index)
+
+                if lk is not None and lk == rk:
+                    if len(left) > 0:
+                        right_drop.append(rk)
+                    else:
+                        left_drop.append(lk)
+                else:
+                    if lk is not None:
+                        left_keys.append(left._get_label_or_level_values(lk))
+                        join_names.append(lk)
+                    else:
+                        left_keys.append(left.index)
+                        join_names.append(left.index.name)
+
+    elif _any(self.left_on):
+        for k in self.left_on:
+            if is_lkey(k):
+                left_keys.append(k)
+                join_names.append(None)
+            else:
+                left_keys.append(left._get_label_or_level_values(k))
+                join_names.append(k)
+
+        right_keys = [right.index._values] if not isinstance(right.index, MultiIndex) else [
+            lev._values.take(lev_codes)
+            for lev, lev_codes in zip(right.index.levels, right.index.codes)
+        ]
+
+    elif _any(self.right_on):
+        for k in self.right_on:
+            if is_rkey(k):
+                right_keys.append(k)
+                join_names.append(None)
+            else:
+                right_keys.append(right._get_label_or_level_values(k))
+                join_names.append(k)
+
+        left_keys = [self.left.index.values] if not isinstance(self.left.index, MultiIndex) else [
+            lev._values.take(lev_codes)
+            for lev, lev_codes in zip(self.left.index.levels, self.left.index.codes)
+        ]
+
+    if left_drop:
+        self.left = self.left._drop_labels_or_levels(left_drop)
+
+    if right_drop:
+        self.right = self.right._drop_labels_or_levels(right_drop)
+
+    return left_keys, right_keys, join_names
+```",
+pandas-116-vall_gpt-4,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+    """"""
+    Note: has side effects (copy/delete key columns)
+
+    Parameters
+    ----------
+    left
+    right
+    on
+
+    Returns
+    -------
+    left_keys, right_keys
+    """"""
+    left_keys = []
+    right_keys = []
+    join_names = []
+    right_drop = []
+    left_drop = []
+
+    left, right = self.left, self.right
+
+    is_lkey = lambda x: is_array_like(x) and len(x) == len(left)
+    is_rkey = lambda x: is_array_like(x) and len(x) == len(right)
+
+    if _any(self.left_on) and _any(self.right_on):
+        for lk, rk in zip(self.left_on, self.right_on):
+            if is_lkey(lk):
+                left_keys.append(left._get_label_or_level_values(lk))
+                if is_rkey(rk):
+                    right_keys.append(right._get_label_or_level_values(rk))
+                    join_names.append(None)
+                else:
+                    if rk is not None:
+                        right_keys.append(right._get_label_or_level_values(rk))
+                        join_names.append(rk)
+                    else:
+                        # work-around for merge_asof(right_index=True)
+                        right_keys.append(right.index)
+                        join_names.append(right.index.name)
+            else:
+                if not is_rkey(rk):
+                    if rk is not None:
+                        right_keys.append(right._get_label_or_level_values(rk))
+                    else:
+                        # work-around for merge_asof(right_index=True)
+                        right_keys.append(right.index)
+
+                    if lk is not None and lk == rk:
+                        if len(left) > 0:
+                            right_drop.append(rk)
+                        else:
+                            left_drop.append(lk)
+                else:
+                    right_keys.append(rk)
+                if lk is not None:
+                    left_keys.append(left._get_label_or_level_values(lk))
+                    join_names.append(lk)
+                else:
+                    left_keys.append(left.index)
+                    join_names.append(left.index.name)
+    elif _any(self.left_on):
+        for k in self.left_on:
+            if is_lkey(k):
+                left_keys.append(k)
+                join_names.append(None)
+            else:
+                left_keys.append(left._get_label_or_level_values(k))
+                join_names.append(k)
+        if isinstance(self.right.index, MultiIndex):
+            right_keys = [
+                lev._values.take(lev_codes)
+                for lev, lev_codes in zip(
+                    self.right.index.levels, self.right.index.codes
+                )
+            ]
+        else:
+            right_keys = [self.right.index._values]
+    elif _any(self.right_on):
+        for k in self.right_on:
+            if is_rkey(k):
+                right_keys.append(k)
+                join_names.append(None)
+            else:
+                right_keys.append(right._get_label_or_level_values(k))
+                join_names.append(k)
+        if isinstance(self.left.index, MultiIndex):
+            left_keys = [
+                lev._values.take(lev_codes)
+                for lev, lev_codes in zip(
+                    self.left.index.levels, self.left.index.codes
+                )
+            ]
+        else:
+            left_keys = [self.left.index.values]
+
+    # Coerce dtypes of keys to match when necessary
+    for i in range(len(left_keys)):
+        if left_keys[i].dtype != right_keys[i].dtype:
+            if is_datetime64tz_dtype(left_keys[i]) and is_datetime64_dtype(right_keys[i]):
+                right_keys[i] = right_keys[i].tz_localize('UTC')
+            elif is_datetime64_dtype(left_keys[i]) and is_datetime64tz_dtype(right_keys[i]):
+                left_keys[i] = left_keys[i].tz_localize('UTC')
+
+    if left_drop:
+        self.left = self.left._drop_labels_or_levels(left_drop)
+
+    if right_drop:
+        self.right = self.right._drop_labels_or_levels(right_drop)
+
+    return left_keys, right_keys, join_names
+```",
+pandas-116-vall_gpt-5,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+    """"""
+    Note: has side effects (copy/delete key columns)
+
+    Parameters
+    ----------
+    left
+    right
+    on
+
+    Returns
+    -------
+    left_keys, right_keys
+    """"""
+    left_keys = []
+    right_keys = []
+    join_names = []
+    right_drop = []
+    left_drop = []
+
+    left, right = self.left, self.right
+
+    is_lkey = lambda x: is_array_like(x) and len(x) == len(left)
+    is_rkey = lambda x: is_array_like(x) and len(x) == len(right)
+
+    if _any(self.left_on) and _any(self.right_on):
+        for lk, rk in zip(self.left_on, self.right_on):
+            if is_lkey(lk):
+                left_keys.append(left._get_label_or_level_values(lk))
+                if is_rkey(rk):
+                    right_keys.append(right._get_label_or_level_values(rk))
+                    join_names.append(None)  # what to do?
+                else:
+                    # Handle cases where rk is None
+                    if rk is not None:
+                        right_keys.append(right._get_label_or_level_values(rk))
+                        join_names.append(rk)
+                    else:
+                        right_keys.append(right.index)
+                        join_names.append(right.index.name)
+            else:
+                if not is_rkey(rk):
+                    if rk is not None:
+                        right_keys.append(right._get_label_or_level_values(rk))
+                    else:
+                        right_keys.append(right.index)
+                    if lk is not None and lk == rk:
+                        if len(left) > 0:
+                            right_drop.append(rk)
+                        else:
+                            left_drop.append(lk)
+                else:
+                    right_keys.append(rk)
+                if lk is not None:
+                    left_keys.append(left._get_label_or_level_values(lk))
+                    join_names.append(lk)
+                else:
+                    left_keys.append(left.index)
+                    join_names.append(left.index.name)
+    elif _any(self.left_on):
+        for k in self.left_on:
+            if is_lkey(k):
+                left_keys.append(k)
+                join_names.append(None)
+            else:
+                left_keys.append(left._get_label_or_level_values(k))
+                join_names.append(k)
+        if isinstance(self.right.index, MultiIndex):
+            right_keys = [
+                lev._values.take(lev_codes)
+                for lev, lev_codes in zip(
+                    self.right.index.levels, self.right.index.codes
+                )
+            ]
+        else:
+            right_keys = [self.right.index._values]
+    elif _any(self.right_on):
+        for k in self.right_on:
+            if is_rkey(k):
+                right_keys.append(k)
+                join_names.append(None)
+            else:
+                right_keys.append(right._get_label_or_level_values(k))
+                join_names.append(k)
+        if isinstance(self.left.index, MultiIndex):
+            left_keys = [
+                lev._values.take(lev_codes)
+                for lev, lev_codes in zip(
+                    self.left.index.levels, self.left.index.codes
+                )
+            ]
+        else:
+            left_keys = [self.left.index.values]
+
+    # Ensure left_keys and right_keys are correctly formed
+    if len(left_keys) != len(right_keys):
+        raise ValueError(
+            ""The length of left keys does not match the length of right keys.""
+        )
+
+    # Perform cleanup of dropped keys, if any
+    if left_drop:
+        self.left = self.left._drop_labels_or_levels(left_drop)
+    if right_drop:
+        self.right = self.right._drop_labels_or_levels(right_drop)
+
+    return left_keys, right_keys, join_names
+```",
+pandas-116-vall_gpt-6,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+    """"""
+    Note: has side effects (copy/delete key columns)
+
+    Parameters
+    ----------
+    left
+    right
+    on
+
+    Returns
+    -------
+    left_keys, right_keys
+    """"""
+    left_keys = []
+    right_keys = []
+    join_names = []
+    right_drop = []
+    left_drop = []
+
+    left, right = self.left, self.right
+
+    is_lkey = lambda x: is_array_like(x) and len(x) == len(left)
+    is_rkey = lambda x: is_array_like(x) and len(x) == len(right)
+
+    if _any(self.left_on) and _any(self.right_on):
+        for lk, rk in zip(self.left_on, self.right_on):
+            if is_lkey(lk):
+                left_keys.append(left._get_label_or_level_values(lk))
+                join_names.append(lk)  # join name reflects the left key
+                if is_rkey(rk):
+                    right_keys.append(rk)
+                else:
+                    right_keys.append(right._get_label_or_level_values(rk) if rk is not None else right.index)
+            else:
+                right_keys.append(right._get_label_or_level_values(rk) if is_rkey(rk) else right.index)
+                if lk is not None:
+                    left_keys.append(left._get_label_or_level_values(lk))
+                    join_names.append(lk)
+
+    elif _any(self.left_on):
+        for k in self.left_on:
+            if is_lkey(k):
+                left_keys.append(k)
+                join_names.append(None)
+            else:
+                left_keys.append(left._get_label_or_level_values(k))
+                join_names.append(k)
+        if isinstance(self.right.index, MultiIndex):
+            right_keys = [
+                lev._values.take(lev_codes)
+                for lev, lev_codes in zip(
+                    self.right.index.levels, self.right.index.codes
+                )
+            ]
+        else:
+            right_keys = [self.right.index._values]
+
+    elif _any(self.right_on):
+        for k in self.right_on:
+            if is_rkey(k):
+                right_keys.append(k)
+                join_names.append(None)
+            else:
+                right_keys.append(right._get_label_or_level_values(k))
+                join_names.append(k)
+        if isinstance(self.left.index, MultiIndex):
+            left_keys = [
+                lev._values.take(lev_codes)
+                for lev, lev_codes in zip(
+                    self.left.index.levels, self.left.index.codes
+                )
+            ]
+        else:
+            left_keys = [self.left.index.values]
+
+    if left_drop:
+        self.left = self.left._drop_labels_or_levels(left_drop)
+
+    if right_drop:
+        self.right = self.right._drop_labels_or_levels(right_drop)
+
+    # Ensure the alignment of keys and their types considering timezone awareness.
+    left_keys = [pd.Series(key).dt.tz_localize(None) if is_datetime64tz_dtype(key.dtype) else key for key in left_keys]
+    right_keys = [pd.Series(key).dt.tz_localize(None) if is_datetime64tz_dtype(key.dtype) else key for key in right_keys]
+
+    return left_keys, right_keys, join_names
+```",
+pandas-116-vall_gpt-7,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+    """"""
+    Note: has side effects (copy/delete key columns)
+
+    Parameters
+    ----------
+    left
+    right
+    on
+
+    Returns
+    -------
+    left_keys, right_keys
+    """"""
+    left_keys = []
+    right_keys = []
+    join_names = []
+    right_drop = []
+    left_drop = []
+
+    left, right = self.left, self.right
+
+    is_lkey = lambda x: is_array_like(x) and len(x) == len(left)
+    is_rkey = lambda x: is_array_like(x) and len(x) == len(right)
+
+    if _any(self.left_on) and _any(self.right_on):
+        for lk, rk in zip(self.left_on, self.right_on):
+            if is_lkey(lk):
+                left_keys.append(left._get_label_or_level_values(lk))
+                if is_rkey(rk):
+                    right_keys.append(right._get_label_or_level_values(rk))
+                    join_names.append(None)
+                else:
+                    if rk is not None:
+                        right_keys.append(right._get_label_or_level_values(rk))
+                        join_names.append(rk)
+                    else:
+                        right_keys.append(right.index)
+                        join_names.append(right.index.name)
+            else:
+                if not is_rkey(rk):
+                    if rk is not None:
+                        right_keys.append(right._get_label_or_level_values(rk))
+                    else:
+                        right_keys.append(right.index)
+                    if lk is not None and lk == rk:
+                        if len(left) > 0:
+                            right_drop.append(rk)
+                        else:
+                            left_drop.append(lk)
+                else:
+                    right_keys.append(rk)
+
+                if lk is not None:
+                    left_keys.append(left._get_label_or_level_values(lk))
+                    join_names.append(lk)
+                else:
+                    left_keys.append(left.index)
+                    join_names.append(left.index.name)
+    elif _any(self.left_on):
+        for k in self.left_on:
+            if is_lkey(k):
+                left_keys.append(k)
+                join_names.append(None)
+            else:
+                left_keys.append(left._get_label_or_level_values(k))
+                join_names.append(k)
+        if isinstance(self.right.index, MultiIndex):
+            right_keys = [
+                lev._values.take(lev_codes)
+                for lev, lev_codes in zip(self.right.index.levels, self.right.index.codes)
+            ]
+        else:
+            right_keys = [self.right.index._values]
+    elif _any(self.right_on):
+        for k in self.right_on:
+            if is_rkey(k):
+                right_keys.append(k)
+                join_names.append(None)
+            else:
+                right_keys.append(right._get_label_or_level_values(k))
+                join_names.append(k)
+        if isinstance(self.left.index, MultiIndex):
+            left_keys = [
+                lev._values.take(lev_codes)
+                for lev, lev_codes in zip(self.left.index.levels, self.left.index.codes)
+            ]
+        else:
+            left_keys = [self.left.index.values]
+
+    if left_drop:
+        self.left = self.left._drop_labels_or_levels(left_drop)
+
+    if right_drop:
+        self.right = self.right._drop_labels_or_levels(right_drop)
+
+    # Coerce keys to compatible dtypes if necessary
+    for i in range(len(left_keys)):
+        if not is_dtype_equal(left_keys[i].dtype, right_keys[i].dtype):
+            if is_datetime64tz_dtype(left_keys[i].dtype) and is_datetime64tz_dtype(right_keys[i].dtype):
+                left_keys[i] = left_keys[i].astype('datetime64[ns, UTC]')
+                right_keys[i] = right_keys[i].astype('datetime64[ns, UTC]')
+    
+    return left_keys, right_keys, join_names
+```",
+pandas-116-vall_gpt-8,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+    """"""
+    Note: has side effects (copy/delete key columns)
+
+    Parameters
+    ----------
+    left
+    right
+    on
+
+    Returns
+    -------
+    left_keys, right_keys
+    """"""
+    left_keys = []
+    right_keys = []
+    join_names = []
+    right_drop = []
+    left_drop = []
+
+    left, right = self.left, self.right
+
+    is_lkey = lambda x: is_array_like(x) and len(x) == len(left)
+    is_rkey = lambda x: is_array_like(x) and len(x) == len(right)
+
+    if _any(self.left_on) and _any(self.right_on):
+        for lk, rk in zip(self.left_on, self.right_on):
+            if is_lkey(lk):
+                left_keys.append(left._get_label_or_level_values(lk))
+                if is_rkey(rk):
+                    right_keys.append(right._get_label_or_level_values(rk))
+                    join_names.append(None)
+                else:
+                    if rk is not None:
+                        right_keys.append(right._get_label_or_level_values(rk))
+                        join_names.append(rk)
+                    else:
+                        right_keys.append(right.index)  # Use right index if rk is None
+                        join_names.append(right.index.name)
+            else:
+                if not is_rkey(rk):
+                    if rk is not None:
+                        right_keys.append(right._get_label_or_level_values(rk))
+                    else:
+                        right_keys.append(right.index)
+                    if lk is not None and lk == rk and len(left) > 0:
+                        right_drop.append(rk)
+                    else:
+                        left_keys.append(left._get_label_or_level_values(lk))
+                        join_names.append(lk)
+                else:
+                    right_keys.append(rk)
+                    if lk is not None:
+                        left_keys.append(left._get_label_or_level_values(lk))
+                        join_names.append(lk)
+                    else:
+                        left_keys.append(left.index)
+                        join_names.append(left.index.name)
+    elif _any(self.left_on):
+        for k in self.left_on:
+            if is_lkey(k):
+                left_keys.append(k)
+                join_names.append(None)
+            else:
+                left_keys.append(left._get_label_or_level_values(k))
+                join_names.append(k)
+
+        if isinstance(self.right.index, MultiIndex):
+            right_keys = [
+                lev._values.take(lev_codes)
+                for lev, lev_codes in zip(self.right.index.levels, self.right.index.codes)
+            ]
+        else:
+            right_keys = [self.right.index._values]
+    elif _any(self.right_on):
+        for k in self.right_on:
+            if is_rkey(k):
+                right_keys.append(k)
+                join_names.append(None)
+            else:
+                right_keys.append(right._get_label_or_level_values(k))
+                join_names.append(k)
+
+        if isinstance(self.left.index, MultiIndex):
+            left_keys = [
+                lev._values.take(lev_codes)
+                for lev, lev_codes in zip(self.left.index.levels, self.left.index.codes)
+            ]
+        else:
+            left_keys = [self.left.index.values]
+
+    if left_drop:
+        self.left = self.left._drop_labels_or_levels(left_drop)
+
+    if right_drop:
+        self.right = self.right._drop_labels_or_levels(right_drop)
+
+    return left_keys, right_keys, join_names
+```",
+pandas-116-vall_gpt-9,UNKNOWN,UNKNOWN,"```python
+def _get_merge_keys(self):
+    """"""
+    Note: has side effects (copy/delete key columns)
+
+    Parameters
+    ----------
+    left
+    right
+
+    Returns
+    -------
+    left_keys, right_keys
+    """"""
+    left_keys = []
+    right_keys = []
+    join_names = []
+    right_drop = []
+    left_drop = []
+
+    left, right = self.left, self.right
+
+    is_lkey = lambda x: is_array_like(x) and len(x) == len(left)
+    is_rkey = lambda x: is_array_like(x) and len(x) == len(right)
+
+    # Check and handle left_on and right_on keys
+    if _any(self.left_on) and _any(self.right_on):
+        for lk, rk in zip(self.left_on, self.right_on):
+            if is_lkey(lk):
+                left_keys.append(left._get_label_or_level_values(lk))
+                join_names.append(lk if lk is not None else None)
+                if is_rkey(rk):
+                    right_keys.append(right._get_label_or_level_values(rk))
+                else:
+                    if rk is not None:
+                        right_keys.append(right._get_label_or_level_values(rk))
+                        join_names.append(rk)
+                    else:
+                        # handle case where rk is None
+                        right_keys.append(right.index)
+                        join_names.append(right.index.name)
+            else:
+                if not is_rkey(rk):
+                    if rk is not None:
+                        right_keys.append(right._get_label_or_level_values(rk))
+                    else:
+                        right_keys.append(right.index)
+                    if lk is not None and lk == rk:
+                        if len(left) > 0:
+                            right_drop.append(rk)
+                        else:
+                            left_drop.append(lk)
+                else:
+                    right_keys.append(rk)
+
+                if lk is not None:
+                    left_keys.append(left._get_label_or_level_values(lk))
+                    join_names.append(lk)
+                else:
+                    left_keys.append(left.index)
+                    join_names.append(left.index.name)
+    elif _any(self.left_on):
+        for k in self.left_on:
+            if is_lkey(k):
+                left_keys.append(k)
+                join_names.append(None)
+            else:
+                left_keys.append(left._get_label_or_level_values(k))
+                join_names.append(k)
+
+        right_keys = [right.index._values]
+    elif _any(self.right_on):
+        for k in self.right_on:
+            if is_rkey(k):
+                right_keys.append(k)
+                join_names.append(None)
+            else:
+                right_keys.append(right._get_label_or_level_values(k))
+                join_names.append(k)
+
+        left_keys = [left.index.values]
+    
+    # Update left and right based on drop lists
+    if left_drop:
+        self.left = self.left._drop_labels_or_levels(left_drop)
+
+    if right_drop:
+        self.right = self.right._drop_labels_or_levels(right_drop)
+
+    return left_keys, right_keys, join_names
+```",

@@ -1,0 +1,422 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-114-vall_gpt-0,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+
+    # if we have something that is Index-like, then
+    # use this, e.g. DatetimeIndex
+    # Things like `Series._get_value` (via .at) pass the EA directly here.
+    s = getattr(series, ""_values"", series)
+
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        # First try to convert the key to a location
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+            else:
+                raise KeyError(f""Key {key} not found in index"")
+
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except (KeyError, TypeError) as e1:
+        if isinstance(e1, KeyError):
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            raise InvalidIndexError(key)
+        except Exception:
+            raise e1
+    except TypeError:
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",
+pandas-114-vall_gpt-1,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+    # Check input conditions early
+    if key is None:
+        raise ValueError(""Key cannot be None"")
+        
+    s = getattr(series, ""_values"", series)
+
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        try:
+            iloc = self.get_loc(key)  # Try to locate the key
+            return s[iloc]
+        except KeyError:
+            # Handle key errors
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Convert series and key to a suitable format
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+
+        # Try to access using an alternate method
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            raise e1  # Raise the original KeyError
+    except TypeError:
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",
+pandas-114-vall_gpt-2,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+    # Ensure key is valid
+    if key is None:
+        raise ValueError(""Key cannot be None"")
+
+    # Extract the values from the series
+    s = getattr(series, ""_values"", series)
+
+    # Handle cases where the series is Index-like
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            # Raise an informative error if the key is not found
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+            else:
+                raise KeyError(f""Key {key} not found in index"")
+
+    # Convert series and key to appropriate types
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+
+    try:
+        # Attempt to retrieve the value using the engine
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError:
+        # If a KeyError occurs, handle it
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+        raise KeyError(f""Key {key} not found in series"")
+    except TypeError as e:
+        # Handle specific TypeErrors with informative messages
+        if is_scalar(key):
+            raise IndexError(f""Key {key} is out of bounds"")
+        raise InvalidIndexError(key)
+```",
+pandas-114-vall_gpt-3,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+    if key is None:
+        raise ValueError(""Key cannot be None."")
+
+    s = getattr(series, ""_values"", series)
+
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise KeyError(f""Key {key} not found in the Index."")
+            elif is_integer(key):
+                return s[key]
+
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise KeyError(f""Key {key} not found in the Index."")
+        raise InvalidIndexError(key)
+    except TypeError:
+        if is_scalar(key):
+            raise IndexError(f""Invalid key: {key}."")
+        raise InvalidIndexError(key)
+```",
+pandas-114-vall_gpt-4,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+
+    # Ensure the key is not None, raising an error if so
+    if key is None:
+        raise ValueError(""Key cannot be None"")
+
+    # Access the underlying values of the series
+    s = getattr(series, ""_values"", series)
+
+    # Check if the input is Index-like
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        try:
+            # Try to get the location of the key in the index
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Convert input series and key to a suitable form for processing
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+
+    try:
+        # Attempt to retrieve the value using the engine
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError as ex:
+            # Allow for iterator keys to raise the appropriate error
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+    except TypeError:
+        # If a non-scalar key is detected raise appropriate IndexError
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",
+pandas-114-vall_gpt-5,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+    # Validate key early
+    if key is None:
+        raise ValueError(""Key cannot be None."")
+
+    s = getattr(series, ""_values"", series)
+
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        # Attempt to find the key's location
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Convert series and key to appropriate types
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+
+    # Convert the key to a valid indexer
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+        raise InvalidIndexError(key) from e1
+    except TypeError as e2:
+        # Raise clearer errors for scalar keys
+        if is_scalar(key):
+            raise IndexError(f""Invalid key: {key}"") from e2
+        raise InvalidIndexError(key) from e2
+```",
+pandas-114-vall_gpt-6,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+    # Validate the key early to handle None case
+    if key is None:
+        raise ValueError(""Key cannot be None"")
+
+    # Attempt to retrieve the underlying values of the series
+    s = getattr(series, ""_values"", series)
+
+    # Handling cases for Index-like objects
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Convert to a common representation to retrieve values
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+
+    # Convert the key for proper indexing behavior
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+
+    try:
+        # Retrieve the value using the engine with appropriate timezone handling
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        # Re-raise KeyError if applicable
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+        raise InvalidIndexError(key)
+    except TypeError:
+        # Handle invalid key types explicitly
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",
+pandas-114-vall_gpt-7,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+    # Validate that the key is provided
+    if key is None:
+        raise ValueError(""Key cannot be None"")
+    
+    s = getattr(series, ""_values"", series)
+
+    # Handle cases for Index-like objects
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            # If the index holds integers or booleans, raise the appropriate error
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise KeyError(f""Key {key} not found in index"")
+            elif is_integer(key):
+                return s[key]
+            raise KeyError(f""Key {key} not found in index"")
+
+    # Convert series and key into proper formats
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+        raise e1
+    except TypeError:
+        if is_scalar(key):
+            raise IndexError(f""Index {key} is not valid for the index"")
+        raise InvalidIndexError(key)
+```",
+pandas-114-vall_gpt-8,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+    # Early return if key is None
+    if key is None:
+        raise ValueError(""Key cannot be None"")
+
+    # Handle the input series to ensure it works with Index-like structures
+    s = getattr(series, ""_values"", series)
+
+    # Handle cases where the series is an ExtensionArray or Index
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        try:
+            iloc = self.get_loc(key)  # Attempt to find the location of the key
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+            else:
+                # If the key is invalid, raise an appropriate error
+                raise InvalidIndexError(key)
+
+    # Convert the series and key to their raw values
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+
+    # Convert the key to a suitable indexer
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+
+    try:
+        # Try to fetch the value using the engine
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise  # Re-raise the KeyError if necessary
+
+        # Attempt to use another method to fetch the value
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+    except TypeError:
+        # handle cases like ""[False] is an invalid key""
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",
+pandas-114-vall_gpt-9,UNKNOWN,UNKNOWN,"```python
+@appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+    # Validate key
+    if key is None:
+        raise ValueError(""Key cannot be None"")
+
+    # If we have something that is Index-like, use this
+    s = getattr(series, ""_values"", series)
+
+    # Handling Index or ExtensionArray
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Fallback handling for other cases
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+
+    # Convert key for indexer
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+        raise InvalidIndexError(key) from e1
+    except TypeError:  # e.g., ""[False] is an invalid key""
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",

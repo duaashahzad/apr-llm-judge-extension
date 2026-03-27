@@ -1,0 +1,374 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-143-vall_gpt-0,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if not (method in [None, 'pad', 'backfill', 'nearest'] and is_list_like(target)):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    if limit is not None and limit < 0:
+        raise ValueError(""Limit must be non-negative."")
+
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+    locs[~valid] = -1
+    counts = np.zeros(locs.shape, dtype=np.intp)
+
+    if limit is not None:
+        for i in range(len(locs)):
+            if valid[i] and counts[locs[i]] < limit:
+                counts[locs[i]] += 1
+            else:
+                valid[i] = False
+
+    locs[valid] = locs[valid] // step
+
+    if step != self.step:
+        locs[valid] = len(self) - 1 - locs[valid]
+        
+    return ensure_platform_int(locs)
+```",
+pandas-143-vall_gpt-1,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if not is_list_like(target):
+        raise ValueError(""Target must be list-like."")
+
+    # Validate method and limit
+    if method not in [None, 'pad', 'backfill', 'nearest']:
+        raise ValueError(f""Method '{method}' is not supported."")
+    
+    if limit is not None and (not isinstance(limit, int) or limit < 0):
+        raise ValueError(""Limit must be a non-negative integer."")
+
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+    
+    if limit is not None:
+        count = 0
+        for i in range(len(valid)):
+            if valid[i]:
+                count += 1
+            elif count > limit:
+                valid[i] = False
+            else:
+                valid[i] = True if count < limit else False
+
+    locs[~valid] = -1
+    locs[valid] = locs[valid] // step
+
+    if step != self.step:
+        locs[valid] = len(self) - 1 - locs[valid]
+        
+    return ensure_platform_int(locs)
+```",
+pandas-143-vall_gpt-2,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if not (method is None and tolerance is None and is_list_like(target)):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (locs < stop)
+    locs[~valid] = -1
+    locs[valid] = locs[valid] // step  # Use integer division
+
+    if step != self.step:
+        locs[valid] = len(self) - 1 - locs[valid]
+
+    # Apply the limit on the number of forward fills
+    if limit is not None:
+        fill_count = 0
+        for i in range(len(locs)):
+            if locs[i] == -1 and fill_count >= limit:
+                locs[i] = -1  # Keep it as -1 if limit is reached
+            elif locs[i] == -1:
+                # If locs[i] is -1, check the previous value
+                if i > 0 and locs[i - 1] != -1:
+                    locs[i] = locs[i - 1]  # ""Fill"" with the previous location
+                    fill_count += 1
+
+    return ensure_platform_int(locs)
+```",
+pandas-143-vall_gpt-3,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if not (method is None and tolerance is None and is_list_like(target)):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (locs < stop)  # Fixing to check `locs < stop`
+    locs[~valid] = -1
+    locs[valid] = locs[valid] // step  # Ensure we use integer division for locs
+
+    if step != self.step:
+        locs[valid] = len(self) - 1 - locs[valid]
+        
+    if limit is not None:
+        # Limit the number of forward fills
+        count = 0
+        for i in range(len(locs)):
+            if locs[i] != -1 and count < limit:
+                count += 1
+            else:
+                if count == limit:
+                    locs[i] = -1
+                elif count > limit:
+                    locs[i] = -1
+
+    return ensure_platform_int(locs)
+```",
+pandas-143-vall_gpt-4,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if not (method in {'pad', 'backfill', 'nearest'} or (method is None and tolerance is None) and is_list_like(target)):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+    locs[~valid] = -1
+    locs[valid] = np.minimum(np.floor_divide(locs[valid], step), limit if limit is not None else np.inf)
+
+    if step != self.step:
+        locs[valid] = len(self) - 1 - locs[valid]
+    return ensure_platform_int(locs)
+```",
+pandas-143-vall_gpt-5,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if method is not None and limit is not None and not is_list_like(target):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+    locs[~valid] = -1
+
+    # Handle valid locations according to limit
+    if limit is not None:
+        count = 0
+        for i in range(len(locs)):
+            if locs[i] != -1:
+                count += 1
+            elif count > limit:
+                locs[i] = -1
+            else:
+                locs[i] = locs[i - 1] if i > 0 else -1
+
+    locs[valid] = locs[valid] // step
+
+    if step != self.step:
+        locs[valid] = len(self) - 1 - locs[valid]
+    return ensure_platform_int(locs)
+```",
+pandas-143-vall_gpt-6,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if limit is None:
+        limit = float('inf')
+        
+    if method not in [None, 'pad', 'backfill', 'nearest']:
+        raise ValueError(f""Method '{method}' is not supported."")
+    
+    if not is_list_like(target):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+    locs[~valid] = -1
+
+    if method == 'pad':
+        fill_count = 0
+        for i in range(len(locs)):
+            if fill_count < limit and locs[i] != -1:
+                fill_count += 1
+            elif i > 0 and locs[i] == -1 and locs[i-1] != -1:
+                locs[i] = locs[i-1]
+
+    locs[valid] = locs[valid] // step
+
+    if step != self.step:
+        locs[valid] = len(self) - 1 - locs[valid]
+        
+    return ensure_platform_int(locs)
+```",
+pandas-143-vall_gpt-7,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if not (method in {None, 'pad', 'backfill'} and is_list_like(target)):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+    locs[~valid] = -1
+    locs[valid] = locs[valid] // step
+
+    if step != self.step:
+        locs[valid] = len(self) - 1 - locs[valid]
+    
+    if limit is not None:
+        counts = np.zeros_like(locs, dtype=np.int64)
+        for i in range(len(locs)):
+            if locs[i] != -1:
+                counts[i] = (counts[i-1] + 1) if i > 0 and locs[i] == locs[i-1] + 1 else 1
+                if counts[i] > limit:
+                    locs[i] = -1
+
+    return ensure_platform_int(locs)
+```",
+pandas-143-vall_gpt-8,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if not (is_list_like(target)):
+        raise ValueError(""Target must be a list-like object."")
+    
+    if method not in [None, 'pad', 'backfill', 'nearest']:
+        raise ValueError(f""Method '{method}' not supported."")
+    
+    if limit is not None and not isinstance(limit, int):
+        raise ValueError(""Limit must be an integer."")
+    
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+    locs[~valid] = -1
+    locs[valid] = locs[valid] // step  # Use integer division for correct indexing
+
+    if limit is not None:
+        locs_with_limit = locs.copy()
+        for i in range(len(locs_with_limit)):
+            if locs_with_limit[i] != -1 and i > 0 and locs_with_limit[i-1] == locs_with_limit[i]:
+                count = 1
+                while count < limit and (i + count) < len(locs_with_limit):
+                    if locs_with_limit[i + count] == -1:
+                        locs_with_limit[i + count] = locs_with_limit[i]
+                    count += 1
+
+        locs = locs_with_limit
+
+    if step != self.step:
+        locs[valid] = len(self) - 1 - locs[valid]
+    return ensure_platform_int(locs)
+```",
+pandas-143-vall_gpt-9,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_indexer""])
+def get_indexer(self, target, method=None, limit=None, tolerance=None):
+    if method not in [None, 'pad', 'backfill', 'nearest']:
+        raise ValueError(f""Method '{method}' not supported."")
+    
+    if limit is not None and limit < 0:
+        raise ValueError(""Limit must be non-negative."")
+
+    if not is_list_like(target):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    if self.step > 0:
+        start, stop, step = self.start, self.stop, self.step
+    else:
+        start, stop, step = (self.stop - self.step, self.start + 1, -self.step)
+
+    target_array = np.asarray(target)
+    if not (is_integer_dtype(target_array) and target_array.ndim == 1):
+        return super().get_indexer(target, method=method, tolerance=tolerance)
+
+    locs = target_array - start
+    valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+    
+    if limit is not None:
+        # Apply limit enforcement for forward filling
+        ffill_count = 0
+        for i in range(len(locs)):
+            if valid[i]:
+                ffill_count = 0
+            else:
+                ffill_count += 1
+                if ffill_count > limit:
+                    locs[i] = -1
+
+    locs[~valid] = -1
+    locs[valid] = locs[valid] // step
+
+    if step != self.step:
+        locs[valid] = len(self) - 1 - locs[valid]
+    
+    return ensure_platform_int(locs)
+```",

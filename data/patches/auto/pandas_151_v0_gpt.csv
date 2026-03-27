@@ -1,0 +1,246 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-151-v0_gpt-0,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    # Ensure key is an array if it is not a scalar
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    # Make sure the value is an ndarray before the result_type check
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    
+    # Change the data type if necessary and handle types correctly
+    try:
+        t = np.result_type(value, values)
+    except TypeError:
+        raise ValueError(f""Cannot set item of dtype {self._dtype} with value {value}"")
+
+    if t != self._ndarray.dtype:
+        # Convert values to new type
+        values = values.astype(t, casting=""same_kind"")  # Changed to ""same_kind"" to prevent potential data loss
+        values[key] = value
+        self._dtype = PandasDtype(t)
+        self._ndarray = values
+    else:
+        self._ndarray[key] = value
+```",
+pandas-151-v0_gpt-1,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    # Check if we need to change the dtype to accommodate the new value
+    if not np.can_cast(value.dtype, values.dtype, casting='same_kind'):
+        t = np.result_type(value, values)
+        values = values.astype(t, casting=""safe"")
+        self._ndarray[key] = value
+        self._dtype = PandasDtype(t)
+        self._ndarray = values
+    else:
+        self._ndarray[key] = value
+```",
+pandas-151-v0_gpt-2,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if lib.is_scalar(value):
+        # Directly assign when value is scalar
+        self._ndarray[key] = value
+    else:
+        raise ValueError(f""Cannot assign '{value}' (type {type(value)}) to array with dtype {self._ndarray.dtype}"")
+
+    # After assignment, ensure the storage dtype is consistent
+    values = self._ndarray
+    t = np.result_type(value, values)
+    if t != self._ndarray.dtype:
+        values = values.astype(t, casting=""safe"")
+        self._dtype = PandasDtype(t)
+        self._ndarray = values
+```",
+pandas-151-v0_gpt-3,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    # Check type compatibility: if value's type is not compatible with 
+    # the current dtype, raise an error
+    if values.dtype.kind in ['O', 'U'] and value.dtype.kind not in ['O', 'U']:
+        value = value.astype(values.dtype)
+
+    t = np.result_type(value, values)
+    if t != self._ndarray.dtype:
+        # If we're coercing to a different dtype, we need to create a new array
+        values = values.astype(t, casting=""safe"")
+        values[key] = value
+        self._dtype = PandasDtype(t)
+        self._ndarray = values
+    else:
+        self._ndarray[key] = value
+```",
+pandas-151-v0_gpt-4,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    # Prevent np.result_type from causing error by ensuring value is convertible
+    if np.issubdtype(values.dtype, np.object_) or np.issubdtype(values.dtype, np.str_):
+        value = np.asarray(value)
+
+    t = np.result_type(value, values)
+    if t != self._ndarray.dtype:
+        values = values.astype(t, casting=""safe"")
+
+    # Ensure that the assignment is carried out correctly
+    values[key] = value
+    self._dtype = PandasDtype(t)
+    self._ndarray = values
+```",
+pandas-151-v0_gpt-5,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    # Ensure we only convert to ndarray if value is scalar or single item
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    # Using np.result_type to determine the correct type
+    try:
+        t = np.result_type(value, values)
+    except TypeError:
+        raise ValueError(f""Invalid value type for assignment: {value}"")
+
+    # Only allow type coercion if the target type differs
+    if t != self._ndarray.dtype:
+        if np.issubdtype(t, np.integer) and not np.issubdtype(self._ndarray.dtype, np.integer):
+            raise ValueError(f""Cannot coerce value from {self._ndarray.dtype} to {t}"")
+        values = values.astype(t, casting=""safe"")
+        values[key] = value
+        self._dtype = PandasDtype(t)
+        self._ndarray = values
+    else:
+        self._ndarray[key] = value
+```",
+pandas-151-v0_gpt-6,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    if values.dtype.kind in ['O', 'U']:  # Object or Unicode type
+        values[key] = value
+    else:
+        try:
+            # Attempt to cast only if it's a compatible type, otherwise let it raise ValueError
+            values[key] = value
+        except (ValueError, TypeError):
+            raise ValueError(f""Cannot set value of type {type(value).__name__} in array of type {values.dtype.name}"")
+```",
+pandas-151-v0_gpt-7,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+
+    if values.dtype.type is np.bytes_:
+        # Prevent coercing non-compatible types for byte arrays
+        if not isinstance(value, (bytes, str)):
+            raise ValueError(f""Cannot convert {type(value).__name__} to bytes"")
+
+    t = np.result_type(value, values)
+
+    if t != self._ndarray.dtype:
+        values = values.astype(t, casting=""safe"")
+        values[key] = value
+        self._dtype = PandasDtype(t)
+        self._ndarray = values
+    else:
+        self._ndarray[key] = value
+```",
+pandas-151-v0_gpt-8,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    if values.dtype.kind in ['U', 'O']:
+        # Handle string or object types directly
+        values[key] = value
+    else:
+        # Determine the result type only for non-string/object types
+        t = np.result_type(value, values)
+        if t != self._ndarray.dtype:
+            values = values.astype(t, casting=""safe"")
+            self._dtype = PandasDtype(t)
+            self._ndarray = values
+        self._ndarray[key] = value
+```",
+pandas-151-v0_gpt-9,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    # Ensure the correct handling of types, especially for strings and objects
+    if np.issubdtype(values.dtype, np.str_) or np.issubdtype(values.dtype, np.object_):
+        # If current values are string or object, convert value to an appropriate type
+        value = np.asarray([value], dtype=values.dtype)[0]
+    
+    t = np.result_type(value, values)
+    if t != self._ndarray.dtype:
+        values = values.astype(t, casting=""safe"")
+        values[key] = value
+        self._dtype = PandasDtype(t)
+        self._ndarray = values
+    else:
+        self._ndarray[key] = value
+```",

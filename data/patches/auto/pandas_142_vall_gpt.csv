@@ -1,0 +1,789 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-142-vall_gpt-0,UNKNOWN,UNKNOWN,"```python
+def diff(arr, n: int, axis: int = 0):
+    """"""
+    difference of n between self,
+    analogous to s-s.shift(n)
+
+    Parameters
+    ----------
+    arr : ndarray
+    n : int
+        number of periods
+    axis : int
+        axis to shift on
+
+    Returns
+    -------
+    shifted
+    """"""
+
+    n = int(n)
+    na = np.nan
+    dtype = arr.dtype
+
+    is_timedelta = False
+    is_bool = False
+    if needs_i8_conversion(arr):
+        dtype = np.float64
+        arr = arr.view(""i8"")
+        na = iNaT
+        is_timedelta = True
+
+    elif is_bool_dtype(dtype):
+        dtype = np.object_
+        is_bool = True
+
+    elif is_integer_dtype(dtype):
+        dtype = np.float64
+
+    dtype = np.dtype(dtype)
+    out_arr = np.empty(arr.shape, dtype=dtype)
+
+    na_indexer = [slice(None)] * arr.ndim
+    na_indexer[axis] = slice(None, n) if n >= 0 else slice(n, None)
+    out_arr[tuple(na_indexer)] = na
+
+    if arr.ndim == 2 and arr.dtype.name in _diff_special:
+        f = _diff_special[arr.dtype.name]
+        f(arr, out_arr, n, axis)
+    else:
+        _res_indexer = [slice(None)] * arr.ndim
+        _res_indexer[axis] = slice(n, None) if n >= 0 else slice(None, n)
+        res_indexer = tuple(_res_indexer)
+
+        _lag_indexer = [slice(None)] * arr.ndim
+        _lag_indexer[axis] = slice(None, -n) if n > 0 else slice(-n, None)
+        lag_indexer = tuple(_lag_indexer)
+
+        if is_timedelta:
+            res = arr[res_indexer]
+            lag = arr[lag_indexer]
+
+            mask = (arr[res_indexer] == na) | (arr[lag_indexer] == na)
+            if mask.any():
+                res = res.copy()
+                res[mask] = 0
+                lag = lag.copy()
+                lag[mask] = 0
+
+            result = res - lag
+            result[mask] = na
+            out_arr[res_indexer] = result
+        else:
+            # Use logical_xor for boolean types instead of subtraction
+            if is_bool:
+                out_arr[res_indexer] = np.logical_xor(arr[res_indexer], arr[lag_indexer])
+            else:
+                out_arr[res_indexer] = arr[res_indexer] - arr[lag_indexer]
+
+    if is_timedelta:
+        out_arr = out_arr.astype(""int64"").view(""timedelta64[ns]"")
+
+    return out_arr
+```",
+pandas-142-vall_gpt-1,UNKNOWN,UNKNOWN,"```python
+def diff(arr, n: int, axis: int = 0):
+    """"""
+    difference of n between self,
+    analogous to s-s.shift(n)
+
+    Parameters
+    ----------
+    arr : ndarray
+    n : int
+        number of periods
+    axis : int
+        axis to shift on
+
+    Returns
+    -------
+    shifted
+    """"""
+
+    n = int(n)
+    na = np.nan
+    dtype = arr.dtype
+
+    is_timedelta = False
+    if needs_i8_conversion(arr):
+        dtype = np.float64
+        arr = arr.view(""i8"")
+        na = iNaT
+        is_timedelta = True
+
+    elif is_bool_dtype(dtype):
+        dtype = np.object_  # Change to object to handle boolean
+
+    elif is_integer_dtype(dtype):
+        dtype = np.float64
+
+    dtype = np.dtype(dtype)
+    out_arr = np.empty(arr.shape, dtype=dtype)
+
+    na_indexer = [slice(None)] * arr.ndim
+    na_indexer[axis] = slice(None, n) if n >= 0 else slice(n, None)
+    out_arr[tuple(na_indexer)] = na
+
+    if arr.ndim == 2 and arr.dtype.name in _diff_special:
+        f = _diff_special[arr.dtype.name]
+        f(arr, out_arr, n, axis)
+    else:
+        _res_indexer = [slice(None)] * arr.ndim
+        _res_indexer[axis] = slice(n, None) if n >= 0 else slice(None, n)
+        res_indexer = tuple(_res_indexer)
+
+        _lag_indexer = [slice(None)] * arr.ndim
+        _lag_indexer[axis] = slice(None, -n) if n > 0 else slice(-n, None)
+        lag_indexer = tuple(_lag_indexer)
+
+        if is_timedelta:
+            res = arr[res_indexer]
+            lag = arr[lag_indexer]
+
+            mask = (arr[res_indexer] == na) | (arr[lag_indexer] == na)
+            if mask.any():
+                res = res.copy()
+                res[mask] = 0
+                lag = lag.copy()
+                lag[mask] = 0
+
+            result = res - lag
+            result[mask] = na
+            out_arr[res_indexer] = result
+        else:
+            # Use logical XOR (^) for boolean arrays instead of subtraction
+            out_arr[res_indexer] = arr[res_indexer] ^ arr[lag_indexer]
+
+    if is_timedelta:
+        out_arr = out_arr.astype(""int64"").view(""timedelta64[ns]"")
+
+    return out_arr
+```",
+pandas-142-vall_gpt-2,UNKNOWN,UNKNOWN,"```python
+def diff(arr, n: int, axis: int = 0):
+    """"""
+    difference of n between self,
+    analogous to s-s.shift(n)
+
+    Parameters
+    ----------
+    arr : ndarray
+    n : int
+        number of periods
+    axis : int
+        axis to shift on
+
+    Returns
+    -------
+    shifted
+    """"""
+
+    n = int(n)
+    na = np.nan
+    dtype = arr.dtype
+
+    is_timedelta = False
+    if needs_i8_conversion(arr):
+        dtype = np.float64
+        arr = arr.view(""i8"")
+        na = iNaT
+        is_timedelta = True
+
+    elif is_bool_dtype(dtype):
+        dtype = np.object_
+        is_bool = True  # Detect if the input dtype is boolean
+
+    elif is_integer_dtype(dtype):
+        dtype = np.float64
+
+    dtype = np.dtype(dtype)
+    out_arr = np.empty(arr.shape, dtype=dtype)
+
+    na_indexer = [slice(None)] * arr.ndim
+    na_indexer[axis] = slice(None, n) if n >= 0 else slice(n, None)
+    out_arr[tuple(na_indexer)] = na
+
+    if arr.ndim == 2 and arr.dtype.name in _diff_special:
+        f = _diff_special[arr.dtype.name]
+        f(arr, out_arr, n, axis)
+    else:
+        _res_indexer = [slice(None)] * arr.ndim
+        _res_indexer[axis] = slice(n, None) if n >= 0 else slice(None, n)
+        res_indexer = tuple(_res_indexer)
+
+        _lag_indexer = [slice(None)] * arr.ndim
+        _lag_indexer[axis] = slice(None, -n) if n > 0 else slice(-n, None)
+        lag_indexer = tuple(_lag_indexer)
+
+        if is_timedelta:
+            res = arr[res_indexer]
+            lag = arr[lag_indexer]
+
+            mask = (arr[res_indexer] == na) | (arr[lag_indexer] == na)
+            if mask.any():
+                res = res.copy()
+                res[mask] = 0
+                lag = lag.copy()
+                lag[mask] = 0
+
+            result = res - lag
+            result[mask] = na
+            out_arr[res_indexer] = result
+        else:
+            # Updated subtraction for boolean arrays
+            out_arr[res_indexer] = arr[res_indexer].astype(int) - arr[lag_indexer].astype(int)
+
+    if is_timedelta:
+        out_arr = out_arr.astype(""int64"").view(""timedelta64[ns]"")
+
+    return out_arr
+```",
+pandas-142-vall_gpt-3,UNKNOWN,UNKNOWN,"```python
+def diff(arr, n: int, axis: int = 0):
+    """"""
+    difference of n between self,
+    analogous to s-s.shift(n)
+
+    Parameters
+    ----------
+    arr : ndarray
+    n : int
+        number of periods
+    axis : int
+        axis to shift on
+
+    Returns
+    -------
+    shifted
+    """"""
+
+    n = int(n)
+    na = np.nan
+    dtype = arr.dtype
+
+    is_timedelta = False
+    if needs_i8_conversion(arr):
+        dtype = np.float64
+        arr = arr.view(""i8"")
+        na = iNaT
+        is_timedelta = True
+
+    elif is_bool_dtype(dtype):
+        dtype = np.object_
+
+    elif is_integer_dtype(dtype):
+        dtype = np.float64
+
+    dtype = np.dtype(dtype)
+    out_arr = np.empty(arr.shape, dtype=dtype)
+
+    na_indexer = [slice(None)] * arr.ndim
+    na_indexer[axis] = slice(None, n) if n >= 0 else slice(n, None)
+    out_arr[tuple(na_indexer)] = na
+
+    if arr.ndim == 2 and arr.dtype.name in _diff_special:
+        f = _diff_special[arr.dtype.name]
+        f(arr, out_arr, n, axis)
+    else:
+        # To keep mypy happy, _res_indexer is a list while res_indexer is
+        #  a tuple, ditto for lag_indexer.
+        _res_indexer = [slice(None)] * arr.ndim
+        _res_indexer[axis] = slice(n, None) if n >= 0 else slice(None, n)
+        res_indexer = tuple(_res_indexer)
+
+        _lag_indexer = [slice(None)] * arr.ndim
+        _lag_indexer[axis] = slice(None, -n) if n > 0 else slice(-n, None)
+        lag_indexer = tuple(_lag_indexer)
+
+        if is_timedelta:
+            res = arr[res_indexer]
+            lag = arr[lag_indexer]
+
+            mask = (arr[res_indexer] == na) | (arr[lag_indexer] == na)
+            if mask.any():
+                res = res.copy()
+                res[mask] = 0
+                lag = lag.copy()
+                lag[mask] = 0
+
+            result = res - lag
+            result[mask] = na
+            out_arr[res_indexer] = result
+        else:
+            # Using np.subtract with where to avoid boolean error during subtraction
+            np.subtract(arr[res_indexer], arr[lag_indexer], out=out_arr[res_indexer], where=~np.isnan(arr[lag_indexer]))
+
+    if is_timedelta:
+        out_arr = out_arr.astype(""int64"").view(""timedelta64[ns]"")
+
+    return out_arr
+```",
+pandas-142-vall_gpt-4,UNKNOWN,UNKNOWN,"```python
+def diff(arr, n: int, axis: int = 0):
+    """"""
+    difference of n between self,
+    analogous to s-s.shift(n)
+
+    Parameters
+    ----------
+    arr : ndarray
+    n : int
+        number of periods
+    axis : int
+        axis to shift on
+
+    Returns
+    -------
+    shifted
+    """"""
+
+    n = int(n)
+    na = np.nan
+    dtype = arr.dtype
+
+    is_timedelta = False
+    if needs_i8_conversion(arr):
+        dtype = np.float64
+        arr = arr.view(""i8"")
+        na = iNaT
+        is_timedelta = True
+
+    elif is_bool_dtype(dtype):
+        dtype = np.object_
+        is_bool = True
+
+    elif is_integer_dtype(dtype):
+        dtype = np.float64
+
+    dtype = np.dtype(dtype)
+    out_arr = np.empty(arr.shape, dtype=dtype)
+
+    na_indexer = [slice(None)] * arr.ndim
+    na_indexer[axis] = slice(None, n) if n >= 0 else slice(n, None)
+    out_arr[tuple(na_indexer)] = na
+
+    if arr.ndim == 2 and arr.dtype.name in _diff_special:
+        f = _diff_special[arr.dtype.name]
+        f(arr, out_arr, n, axis)
+    else:
+        _res_indexer = [slice(None)] * arr.ndim
+        _res_indexer[axis] = slice(n, None) if n >= 0 else slice(None, n)
+        res_indexer = tuple(_res_indexer)
+
+        _lag_indexer = [slice(None)] * arr.ndim
+        _lag_indexer[axis] = slice(None, -n) if n > 0 else slice(-n, None)
+        lag_indexer = tuple(_lag_indexer)
+
+        if is_timedelta:
+            res = arr[res_indexer]
+            lag = arr[lag_indexer]
+
+            mask = (arr[res_indexer] == na) | (arr[lag_indexer] == na)
+            if mask.any():
+                res = res.copy()
+                res[mask] = 0
+                lag = lag.copy()
+                lag[mask] = 0
+
+            result = res - lag
+            result[mask] = na
+            out_arr[res_indexer] = result
+        else:
+            # Use np.logical_xor for boolean arrays
+            out_arr[res_indexer] = np.logical_xor(arr[res_indexer], arr[lag_indexer])
+
+    if is_timedelta:
+        out_arr = out_arr.astype(""int64"").view(""timedelta64[ns]"")
+
+    return out_arr
+```",
+pandas-142-vall_gpt-5,UNKNOWN,UNKNOWN,"```python
+def diff(arr, n: int, axis: int = 0):
+    """"""
+    difference of n between self,
+    analogous to s-s.shift(n)
+
+    Parameters
+    ----------
+    arr : ndarray
+    n : int
+        number of periods
+    axis : int
+        axis to shift on
+
+    Returns
+    -------
+    shifted
+    """"""
+    
+    n = int(n)
+    na = np.nan
+    dtype = arr.dtype
+
+    is_timedelta = False
+    if needs_i8_conversion(arr):
+        dtype = np.float64
+        arr = arr.view(""i8"")
+        na = iNaT
+        is_timedelta = True
+
+    elif is_bool_dtype(dtype):
+        dtype = np.object_
+    
+    elif is_integer_dtype(dtype):
+        dtype = np.float64
+
+    out_arr = np.empty(arr.shape, dtype=dtype)
+    
+    na_indexer = [slice(None)] * arr.ndim
+    na_indexer[axis] = slice(None, n) if n >= 0 else slice(n, None)
+    out_arr[tuple(na_indexer)] = na
+    
+    if arr.ndim == 2 and arr.dtype.name in _diff_special:
+        f = _diff_special[arr.dtype.name]
+        f(arr, out_arr, n, axis)
+    else:
+        _res_indexer = [slice(None)] * arr.ndim
+        _res_indexer[axis] = slice(n, None) if n >= 0 else slice(None, n)
+        res_indexer = tuple(_res_indexer)
+        
+        _lag_indexer = [slice(None)] * arr.ndim
+        _lag_indexer[axis] = slice(None, -n) if n > 0 else slice(-n, None)
+        lag_indexer = tuple(_lag_indexer)
+
+        if is_timedelta:
+            res = arr[res_indexer]
+            lag = arr[lag_indexer]
+
+            mask = (arr[res_indexer] == na) | (arr[lag_indexer] == na)
+            if mask.any():
+                res = res.copy()
+                res[mask] = 0
+                lag = lag.copy()
+                lag[mask] = 0
+
+            result = res - lag
+            result[mask] = na
+            out_arr[res_indexer] = result
+        else:
+            # use bitwise differencing for boolean types
+            out_arr[res_indexer] = arr[res_indexer] != arr[lag_indexer]
+
+    if is_timedelta:
+        out_arr = out_arr.astype(""int64"").view(""timedelta64[ns]"")
+
+    return out_arr
+```",
+pandas-142-vall_gpt-6,UNKNOWN,UNKNOWN,"```python
+def diff(arr, n: int, axis: int = 0):
+    """"""
+    difference of n between self,
+    analogous to s-s.shift(n)
+
+    Parameters
+    ----------
+    arr : ndarray
+    n : int
+        number of periods
+    axis : int
+        axis to shift on
+
+    Returns
+    -------
+    shifted
+    """"""
+
+    n = int(n)
+    na = np.nan  # Default to NaN for numeric types
+    dtype = arr.dtype
+
+    is_timedelta = False
+    if needs_i8_conversion(arr):
+        dtype = np.float64
+        arr = arr.view(""i8"")
+        na = iNaT
+        is_timedelta = True
+
+    elif is_bool_dtype(dtype):
+        dtype = np.object_  # Use object dtype for boolean operations
+
+    elif is_integer_dtype(dtype):
+        dtype = np.float64
+
+    out_arr = np.empty(arr.shape, dtype=dtype)  # Prepare output array
+
+    na_indexer = [slice(None)] * arr.ndim
+    na_indexer[axis] = slice(None, n) if n >= 0 else slice(n, None)
+    out_arr[tuple(na_indexer)] = na  # Fill initial entries with NaN
+
+    if arr.ndim == 2 and arr.dtype.name in _diff_special:
+        f = _diff_special[arr.dtype.name]
+        f(arr, out_arr, n, axis)
+    else:
+        # To keep mypy happy, _res_indexer is a list while res_indexer is
+        #  a tuple, ditto for lag_indexer.
+        _res_indexer = [slice(None)] * arr.ndim
+        _res_indexer[axis] = slice(n, None) if n >= 0 else slice(None, n)
+        res_indexer = tuple(_res_indexer)
+
+        _lag_indexer = [slice(None)] * arr.ndim
+        _lag_indexer[axis] = slice(None, -n) if n > 0 else slice(-n, None)
+        lag_indexer = tuple(_lag_indexer)
+
+        # Use logical_xor for boolean arrays
+        if is_bool_dtype(arr.dtype):
+            out_arr[res_indexer] = np.logical_xor(arr[res_indexer], arr[lag_indexer])
+        else:
+            out_arr[res_indexer] = arr[res_indexer] - arr[lag_indexer]
+
+    if is_timedelta:
+        out_arr = out_arr.astype(""int64"").view(""timedelta64[ns]"")
+
+    return out_arr
+```",
+pandas-142-vall_gpt-7,UNKNOWN,UNKNOWN,"```python
+def diff(arr, n: int, axis: int = 0):
+    """"""
+    difference of n between self,
+    analogous to s-s.shift(n)
+
+    Parameters
+    ----------
+    arr : ndarray
+    n : int
+        number of periods
+    axis : int
+        axis to shift on
+
+    Returns
+    -------
+    shifted
+    """"""
+
+    n = int(n)
+    na = np.nan
+    dtype = arr.dtype
+
+    is_timedelta = False
+    is_bool = is_bool_dtype(dtype)
+
+    if needs_i8_conversion(arr):
+        dtype = np.float64
+        arr = arr.view(""i8"")
+        na = iNaT
+        is_timedelta = True
+
+    elif is_bool:
+        dtype = np.object_
+
+    elif is_integer_dtype(dtype):
+        dtype = np.float64
+
+    dtype = np.dtype(dtype)
+    out_arr = np.empty(arr.shape, dtype=dtype)
+
+    na_indexer = [slice(None)] * arr.ndim
+    na_indexer[axis] = slice(None, n) if n >= 0 else slice(n, None)
+    out_arr[tuple(na_indexer)] = na
+
+    if arr.ndim == 2 and arr.dtype.name in _diff_special:
+        f = _diff_special[arr.dtype.name]
+        f(arr, out_arr, n, axis)
+    else:
+        _res_indexer = [slice(None)] * arr.ndim
+        _res_indexer[axis] = slice(n, None) if n >= 0 else slice(None, n)
+        res_indexer = tuple(_res_indexer)
+
+        _lag_indexer = [slice(None)] * arr.ndim
+        _lag_indexer[axis] = slice(None, -n) if n > 0 else slice(-n, None)
+        lag_indexer = tuple(_lag_indexer)
+
+        if is_timedelta:
+            res = arr[res_indexer]
+            lag = arr[lag_indexer]
+            mask = (arr[res_indexer] == na) | (arr[lag_indexer] == na)
+
+            if mask.any():
+                res = res.copy()
+                res[mask] = 0
+                lag = lag.copy()
+                lag[mask] = 0
+
+            result = res - lag
+            result[mask] = na
+            out_arr[res_indexer] = result
+        else:
+            out_arr[res_indexer] = arr[res_indexer] ^ arr[lag_indexer]  # Use bitwise XOR for boolean
+
+    if is_timedelta:
+        out_arr = out_arr.astype(""int64"").view(""timedelta64[ns]"")
+
+    return out_arr
+```",
+pandas-142-vall_gpt-8,UNKNOWN,UNKNOWN,"```python
+def diff(arr, n: int, axis: int = 0):
+    """"""
+    difference of n between self,
+    analogous to s-s.shift(n)
+
+    Parameters
+    ----------
+    arr : ndarray
+    n : int
+        number of periods
+    axis : int
+        axis to shift on
+
+    Returns
+    -------
+    shifted
+    """"""
+
+    n = int(n)
+    na = np.nan
+    dtype = arr.dtype
+
+    is_timedelta = False
+    if needs_i8_conversion(arr):
+        dtype = np.float64
+        arr = arr.view(""i8"")
+        na = iNaT
+        is_timedelta = True
+
+    elif is_bool_dtype(dtype):
+        dtype = np.object_
+        is_bool = True
+
+    elif is_integer_dtype(dtype):
+        dtype = np.float64
+
+    dtype = np.dtype(dtype)
+    out_arr = np.empty(arr.shape, dtype=dtype)
+
+    na_indexer = [slice(None)] * arr.ndim
+    na_indexer[axis] = slice(None, n) if n >= 0 else slice(n, None)
+    out_arr[tuple(na_indexer)] = na
+
+    if arr.ndim == 2 and arr.dtype.name in _diff_special:
+        f = _diff_special[arr.dtype.name]
+        f(arr, out_arr, n, axis)
+    else:
+        # To keep mypy happy, _res_indexer is a list while res_indexer is
+        #  a tuple, ditto for lag_indexer.
+        _res_indexer = [slice(None)] * arr.ndim
+        _res_indexer[axis] = slice(n, None) if n >= 0 else slice(None, n)
+        res_indexer = tuple(_res_indexer)
+
+        _lag_indexer = [slice(None)] * arr.ndim
+        _lag_indexer[axis] = slice(None, -n) if n > 0 else slice(-n, None)
+        lag_indexer = tuple(_lag_indexer)
+
+        if is_timedelta:
+            res = arr[res_indexer]
+            lag = arr[lag_indexer]
+            mask = (arr[res_indexer] == na) | (arr[lag_indexer] == na)
+
+            if mask.any():
+                res = res.copy()
+                res[mask] = 0
+                lag = lag.copy()
+                lag[mask] = 0
+
+            result = res - lag
+            result[mask] = na
+            out_arr[res_indexer] = result
+        else:
+            # Handle boolean arrays specifically
+            if is_bool:
+                arr_res = arr[res_indexer]
+                arr_lag = arr[lag_indexer]
+                out_arr[res_indexer] = arr_res ^ arr_lag
+            else:
+                out_arr[res_indexer] = arr[res_indexer] - arr[lag_indexer]
+
+    if is_timedelta:
+        out_arr = out_arr.astype(""int64"").view(""timedelta64[ns]"")
+
+    return out_arr
+```",
+pandas-142-vall_gpt-9,UNKNOWN,UNKNOWN,"```python
+def diff(arr, n: int, axis: int = 0):
+    """"""
+    difference of n between self,
+    analogous to s-s.shift(n)
+
+    Parameters
+    ----------
+    arr : ndarray
+    n : int
+        number of periods
+    axis : int
+        axis to shift on
+
+    Returns
+    -------
+    shifted
+    """"""
+
+    n = int(n)
+    na = np.nan
+    dtype = arr.dtype
+
+    is_timedelta = False
+    if needs_i8_conversion(arr):
+        dtype = np.float64
+        arr = arr.view(""i8"")
+        na = iNaT
+        is_timedelta = True
+
+    elif is_bool_dtype(dtype):
+        dtype = np.object_
+        is_bool = True
+
+    elif is_integer_dtype(dtype):
+        dtype = np.float64
+
+    dtype = np.dtype(dtype)
+    out_arr = np.empty(arr.shape, dtype=dtype)
+
+    na_indexer = [slice(None)] * arr.ndim
+    na_indexer[axis] = slice(None, n) if n >= 0 else slice(n, None)
+    out_arr[tuple(na_indexer)] = na
+
+    if arr.ndim == 2 and arr.dtype.name in _diff_special:
+        f = _diff_special[arr.dtype.name]
+        f(arr, out_arr, n, axis)
+    else:
+        _res_indexer = [slice(None)] * arr.ndim
+        _res_indexer[axis] = slice(n, None) if n >= 0 else slice(None, n)
+        res_indexer = tuple(_res_indexer)
+
+        _lag_indexer = [slice(None)] * arr.ndim
+        _lag_indexer[axis] = slice(None, -n) if n > 0 else slice(-n, None)
+        lag_indexer = tuple(_lag_indexer)
+
+        if is_timedelta:
+            res = arr[res_indexer]
+            lag = arr[lag_indexer]
+
+            mask = (arr[res_indexer] == na) | (arr[lag_indexer] == na)
+            if mask.any():
+                res = res.copy()
+                res[mask] = 0
+                lag = lag.copy()
+                lag[mask] = 0
+
+            result = res - lag
+            result[mask] = na
+            out_arr[res_indexer] = result
+        else:
+            # Convert boolean to int for subtraction; then back to boolean
+            result = arr[res_indexer] != arr[lag_indexer]
+            out_arr[res_indexer] = result
+
+    if is_timedelta:
+        out_arr = out_arr.astype(""int64"").view(""timedelta64[ns]"")
+
+    return out_arr
+```",

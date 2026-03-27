@@ -1,0 +1,293 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-151-vall_gpt-0,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    # If value is not scalar, convert to ndarray
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    # Determine the result type for the assignment
+    t = np.result_type(value, values)
+
+    # Ensure we maintain the integrity of the dtype
+    if t != self._ndarray.dtype:
+        # Use safe casting
+        try:
+            values = values.astype(t, casting=""safe"")
+        except TypeError:
+            raise ValueError(f""Cannot cast from {self._ndarray.dtype} to {t}"")
+
+    # Assign the value at the specified index(key)
+    try:
+        values[key] = value
+    except (IndexError, ValueError) as e:
+        raise IndexError(f""Indexing error with key: {key} and value: {value}"") from e
+
+    self._dtype = PandasDtype(t)
+    self._ndarray = values
+```",
+pandas-151-vall_gpt-1,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+    
+    # Convert key to a numpy array if it's list-like
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    # Ensure value is a numpy array
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    t = np.result_type(value, values)
+
+    # Ensure that the value type is compatible with the existing ndarray type
+    if t != self._ndarray.dtype:
+        try:
+            values = values.astype(t, casting=""safe"")
+        except TypeError:
+            raise ValueError(f""Cannot cast array of dtype {self._ndarray.dtype} to dtype {t}"")
+
+    # Perform the assignment while ensuring that the shapes match
+    if values.shape[key].size != value.shape[0]:
+        raise ValueError(""Cannot assign value of different shape to array"")
+
+    # Assignment operation:
+    values[key] = value
+    
+    # Update internal state
+    self._dtype = PandasDtype(t)
+    self._ndarray = values
+```",
+pandas-151-vall_gpt-2,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    t = np.result_type(value, values)
+
+    if t != self._ndarray.dtype:
+        values = values.astype(t, casting=""safe"")
+    
+    if isinstance(key, np.ndarray):
+        if key.shape != value.shape:
+            raise ValueError(""Shape of value does not match shape of index."")
+    
+    # Perform the assignment
+    values[key] = value
+    self._dtype = PandasDtype(t)
+    self._ndarray = values
+```",
+pandas-151-vall_gpt-3,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    t = np.result_type(value, values)
+    
+    # Ensure dtype consistency before assignment
+    if t != self._ndarray.dtype:
+        values = values.astype(t, casting=""safe"")
+
+    # Perform assignment with reshaping if necessary
+    if isinstance(key, np.ndarray) and len(key) > 1 and value.ndim == 0:
+        value = np.full_like(key, value, dtype=t)
+
+    values[key] = value
+    
+    # Update internal state
+    self._dtype = PandasDtype(t)
+    self._ndarray = values
+```",
+pandas-151-vall_gpt-4,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    t = np.result_type(value, values)
+
+    # Check for type compatibility before assignment
+    if not np.can_cast(value.dtype, self._ndarray.dtype, casting='safe'):
+        raise ValueError(f""Cannot cast from {value.dtype} to {self._ndarray.dtype}"")
+
+    # Perform assignment
+    if t != self._ndarray.dtype:
+        # Cast existing values to the new type
+        values = values.astype(t, casting=""safe"")
+        self._dtype = PandasDtype(t)
+        self._ndarray = values
+    # Assign the value
+    self._ndarray[key] = value
+```",
+pandas-151-vall_gpt-5,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    # Convert value to an array if it is not a scalar
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    t = np.result_type(value, values)
+
+    # Strictly check and cast values if necessary
+    if t != self._ndarray.dtype:
+        # Perform type casting and raise if casting fails
+        try:
+            values = values.astype(t, casting=""safe"")
+        except TypeError:
+            raise TypeError(f""Cannot cast array of dtype {self._ndarray.dtype} to {t}"")
+
+    # Use a more explicit assignment to handle possible index issues
+    if isinstance(key, (np.ndarray, list)):
+        # Assign using explicit indexing
+        values[key] = value
+    else:
+        # Direct assignment for single index
+        values[key] = value
+
+    # Update internal state only after successful assignment
+    self._dtype = PandasDtype(t)
+    self._ndarray = values
+```",
+pandas-151-vall_gpt-6,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+
+    # Check if the key and value shapes match for assignment
+    if np.ndim(values) != np.ndim(value) and np.numel(key) != np.ndim(value):
+        raise ValueError(""Incompatible shapes for key and value assignment."")
+
+    t = np.result_type(value, values)
+    
+    if t != self._ndarray.dtype:
+        values = values.astype(t, casting=""safe"")
+        self._dtype = PandasDtype(t)
+
+    # Ensure that assignment is performed correctly
+    if np.shape(key) > 0:
+        values[key] = value
+    else:
+        raise ValueError(""Key must not be an empty index."")
+
+    self._ndarray = values
+```",
+pandas-151-vall_gpt-7,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if isinstance(value, str):
+        value = np.array(value, dtype=np.object)  # Ensures string values are treated correctly
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    
+    # Handling the expected types more carefully
+    t = np.result_type(value, values)
+
+    if t != self._ndarray.dtype:
+        if self._ndarray.size != value.size and not (len(key) == 1 and isinstance(value, np.ndarray)):
+            raise ValueError(""Value must match the shape of the target array."")
+        values = values.astype(t, casting=""safe"")
+
+    values[key] = value  # Direct assignment, should now work correctly
+    
+    self._dtype = PandasDtype(t)
+    self._ndarray = values
+```",
+pandas-151-vall_gpt-8,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+
+    # Correcting the check for result type and casting appropriately
+    t = np.result_type(value, values)
+    
+    # Update self._ndarray dtype only if it changes
+    if t != self._ndarray.dtype:
+        values = values.astype(t, casting=""safe"")  # safe casting
+        self._dtype = PandasDtype(t)
+
+    # Ensure the key can handle scalar or array assignment correctly
+    if lib.is_scalar(key):
+        values[key] = value
+    else:
+        # Handling the case where key is not scalar
+        values[key] = value
+
+    self._ndarray = values
+```",
+pandas-151-vall_gpt-9,UNKNOWN,UNKNOWN,"```python
+def __setitem__(self, key, value):
+    value = extract_array(value, extract_numpy=True)
+
+    if not lib.is_scalar(key) and is_list_like(key):
+        key = np.asarray(key)
+
+    if not lib.is_scalar(value):
+        value = np.asarray(value)
+
+    values = self._ndarray
+    t = np.result_type(value, values)
+
+    # Check if the result type is compatible with current dtype
+    if t != self._ndarray.dtype:
+        # Perform type casting safely
+        values = values.astype(t, casting=""safe"")
+
+    # Execute the assignment; we check the shape here to ensure compatibility
+    if values.shape != value.shape and not (lib.is_scalar(value) or lib.is_scalar(key)):
+        raise ValueError(""Shape of new value does not match the shape of existing array."")
+
+    values[key] = value
+
+    # Update the internal state to reflect the new type and array
+    self._dtype = PandasDtype(t)
+    self._ndarray = values
+```",

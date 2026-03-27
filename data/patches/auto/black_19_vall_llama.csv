@@ -1,0 +1,655 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+black-19-vall_llama-0,UNKNOWN,UNKNOWN,"```python
+def _maybe_empty_lines(self, current_line: Line) -> Tuple[int, int]:
+    max_allowed = 1
+    if current_line.depth == 0:
+        max_allowed = 2
+    if current_line.leaves:
+        # Consume the first leaf's extra newlines.
+        first_leaf = current_line.leaves[0]
+        before = first_leaf.prefix.count(""\n"")
+        before = min(before, max_allowed)
+        first_leaf.prefix = """"
+    else:
+        before = 0
+    depth = current_line.depth
+    while self.previous_defs and self.previous_defs[-1] >= depth:
+        self.previous_defs.pop()
+        before = 1 if depth else 2
+    is_decorator = current_line.is_decorator
+    if is_decorator or current_line.is_def or current_line.is_class:
+        if not is_decorator:
+            self.previous_defs.append(depth)
+        if self.previous_line is None:
+            # Don't insert empty lines before the first line in the file.
+            return 0, 0
+
+        if self.previous_line and self.previous_line.is_decorator:
+            if not is_decorator:
+                return 1, 0  # Modified to include an empty line after the previous decorator if current line is not a decorator itself
+            # Don't insert empty lines between decorators.
+            return 0, 0
+
+        newlines = 2
+        if current_line.depth:
+            newlines -= 1
+        return newlines, 0
+
+    if current_line.is_flow_control:
+        return before, 1
+
+    if (
+        self.previous_line
+        and self.previous_line.is_import
+        and not current_line.is_import
+        and depth == self.previous_line.depth
+    ):
+        return (before or 1), 0
+
+    if (
+        self.previous_line
+        and self.previous_line.is_yield
+        and (not current_line.is_yield or depth!= self.previous_line.depth)
+    ):
+        return (before or 1), 0
+
+    return before, 0
+```",
+black-19-vall_llama-1,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Incorrect handling of comments between decorators**: The buggy function incorrectly inserts blank lines after a comment between decorators, which is against standard formatting practices. 
+2. **Need to distinguish between different line types**: The function should distinguish between different line types such as decorators, comments, function definitions, and class definitions to handle them appropriately.
+3. **Use of `self.previous_line` and `self.previous_defs`**: The function uses `self.previous_line` and `self.previous_defs` to track the state of previous lines and definitions. However, it does not utilize these variables correctly in the given context.
+
+### Fixed solution:
+```python
+def _maybe_empty_lines(self, current_line: Line) -> Tuple[int, int]:
+    max_allowed = 1
+    if current_line.depth == 0:
+        max_allowed = 2
+    if current_line.leaves:
+        # Consume the first leaf's extra newlines.
+        first_leaf = current_line.leaves[0]
+        before = first_leaf.prefix.count(""\n"")
+        before = min(before, max_allowed)
+        first_leaf.prefix = """"
+    else:
+        before = 0
+    depth = current_line.depth
+    while self.previous_defs and self.previous_defs[-1] >= depth:
+        self.previous_defs.pop()
+        before = 1 if depth else 2
+    is_decorator = current_line.is_decorator
+    if is_decorator or current_line.is_def or current_line.is_class:
+        if not is_decorator:
+            self.previous_defs.append(depth)
+        if self.previous_line is None:
+            # Don't insert empty lines before the first line in the file.
+            return 0, 0
+
+        if self.previous_line and self.previous_line.is_decorator and current_line.is_decorator:
+            # Don't insert empty lines between decorators.
+            return 0, 0
+
+        if self.previous_line and self.previous_line.is_decorator and current_line.is_comment:
+            # Don't insert empty lines between a decorator and a comment.
+            return 0, 0
+
+        newlines = 2
+        if current_line.depth:
+            newlines -= 1
+        return newlines, 0
+
+    if current_line.is_flow_control:
+        return before, 1
+
+    if (
+        self.previous_line
+        and self.previous_line.is_import
+        and not current_line.is_import
+        and depth == self.previous_line.depth
+    ):
+        return (before or 1), 0
+
+    if (
+        self.previous_line
+        and self.previous_line.is_yield
+        and (not current_line.is_yield or depth!= self.previous_line.depth)
+    ):
+        return (before or 1), 0
+
+    return before, 0
+```
+### Explanation of changes:
+*   **Added a condition to handle comments between decorators**: I added a condition to check if the previous line is a decorator and the current line is a comment. If this condition is met, the function returns 0, 0, which means no empty lines are inserted between a decorator and a comment.
+*   **Modified the condition for inserting empty lines between decorators**: I modified the condition to check if the previous line and the current line are both decorators. If they are, the function returns 0, 0, which means no empty lines are inserted between decorators.
+
+### Tests and example uses:
+To test the corrected function, you can use the following example:
+```python
+# Create a Line object with a decorator
+line1 = Line(leaves=[Leaf(token.AT, '@'), Leaf(token.NAME, 'property')])
+
+# Create a Line object with a comment
+line2 = Line(leaves=[Leaf(token.COMMENT, '# TODO: X')])
+
+# Create a Line object with another decorator
+line3 = Line(leaves=[Leaf(token.AT, '@'), Leaf(token.NAME, 'another_property')])
+
+# Test the _maybe_empty_lines function
+tracker = EmptyLineTracker()
+print(tracker._maybe_empty_lines(line1))  # Should return (0, 0)
+print(tracker._maybe_empty_lines(line2))  # Should return (0, 0)
+print(tracker._maybe_empty_lines(line3))  # Should return (0, 0)
+```",
+black-19-vall_llama-2,UNKNOWN,UNKNOWN,"```python
+def _maybe_empty_lines(self, current_line: Line) -> Tuple[int, int]:
+    max_allowed = 1
+    if current_line.depth == 0:
+        max_allowed = 2
+    if current_line.leaves:
+        # Consume the first leaf's extra newlines.
+        first_leaf = current_line.leaves[0]
+        before = first_leaf.prefix.count(""\n"")
+        before = min(before, max_allowed)
+        first_leaf.prefix = """"
+    else:
+        before = 0
+    depth = current_line.depth
+    while self.previous_defs and self.previous_defs[-1] >= depth:
+        self.previous_defs.pop()
+        before = 1 if depth else 2
+    is_decorator = current_line.is_decorator
+    if is_decorator or current_line.is_def or current_line.is_class:
+        if not is_decorator:
+            self.previous_defs.append(depth)
+        if self.previous_line is None:
+            # Don't insert empty lines before the first line in the file.
+            return 0, 0
+
+        if self.previous_line and self.previous_line.is_decorator:
+            # Don't insert empty lines between decorators unless they have a comment between them.
+            if current_line.prefix.strip() == '':
+                return 0, 0
+
+        newlines = 2
+        if current_line.depth:
+            newlines -= 1
+        return newlines, 0
+
+    if current_line.is_flow_control:
+        return before, 1
+
+    if (
+        self.previous_line
+        and self.previous_line.is_import
+        and not current_line.is_import
+        and depth == self.previous_line.depth
+    ):
+        return (before or 1), 0
+
+    if (
+        self.previous_line
+        and self.previous_line.is_yield
+        and (not current_line.is_yield or depth!= self.previous_line.depth)
+    ):
+        return (before or 1), 0
+
+    return before, 0
+```",
+black-19-vall_llama-3,UNKNOWN,UNKNOWN,"```python
+def _maybe_empty_lines(self, current_line: Line) -> Tuple[int, int]:
+    max_allowed = 1
+    if current_line.depth == 0:
+        max_allowed = 2
+    if current_line.leaves:
+        first_leaf = current_line.leaves[0]
+        before = first_leaf.prefix.count(""\n"")
+        before = min(before, max_allowed)
+        first_leaf.prefix = """"
+    else:
+        before = 0
+    depth = current_line.depth
+    while self.previous_defs and self.previous_defs[-1] >= depth:
+        self.previous_defs.pop()
+        before = 1 if depth else 2
+    is_decorator = current_line.is_decorator
+    if is_decorator or current_line.is_def or current_line.is_class:
+        if not is_decorator:
+            self.previous_defs.append(depth)
+        if self.previous_line is None:
+            return 0, 0
+        if self.previous_line and self.previous_line.is_decorator and is_decorator:
+            return 0, 0
+        newlines = 2
+        if current_line.depth:
+            newlines -= 1
+        return newlines, 0
+    if current_line.is_flow_control:
+        return before, 1
+    if (
+        self.previous_line
+        and self.previous_line.is_import
+        and not current_line.is_import
+        and depth == self.previous_line.depth
+    ):
+        return (before or 1), 0
+    if (
+        self.previous_line
+        and self.previous_line.is_yield
+        and (not current_line.is_yield or depth!= self.previous_line.depth)
+    ):
+        return (before or 1), 0
+    if (
+        self.previous_line
+        and self.previous_line.is_decorator
+        and not is_decorator
+    ):
+        return 1, 0
+    return before, 0
+```",
+black-19-vall_llama-4,UNKNOWN,UNKNOWN,"### Step 1: Analyze the buggy function and its relationship with corresponding GitHub Issue's or Pull Request's title and description, test code, corresponding error message, the runtime input/output values, the expected input/output values, used methods and classes in the buggy function from the repository, usages of the buggy function in other functions, the last commit made to the buggy function in the past, the documentation of the project, past related issues
+The GitHub issue describes an issue where Black adds blank lines after comments between decorators. The test code demonstrates this issue with a specific example. The error message from the failing test shows the expected and actual outputs. The runtime input/output values show the values of variables during the test execution. The expected input/output values show the desired behavior of the function.
+
+### Step 2: Identify potential error locations within the buggy function.
+Potential error locations in the `_maybe_empty_lines` function include the logic for handling decorators, comments, and empty lines. Specifically, the conditions for checking if the current line is a decorator or a comment, and the logic for calculating the number of empty lines to add.
+
+### Step 3: Identify the cause of the bug using the buggy function, GitHub's corresponding Issue's or Pull Request's title and description, test code, corresponding error message, the runtime input/output values, the expected input/output values, used methods and classes in the buggy function from the repository, usages of the buggy function in other functions, the last commit made to the buggy function in the past, the documentation of the project, past related issues
+The cause of the bug is that the function is adding an extra newline after a comment when it encounters a decorator. This is because the function is not correctly handling the case where a comment is followed by a decorator.
+
+### Step 4: Think of a strategy for fixing the bug.
+To fix the bug, we need to modify the function to correctly handle the case where a comment is followed by a decorator. We can do this by adding a condition to check if the previous line is a comment and the current line is a decorator, and if so, do not add an extra newline.
+
+### Step 5: Given the buggy function, edit the content of the function and output ONLY the WHOLE corrected version of the function wrapped in triple backticks.
+```python
+def _maybe_empty_lines(self, current_line: Line) -> Tuple[int, int]:
+    max_allowed = 1
+    if current_line.depth == 0:
+        max_allowed = 2
+    if current_line.leaves:
+        # Consume the first leaf's extra newlines.
+        first_leaf = current_line.leaves[0]
+        before = first_leaf.prefix.count(""\n"")
+        before = min(before, max_allowed)
+        first_leaf.prefix = """"
+    else:
+        before = 0
+    depth = current_line.depth
+    while self.previous_defs and self.previous_defs[-1] >= depth:
+        self.previous_defs.pop()
+        before = 1 if depth else 2
+    is_decorator = current_line.is_decorator
+    if is_decorator or current_line.is_def or current_line.is_class:
+        if not is_decorator:
+            self.previous_defs.append(depth)
+        if self.previous_line is None:
+            # Don't insert empty lines before the first line in the file.
+            return 0, 0
+
+        if self.previous_line and self.previous_line.is_decorator:
+            # Don't insert empty lines between decorators.
+            return 0, 0
+        elif self.previous_line and self.previous_line.is_comment and current_line.is_decorator:
+            # Don't insert empty lines between comments and decorators.
+            return 0, 0
+
+        newlines = 2
+        if current_line.depth:
+            newlines -= 1
+        return newlines, 0
+
+    if current_line.is_flow_control:
+        return before, 1
+
+    if (
+        self.previous_line
+        and self.previous_line.is_import
+        and not current_line.is_import
+        and depth == self.previous_line.depth
+    ):
+        return (before or 1), 0
+
+    if (
+        self.previous_line
+        and self.previous_line.is_yield
+        and (not current_line.is_yield or depth!= self.previous_line.depth)
+    ):
+        return (before or 1), 0
+
+    return before, 0
+```",
+black-19-vall_llama-5,UNKNOWN,UNKNOWN,"```python
+def _maybe_empty_lines(self, current_line: Line) -> Tuple[int, int]:
+    max_allowed = 1
+    if current_line.depth == 0:
+        max_allowed = 2
+    if current_line.leaves:
+        # Consume the first leaf's extra newlines.
+        first_leaf = current_line.leaves[0]
+        before = first_leaf.prefix.count(""\n"")
+        before = min(before, max_allowed)
+        first_leaf.prefix = """"
+    else:
+        before = 0
+    depth = current_line.depth
+    while self.previous_defs and self.previous_defs[-1] >= depth:
+        self.previous_defs.pop()
+        before = 1 if depth else 2
+    is_decorator = current_line.is_decorator
+    if is_decorator or current_line.is_def or current_line.is_class:
+        if not is_decorator:
+            self.previous_defs.append(depth)
+        if self.previous_line is None:
+            return 0, 0
+
+        if self.previous_line and self.previous_line.is_decorator:
+            if current_line.is_decorator:
+                return 0, 0  # Added condition to prevent empty lines between decorators.
+
+        newlines = 2
+        if current_line.depth:
+            newlines -= 1
+        return newlines, 0
+
+    if current_line.is_flow_control:
+        return before, 1
+
+    if (
+        self.previous_line
+        and self.previous_line.is_import
+        and not current_line.is_import
+        and depth == self.previous_line.depth
+    ):
+        return (before or 1), 0
+
+    if (
+        self.previous_line
+        and self.previous_line.is_yield
+        and (not current_line.is_yield or depth!= self.previous_line.depth)
+    ):
+        return (before or 1), 0
+
+    return before, 0
+```",
+black-19-vall_llama-6,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the Bug Context**: The bug involves the `_maybe_empty_lines` function, which seems to incorrectly handle newlines between decorators. This is causing flake8 to report blank lines found after function decorators, which is against the style guidelines.
+2. **Flake8 Error Indication**: The error message ""E304 blank lines found after function decorator"" suggests that the issue lies in how the function is handling or inserting newlines after decorator lines.
+3. **Current Function Behavior**: The function calculates the number of newlines that should precede a given line based on various conditions such as the type of line (decorator, function definition, class definition, etc.) and its depth. However, the logic for handling decorators seems to be the point of failure.
+4. **Analysis of Decorator Logic**: In the provided code, when `is_decorator` is `True`, the function sets `newlines` to `2` (or `1` if `current_line.depth` is not `0`). This suggests that the function aims to add two newlines after a decorator if it's at the top level, but this behavior causes the issue when multiple decorators are present.
+5. **Identifying the Root Cause**: The bug arises because the current implementation inserts newlines after every decorator, which contradicts the style guideline that disallows blank lines between decorators.
+
+### Fixed solution:
+```python
+def _maybe_empty_lines(self, current_line: Line) -> Tuple[int, int]:
+    max_allowed = 1
+    if current_line.depth == 0:
+        max_allowed = 2
+    if current_line.leaves:
+        # Consume the first leaf's extra newlines.
+        first_leaf = current_line.leaves[0]
+        before = first_leaf.prefix.count(""\n"")
+        before = min(before, max_allowed)
+        first_leaf.prefix = """"
+    else:
+        before = 0
+    depth = current_line.depth
+    while self.previous_defs and self.previous_defs[-1] >= depth:
+        self.previous_defs.pop()
+        before = 1 if depth else 2
+    is_decorator = current_line.is_decorator
+    if is_decorator or current_line.is_def or current_line.is_class:
+        if not is_decorator:
+            self.previous_defs.append(depth)
+        if self.previous_line is None:
+            # Don't insert empty lines before the first line in the file.
+            return 0, 0
+
+        if self.previous_line and self.previous_line.is_decorator:
+            # Specifically for this bug, ensure no newlines between decorators.
+            return 0, 0
+
+        # Changed logic to not insert newlines after decorators.
+        if is_decorator:
+            return 0, 0
+
+        newlines = 2
+        if current_line.depth:
+            newlines -= 1
+        return newlines, 0
+
+    if current_line.is_flow_control:
+        return before, 1
+
+    if (
+        self.previous_line
+        and self.previous_line.is_import
+        and not current_line.is_import
+        and depth == self.previous_line.depth
+    ):
+        return (before or 1), 0
+
+    if (
+        self.previous_line
+        and self.previous_line.is_yield
+        and (not current_line.is_yield or depth!= self.previous_line.depth)
+    ):
+        return (before or 1), 0
+
+    return before, 0
+```
+
+### Explanation of changes:
+*   **Decorator Logic Adjustment**: The primary change involves adjusting the logic when `is_decorator` is `True`. Instead of setting `newlines` to a non-zero value, the function now returns `0, 0` when it encounters a decorator, effectively not inserting newlines after decorators.
+*   **Ensuring Consistency**: This change ensures that there are no blank lines between decorators, aligning with the style guidelines and resolving the flake8 error.
+
+### Tests and example uses:
+You can test the corrected function using the provided test cases or by creating new ones that specifically target the decorator scenario. For example:
+```python
+def test_no_newline_between_decorators():
+    # Setup: Create two decorator lines and a function definition.
+    decorator1 = Line(depth=0, leaves=[Leaf(AT, '@'), Leaf(NAME, 'decorator1')])
+    decorator2 = Line(depth=0, leaves=[Leaf(AT, '@'), Leaf(NAME, 'decorator2')])
+    function_def = Line(depth=0, leaves=[Leaf(NAME, 'def'), Leaf(NAME, 'my_function')])
+
+    # Apply the _maybe_empty_lines function.
+    tracker = EmptyLineTracker()
+    tracker._maybe_empty_lines(decorator1)
+    tracker._maybe_empty_lines(decorator2)
+    result = tracker._maybe_empty_lines(function_def)
+
+    # Assert: There should be no newlines between the decorators.
+    assert result == (2, 0)  # Or the expected result based on the rest of your logic
+```
+This example tests the scenario where two decorators precede a function definition, ensuring that no newlines are inserted between the decorators.",
+black-19-vall_llama-7,UNKNOWN,UNKNOWN,"```python
+def _maybe_empty_lines(self, current_line: Line) -> Tuple[int, int]:
+    max_allowed = 1
+    if current_line.depth == 0:
+        max_allowed = 2
+    if current_line.leaves:
+        # Consume the first leaf's extra newlines.
+        first_leaf = current_line.leaves[0]
+        before = first_leaf.prefix.count(""\n"")
+        before = min(before, max_allowed)
+        first_leaf.prefix = """"
+    else:
+        before = 0
+    depth = current_line.depth
+    while self.previous_defs and self.previous_defs[-1] >= depth:
+        if self.previous_line and self.previous_line.is_decorator:
+            self.previous_defs.pop()
+            before = 0
+        else:
+            self.previous_defs.pop()
+            before = 1 if depth else 2
+    is_decorator = current_line.is_decorator
+    if is_decorator or current_line.is_def or current_line.is_class:
+        if not is_decorator:
+            self.previous_defs.append(depth)
+        if self.previous_line is None:
+            # Don't insert empty lines before the first line in the file.
+            return 0, 0
+
+        if self.previous_line and self.previous_line.is_decorator:
+            # Don't insert empty lines between decorators.
+            return 0, 0
+
+        newlines = 2
+        if current_line.depth:
+            newlines -= 1
+        return newlines, 0
+
+    if current_line.is_flow_control:
+        return before, 1
+
+    if (
+        self.previous_line
+        and self.previous_line.is_import
+        and not current_line.is_import
+        and depth == self.previous_line.depth
+    ):
+        return (before or 1), 0
+
+    if (
+        self.previous_line
+        and self.previous_line.is_yield
+        and (not current_line.is_yield or depth!= self.previous_line.depth)
+    ):
+        return (before or 1), 0
+
+    return before, 0
+```",
+black-19-vall_llama-8,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the Bug**: The bug introduces unnecessary blank lines after a comment between decorators. This issue arises because the current implementation of `_maybe_empty_lines` does not correctly handle cases where the previous line is a comment and the current line is a decorator.
+
+2. ** Reviewing `_maybe_empty_lines` Function**: The function is designed to determine the number of empty lines that should be inserted before the `current_line` based on its type (decorator, function definition, class definition, etc.) and the state of the previous lines.
+
+3. **Identifying the Root Cause**: The problem lies in the logic that handles the insertion of newlines when the previous line is a comment and the current line is a decorator. The current logic does not distinguish between these cases properly, leading to incorrect newline insertion.
+
+4. **Proposed Fix**: To fix this issue, we need to modify the `_maybe_empty_lines` function to correctly handle the scenario where the previous line is a comment and the current line is a decorator. This involves adding a condition to check if the previous line is a comment and the current line is a decorator, and if so, return without adding any newlines.
+
+5. **Implementing the Fix**: The fix involves modifying the conditional logic within the `_maybe_empty_lines` function to account for the specific scenario of a comment followed by a decorator.
+
+### Fixed solution:
+```python
+def _maybe_empty_lines(self, current_line: Line) -> Tuple[int, int]:
+    max_allowed = 1
+    if current_line.depth == 0:
+        max_allowed = 2
+    if current_line.leaves:
+        # Consume the first leaf's extra newlines.
+        first_leaf = current_line.leaves[0]
+        before = first_leaf.prefix.count(""\n"")
+        before = min(before, max_allowed)
+        first_leaf.prefix = """"
+    else:
+        before = 0
+    depth = current_line.depth
+    while self.previous_defs and self.previous_defs[-1] >= depth:
+        self.previous_defs.pop()
+        before = 1 if depth else 2
+    is_decorator = current_line.is_decorator
+    if is_decorator or current_line.is_def or current_line.is_class:
+        if not is_decorator:
+            self.previous_defs.append(depth)
+        if self.previous_line is None:
+            # Don't insert empty lines before the first line in the file.
+            return 0, 0
+
+        if self.previous_line and self.previous_line.is_decorator:
+            # Don't insert empty lines between decorators.
+            return 0, 0
+        
+        # Added condition to check if previous line is a comment
+        # and current line is a decorator to avoid inserting newlines
+        if self.previous_line and self.previous_line.is_comment and is_decorator:
+            return 0, 0
+
+        newlines = 2
+        if current_line.depth:
+            newlines -= 1
+        return newlines, 0
+
+    if current_line.is_flow_control:
+        return before, 1
+
+    if (
+        self.previous_line
+        and self.previous_line.is_import
+        and not current_line.is_import
+        and depth == self.previous_line.depth
+    ):
+        return (before or 1), 0
+
+    if (
+        self.previous_line
+        and self.previous_line.is_yield
+        and (not current_line.is_yield or depth!= self.previous_line.depth)
+    ):
+        return (before or 1), 0
+
+    return before, 0
+```
+
+### Explanation of changes:
+*   **Additional Conditional Check**: Added a condition to check if the previous line is a comment (`self.previous_line.is_comment`) and the current line is a decorator (`is_decorator`). If both conditions are true, the function returns without adding any newlines (`return 0, 0`).
+*   **Logic Modification**: This modification ensures that unnecessary blank lines are not inserted between a comment and a decorator, addressing the identified bug.
+
+### Tests and example uses:
+The provided test case `test_comment_in_decorator` should pass after applying the fix, demonstrating the correction of the bug. Additionally, you can create more test cases to cover different scenarios, such as multiple comments followed by decorators, to ensure the function behaves as expected in all situations.",
+black-19-vall_llama-9,UNKNOWN,UNKNOWN,"```python
+def _maybe_empty_lines(self, current_line: Line) -> Tuple[int, int]:
+    max_allowed = 1
+    if current_line.depth == 0:
+        max_allowed = 2
+    if current_line.leaves:
+        # Consume the first leaf's extra newlines.
+        first_leaf = current_line.leaves[0]
+        before = first_leaf.prefix.count(""\n"")
+        before = min(before, max_allowed)
+        first_leaf.prefix = """"
+    else:
+        before = 0
+    depth = current_line.depth
+    while self.previous_defs and self.previous_defs[-1] >= depth:
+        self.previous_defs.pop()
+        before = 1 if depth else 2
+    is_decorator = current_line.is_decorator
+    if is_decorator or current_line.is_def or current_line.is_class:
+        if not is_decorator:
+            self.previous_defs.append(depth)
+        if self.previous_line is None:
+            # Don't insert empty lines before the first line in the file.
+            return 0, 0
+
+        if self.previous_line and self.previous_line.is_decorator:
+            # Don't insert empty lines between decorators.
+            return 0, 0
+
+        newlines = 2
+        if current_line.depth:
+            newlines -= 1
+        # Handle the specific scenario when the previous line is a comment and the current line is a decorator
+        if self.previous_line and self.previous_line.leaves and self.previous_line.leaves[0].type == 153:
+            return 0, 0
+        return newlines, 0
+
+    if current_line.is_flow_control:
+        return before, 1
+
+    if (
+        self.previous_line
+        and self.previous_line.is_import
+        and not current_line.is_import
+        and depth == self.previous_line.depth
+    ):
+        return (before or 1), 0
+
+    if (
+        self.previous_line
+        and self.previous_line.is_yield
+        and (not current_line.is_yield or depth!= self.previous_line.depth)
+    ):
+        return (before or 1), 0
+
+    return before, 0
+```",

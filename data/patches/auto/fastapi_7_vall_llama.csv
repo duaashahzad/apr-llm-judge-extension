@@ -1,0 +1,193 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+fastapi-7-vall_llama-0,UNKNOWN,UNKNOWN,"```python
+async def request_validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    errors = exc.errors()
+    # Convert Decimal to float to make it JSON serializable
+    for error in errors:
+        if 'ctx' in error and 'limit_value' in error['ctx'] and isinstance(error['ctx']['limit_value'], Decimal):
+            error['ctx']['limit_value'] = float(error['ctx']['limit_value'])
+    return JSONResponse(
+        status_code=HTTP_422_UNPROCESSABLE_ENTITY, content={""detail"": errors}
+    )
+```",
+fastapi-7-vall_llama-1,UNKNOWN,UNKNOWN,"### Corrected Function
+```python
+from fastapi.exceptions import RequestValidationError
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+import json
+from decimal import Decimal
+
+async def request_validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    # Define a custom JSON encoder to handle Decimal
+    class DecimalEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, Decimal):
+                return float(obj)
+            return super().default(obj)
+
+    return JSONResponse(
+        status_code=HTTP_422_UNPROCESSABLE_ENTITY, 
+        content=json.dumps({""detail"": exc.errors()}, cls=DecimalEncoder)
+    )
+```",
+fastapi-7-vall_llama-2,UNKNOWN,UNKNOWN,"### Corrected Function
+```python
+async def request_validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    errors = exc.errors()
+    # Convert any Decimal instances to float for JSON serialization
+    for error in errors:
+        if 'ctx' in error and 'limit_value' in error['ctx'] and isinstance(error['ctx']['limit_value'], Decimal):
+            error['ctx']['limit_value'] = float(error['ctx']['limit_value'])
+    return JSONResponse(
+        status_code=HTTP_422_UNPROCESSABLE_ENTITY, content={""detail"": errors}
+    )
+```",
+fastapi-7-vall_llama-3,UNKNOWN,UNKNOWN,"```python
+async def request_validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    error_list = exc.errors()
+    # Convert Decimal to float before returning the response
+    for error in error_list:
+        if 'ctx' in error and 'limit_value' in error['ctx'] and isinstance(error['ctx']['limit_value'], Decimal):
+            error['ctx']['limit_value'] = float(error['ctx']['limit_value'])
+    
+    return JSONResponse(
+        status_code=HTTP_422_UNPROCESSABLE_ENTITY, content={""detail"": error_list}
+    )
+```",
+fastapi-7-vall_llama-4,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Analyzing the error**: The error message indicates that the `Decimal` type is not JSON serializable, which is causing the `TypeError`. This suggests that the issue lies in how the error details are being returned in the response.
+2. **Understanding the requirements**: The `request_validation_exception_handler` function needs to return a JSON response with a status code of 422 and include the validation errors in the response body.
+3. **Identifying the problematic line**: The line `return JSONResponse(status_code=HTTP_422_UNPROCESSABLE_ENTITY, content={""detail"": exc.errors()})` is where the error occurs because `exc.errors()` contains a `Decimal` value that cannot be serialized to JSON.
+4. **Finding a solution**: To fix this, we need to ensure that any `Decimal` values in the error details are converted to a JSON-serializable type, such as `str` or `float`, before returning the response.
+
+### Fixed solution:
+```python
+async def request_validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    # Convert Decimal values to float in error details
+    errors = exc.errors()
+    for error in errors:
+        if 'ctx' in error and 'limit_value' in error['ctx'] and isinstance(error['ctx']['limit_value'], Decimal):
+            error['ctx']['limit_value'] = float(error['ctx']['limit_value'])
+    
+    return JSONResponse(
+        status_code=HTTP_422_UNPROCESSABLE_ENTITY, 
+        content={""detail"": errors}
+    )
+```
+
+### Explanation of changes:
+*   **Iteration over errors**: We iterate over each error in `exc.errors()` to check for `Decimal` values.
+*   **Conversion of Decimal to float**: If a `Decimal` value is found in the error context, we convert it to a `float` to make it JSON-serializable.
+*   **Updated response content**: We return the updated error details in the response content.
+
+### Tests and example uses:
+*   Test the function with a request that causes a `RequestValidationError` involving a `Decimal` value.
+*   Verify that the response status code is 422 and the error details in the response body are correctly serialized and include the converted `Decimal` value.",
+fastapi-7-vall_llama-5,UNKNOWN,UNKNOWN,"```python
+async def request_validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    # Convert Decimal to float before returning the response
+    errors = [{""loc"": e[""loc""], ""msg"": e[""msg""], ""type"": e[""type""], ""ctx"": {k: float(v) if isinstance(v, Decimal) else v for k, v in e.get(""ctx"", {}).items()}} for e in exc.errors()]
+    return JSONResponse(
+        status_code=HTTP_422_UNPROCESSABLE_ENTITY, content={""detail"": errors}
+    )
+```",
+fastapi-7-vall_llama-6,UNKNOWN,UNKNOWN,"```python
+async def request_validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    # JSONResponse cannot handle Decimal type, convert it to string or float first
+    errors = exc.errors()
+    for error in errors:
+        if 'ctx' in error and 'limit_value' in error['ctx'] and isinstance(error['ctx']['limit_value'], Decimal):
+            error['ctx']['limit_value'] = float(error['ctx']['limit_value'])
+    return JSONResponse(
+        status_code=HTTP_422_UNPROCESSABLE_ENTITY, content={""detail"": errors}
+    )
+```",
+fastapi-7-vall_llama-7,UNKNOWN,UNKNOWN,"```python
+async def request_validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    errors = exc.errors()
+    for error in errors:
+        if 'ctx' in error and 'limit_value' in error['ctx']:
+            error['ctx']['limit_value'] = float(error['ctx']['limit_value'])
+    return JSONResponse(
+        status_code=HTTP_422_UNPROCESSABLE_ENTITY, content={""detail"": errors}
+    )
+```",
+fastapi-7-vall_llama-8,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Error Cause**: The bug in the `request_validation_exception_handler` function arises when the `JSONResponse` tries to serialize a `Decimal` object that is part of the validation error messages. The `json.dumps()` function does not know how to serialize `Decimal` objects by default, leading to a `TypeError`.
+
+2. **Serialization of Decimals**: To fix this issue, we need to ensure that any `Decimal` objects within the validation errors are properly serialized to a JSON-compatible format. This can be achieved by using a custom JSON encoder that knows how to handle `Decimal` objects.
+
+3. **Custom JSON Encoder**: We will define a custom JSON encoder class that inherits from `JSONEncoder`. This class will override the `default` method to provide a serialization method for `Decimal` objects.
+
+4. **Integration with FastAPI**: After defining the custom encoder, we need to integrate it with the `JSONResponse` in the `request_validation_exception_handler` function. This involves passing an instance of our custom encoder to the `json.dumps()` function or configuring FastAPI to use our encoder globally.
+
+### Fixed solution:
+```python
+from fastapi.exceptions import RequestValidationError
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+import json
+from decimal import Decimal
+
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return json.JSONEncoder.default(self, obj)
+
+async def request_validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    error_details = exc.errors()
+    # Use the custom encoder to serialize the error details
+    error_json = json.dumps({""detail"": error_details}, cls=CustomJSONEncoder)
+    return JSONResponse(
+        status_code=HTTP_422_UNPROCESSABLE_ENTITY, content=error_json
+    )
+```
+
+### Explanation of changes:
+* **Added CustomJSONEncoder Class**: Defined a `CustomJSONEncoder` class that inherits from `json.JSONEncoder`. This class overrides the `default` method to handle serialization of `Decimal` objects.
+* **Modified request_validation_exception_handler**: Updated the `request_validation_exception_handler` function to use the `CustomJSONEncoder` when serializing the validation error details to JSON.
+* **Serialized Error Details with Custom Encoder**: Used `json.dumps()` with the `cls` parameter set to `CustomJSONEncoder` to ensure that `Decimal` objects within the error details are properly serialized.
+
+### Tests and example uses:
+To test this solution, you can use the same test function that previously failed, `test_jsonable_encoder_requiring_error`. With the modifications to the `request_validation_exception_handler` function, this test should now pass, indicating that the bug has been successfully fixed. Additionally, you can manually test the API endpoint with invalid data to verify that the response is correctly formatted and contains detailed error messages, even when those messages include `Decimal` values.",
+fastapi-7-vall_llama-9,UNKNOWN,UNKNOWN,"### Corrected Function
+```python
+async def request_validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    # Convert Decimal to float to make it JSON serializable
+    errors = [
+        {
+            key: value if not isinstance(value, dict) else {
+                k: float(v) if isinstance(v, type(Decimal('0'))) else v for k, v in value.items()
+            }
+            for key, value in error.items()
+        }
+        for error in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=HTTP_422_UNPROCESSABLE_ENTITY, content={""detail"": errors}
+    )
+```",

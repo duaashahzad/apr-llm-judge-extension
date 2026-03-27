@@ -1,0 +1,920 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-150-vall_llama-0,UNKNOWN,UNKNOWN,"```python
+def array_equivalent(left, right, strict_nan=False):
+    """"""
+    True if two arrays, left and right, have equal non-NaN elements, and NaNs
+    in corresponding locations.  False otherwise. It is assumed that left and
+    right are NumPy arrays of the same dtype. The behavior of this function
+    (particularly with respect to NaNs) is not defined if the dtypes are
+    different.
+
+    Parameters
+    ----------
+    left, right : ndarrays
+    strict_nan : bool, default False
+        If True, consider NaN and None to be different.
+
+    Returns
+    -------
+    b : bool
+        Returns True if the arrays are equivalent.
+
+    Examples
+    --------
+    >>> array_equivalent(
+   ...     np.array([1, 2, np.nan]),
+   ...     np.array([1, 2, np.nan]))
+    True
+    >>> array_equivalent(
+   ...     np.array([1, np.nan, 2]),
+   ...     np.array([1, 2, np.nan]))
+    False
+    """"""
+
+    left, right = np.asarray(left), np.asarray(right)
+
+    # shape compat
+    if left.shape!= right.shape:
+        return False
+
+    # Object arrays can contain None, NaN and NaT.
+    # string dtypes must be come to this path for NumPy 1.7.1 compat
+    if is_object_dtype(left) or is_object_dtype(right):
+
+        if not strict_nan:
+            # isna considers NaN and None to be equivalent.
+            return lib.array_equivalent_object(
+                ensure_object(left.ravel()), ensure_object(right.ravel())
+            )
+
+        for left_value, right_value in zip(np.atleast_1d(left).ravel(), np.atleast_1d(right).ravel()):
+            if isinstance(left_value, np.ndarray) and isinstance(right_value, np.ndarray):
+                if not array_equivalent(left_value, right_value, strict_nan):
+                    return False
+            elif isinstance(left_value, float) and np.isnan(left_value):
+                if not isinstance(right_value, float) or not np.isnan(right_value):
+                    return False
+            elif left_value!= right_value:
+                return False
+        return True
+
+    # NaNs can occur in float and complex arrays.
+    if is_float_dtype(left) or is_complex_dtype(left):
+
+        # empty
+        if not (np.prod(left.shape) and np.prod(right.shape)):
+            return True
+        return ((left == right) | (isna(left) & isna(right))).all()
+
+    # numpy will will not allow this type of datetimelike vs integer comparison
+    elif is_datetimelike_v_numeric(left, right):
+        return False
+
+    # M8/m8
+    elif needs_i8_conversion(left) and needs_i8_conversion(right):
+        if not is_dtype_equal(left.dtype, right.dtype):
+            return False
+
+        left = left.view(""i8"")
+        right = right.view(""i8"")
+
+    # if we have structured dtypes, compare first
+    if left.dtype.type is np.void or right.dtype.type is np.void:
+        if left.dtype!= right.dtype:
+            return False
+
+    return np.array_equal(left, right)
+```",
+pandas-150-vall_llama-1,UNKNOWN,UNKNOWN,"```python
+def array_equivalent(left, right, strict_nan=False):
+    """"""
+    True if two arrays, left and right, have equal non-NaN elements, and NaNs
+    in corresponding locations.  False otherwise. It is assumed that left and
+    right are NumPy arrays of the same dtype. The behavior of this function
+    (particularly with respect to NaNs) is not defined if the dtypes are
+    different.
+
+    Parameters
+    ----------
+    left, right : ndarrays
+    strict_nan : bool, default False
+        If True, consider NaN and None to be different.
+
+    Returns
+    -------
+    b : bool
+        Returns True if the arrays are equivalent.
+
+    Examples
+    --------
+    >>> array_equivalent(
+   ...     np.array([1, 2, np.nan]),
+   ...     np.array([1, 2, np.nan]))
+    True
+    >>> array_equivalent(
+   ...     np.array([1, np.nan, 2]),
+   ...     np.array([1, 2, np.nan]))
+    False
+    """"""
+
+    left, right = np.asarray(left), np.asarray(right)
+
+    # shape compat
+    if left.shape!= right.shape:
+        return False
+
+    # Object arrays can contain None, NaN and NaT.
+    # string dtypes must be come to this path for NumPy 1.7.1 compat
+    if is_string_dtype(left) or is_string_dtype(right):
+
+        if not strict_nan:
+            # isna considers NaN and None to be equivalent.
+            return lib.array_equivalent_object(
+                ensure_object(left.ravel()), ensure_object(right.ravel())
+            )
+
+        for left_value, right_value in zip(left, right):
+            if isinstance(left_value, np.ndarray) and isinstance(right_value, np.ndarray):
+                if not array_equivalent(left_value, right_value, strict_nan):
+                    return False
+            else:
+                if left_value is NaT and right_value is not NaT:
+                    return False
+
+                elif isinstance(left_value, float) and np.isnan(left_value):
+                    if not isinstance(right_value, float) or not np.isnan(right_value):
+                        return False
+                else:
+                    if left_value!= right_value:
+                        return False
+        return True
+
+    # NaNs can occur in float and complex arrays.
+    if is_float_dtype(left) or is_complex_dtype(left):
+
+        # empty
+        if not (np.prod(left.shape) and np.prod(right.shape)):
+            return True
+        return ((left == right) | (isna(left) & isna(right))).all()
+
+    # numpy will will not allow this type of datetimelike vs integer comparison
+    elif is_datetimelike_v_numeric(left, right):
+        return False
+
+    # M8/m8
+    elif needs_i8_conversion(left) and needs_i8_conversion(right):
+        if not is_dtype_equal(left.dtype, right.dtype):
+            return False
+
+        left = left.view(""i8"")
+        right = right.view(""i8"")
+
+    # if we have structured dtypes, compare first
+    if left.dtype.type is np.void or right.dtype.type is np.void:
+        if left.dtype!= right.dtype:
+            return False
+
+    return np.array_equal(left, right)
+```",
+pandas-150-vall_llama-2,UNKNOWN,UNKNOWN,"```python
+def array_equivalent(left, right, strict_nan=False):
+    """"""
+    True if two arrays, left and right, have equal non-NaN elements, and NaNs
+    in corresponding locations.  False otherwise. It is assumed that left and
+    right are NumPy arrays of the same dtype. The behavior of this function
+    (particularly with respect to NaNs) is not defined if the dtypes are
+    different.
+
+    Parameters
+    ----------
+    left, right : ndarrays
+    strict_nan : bool, default False
+        If True, consider NaN and None to be different.
+
+    Returns
+    -------
+    b : bool
+        Returns True if the arrays are equivalent.
+
+    Examples
+    --------
+    >>> array_equivalent(
+   ...     np.array([1, 2, np.nan]),
+   ...     np.array([1, 2, np.nan]))
+    True
+    >>> array_equivalent(
+   ...     np.array([1, np.nan, 2]),
+   ...     np.array([1, 2, np.nan]))
+    False
+    """"""
+
+    left, right = np.asarray(left), np.asarray(right)
+
+    # shape compat
+    if left.shape!= right.shape:
+        return False
+
+    # Object arrays can contain None, NaN and NaT.
+    # string dtypes must be come to this path for NumPy 1.7.1 compat
+    if is_object_dtype(left) or is_object_dtype(right):
+
+        if not strict_nan:
+            # isna considers NaN and None to be equivalent.
+            return lib.array_equivalent_object(
+                ensure_object(left.ravel()), ensure_object(right.ravel())
+            )
+
+        for left_value, right_value in zip(left.ravel(), right.ravel()):
+            if left_value is NaT and right_value is not NaT:
+                return False
+
+            elif isinstance(left_value, float) and np.isnan(left_value):
+                if not isinstance(right_value, float) or not np.isnan(right_value):
+                    return False
+            elif isinstance(left_value, np.ndarray) and isinstance(right_value, np.ndarray):
+                if not array_equivalent(left_value, right_value, strict_nan=strict_nan):
+                    return False
+            else:
+                if left_value!= right_value:
+                    return False
+        return True
+
+    # NaNs can occur in float and complex arrays.
+    if is_float_dtype(left) or is_complex_dtype(left):
+
+        # empty
+        if not (np.prod(left.shape) and np.prod(right.shape)):
+            return True
+        return ((left == right) | (isna(left) & isna(right))).all()
+
+    # numpy will will not allow this type of datetimelike vs integer comparison
+    elif is_datetimelike_v_numeric(left, right):
+        return False
+
+    # M8/m8
+    elif needs_i8_conversion(left) and needs_i8_conversion(right):
+        if not is_dtype_equal(left.dtype, right.dtype):
+            return False
+
+        left = left.view(""i8"")
+        right = right.view(""i8"")
+
+    # if we have structured dtypes, compare first
+    if left.dtype.type is np.void or right.dtype.type is np.void:
+        if left.dtype!= right.dtype:
+            return False
+
+    return np.array_equal(left, right)
+```",
+pandas-150-vall_llama-3,UNKNOWN,UNKNOWN,"```python
+def array_equivalent(left, right, strict_nan=False):
+    """"""
+    True if two arrays, left and right, have equal non-NaN elements, and NaNs
+    in corresponding locations.  False otherwise. It is assumed that left and
+    right are NumPy arrays of the same dtype. The behavior of this function
+    (particularly with respect to NaNs) is not defined if the dtypes are
+    different.
+
+    Parameters
+    ----------
+    left, right : ndarrays
+    strict_nan : bool, default False
+        If True, consider NaN and None to be different.
+
+    Returns
+    -------
+    b : bool
+        Returns True if the arrays are equivalent.
+
+    Examples
+    --------
+    >>> array_equivalent(
+   ...     np.array([1, 2, np.nan]),
+   ...     np.array([1, 2, np.nan]))
+    True
+    >>> array_equivalent(
+   ...     np.array([1, np.nan, 2]),
+   ...     np.array([1, 2, np.nan]))
+    False
+    """"""
+
+    left, right = np.asarray(left), np.asarray(right)
+
+    # shape compat
+    if left.shape!= right.shape:
+        return False
+
+    # Object arrays can contain None, NaN and NaT.
+    # string dtypes must be come to this path for NumPy 1.7.1 compat
+    if is_object_dtype(left) or is_object_dtype(right):
+
+        if not strict_nan:
+            # isna considers NaN and None to be equivalent.
+            return lib.array_equivalent_object(
+                ensure_object(left.ravel()), ensure_object(right.ravel())
+            )
+
+        for left_value, right_value in zip(left, right):
+            if isinstance(left_value, np.ndarray) and isinstance(right_value, np.ndarray):
+                if not array_equivalent(left_value, right_value, strict_nan):
+                    return False
+            else:
+                if left_value is NaT and right_value is not NaT:
+                    return False
+
+                elif isinstance(left_value, float) and np.isnan(left_value):
+                    if not isinstance(right_value, float) or not np.isnan(right_value):
+                        return False
+                else:
+                    if left_value!= right_value:
+                        return False
+        return True
+
+    # NaNs can occur in float and complex arrays.
+    if is_float_dtype(left) or is_complex_dtype(left):
+
+        # empty
+        if not (np.prod(left.shape) and np.prod(right.shape)):
+            return True
+        return ((left == right) | (isna(left) & isna(right))).all()
+
+    # numpy will will not allow this type of datetimelike vs integer comparison
+    elif is_datetimelike_v_numeric(left, right):
+        return False
+
+    # M8/m8
+    elif needs_i8_conversion(left) and needs_i8_conversion(right):
+        if not is_dtype_equal(left.dtype, right.dtype):
+            return False
+
+        left = left.view(""i8"")
+        right = right.view(""i8"")
+
+    # if we have structured dtypes, compare first
+    if left.dtype.type is np.void or right.dtype.type is np.void:
+        if left.dtype!= right.dtype:
+            return False
+
+    return np.array_equal(left, right)
+```",
+pandas-150-vall_llama-4,UNKNOWN,UNKNOWN,"```python
+def array_equivalent(left, right, strict_nan=False):
+    """"""
+    True if two arrays, left and right, have equal non-NaN elements, and NaNs
+    in corresponding locations.  False otherwise. It is assumed that left and
+    right are NumPy arrays of the same dtype. The behavior of this function
+    (particularly with respect to NaNs) is not defined if the dtypes are
+    different.
+
+    Parameters
+    ----------
+    left, right : ndarrays
+    strict_nan : bool, default False
+        If True, consider NaN and None to be different.
+
+    Returns
+    -------
+    b : bool
+        Returns True if the arrays are equivalent.
+
+    Examples
+    --------
+    >>> array_equivalent(
+   ...     np.array([1, 2, np.nan]),
+   ...     np.array([1, 2, np.nan]))
+    True
+    >>> array_equivalent(
+   ...     np.array([1, np.nan, 2]),
+   ...     np.array([1, 2, np.nan]))
+    False
+    """"""
+
+    left, right = np.asarray(left), np.asarray(right)
+
+    # shape compat
+    if left.shape!= right.shape:
+        return False
+
+    # Object arrays can contain None, NaN and NaT.
+    # string dtypes must be come to this path for NumPy 1.7.1 compat
+    if is_string_dtype(left) or is_string_dtype(right):
+
+        if not strict_nan:
+            # isna considers NaN and None to be equivalent.
+            return lib.array_equivalent_object(
+                ensure_object(left.ravel()), ensure_object(right.ravel())
+            )
+
+        for left_value, right_value in zip(left, right):
+            if isinstance(left_value, np.ndarray) and isinstance(right_value, np.ndarray):
+                if not array_equivalent(left_value, right_value, strict_nan=strict_nan):
+                    return False
+            else:
+                if left_value is NaT and right_value is not NaT:
+                    return False
+
+                elif isinstance(left_value, float) and np.isnan(left_value):
+                    if not isinstance(right_value, float) or not np.isnan(right_value):
+                        return False
+                else:
+                    if left_value!= right_value:
+                        return False
+        return True
+
+    # NaNs can occur in float and complex arrays.
+    if is_float_dtype(left) or is_complex_dtype(left):
+
+        # empty
+        if not (np.prod(left.shape) and np.prod(right.shape)):
+            return True
+        return ((left == right) | (isna(left) & isna(right))).all()
+
+    # numpy will will not allow this type of datetimelike vs integer comparison
+    elif is_datetimelike_v_numeric(left, right):
+        return False
+
+    # M8/m8
+    elif needs_i8_conversion(left) and needs_i8_conversion(right):
+        if not is_dtype_equal(left.dtype, right.dtype):
+            return False
+
+        left = left.view(""i8"")
+        right = right.view(""i8"")
+
+    # if we have structured dtypes, compare first
+    if left.dtype.type is np.void or right.dtype.type is np.void:
+        if left.dtype!= right.dtype:
+            return False
+
+    return np.array_equal(left, right)
+```",
+pandas-150-vall_llama-5,UNKNOWN,UNKNOWN,"```python
+def array_equivalent(left, right, strict_nan=False):
+    """"""
+    True if two arrays, left and right, have equal non-NaN elements, and NaNs
+    in corresponding locations.  False otherwise. It is assumed that left and
+    right are NumPy arrays of the same dtype. The behavior of this function
+    (particularly with respect to NaNs) is not defined if the dtypes are
+    different.
+
+    Parameters
+    ----------
+    left, right : ndarrays
+    strict_nan : bool, default False
+        If True, consider NaN and None to be different.
+
+    Returns
+    -------
+    b : bool
+        Returns True if the arrays are equivalent.
+
+    Examples
+    --------
+    >>> array_equivalent(
+   ...     np.array([1, 2, np.nan]),
+   ...     np.array([1, 2, np.nan]))
+    True
+    >>> array_equivalent(
+   ...     np.array([1, np.nan, 2]),
+   ...     np.array([1, 2, np.nan]))
+    False
+    """"""
+
+    left, right = np.asarray(left), np.asarray(right)
+
+    # Shape compatibility check
+    if left.shape!= right.shape:
+        return False
+
+    # If inputs are object arrays and strict_nan is True, compare element by element
+    if is_object_dtype(left) or is_object_dtype(right):
+        if strict_nan:
+            for left_value, right_value in zip(left.ravel(), right.ravel()):
+                if isinstance(left_value, np.ndarray) and isinstance(right_value, np.ndarray):
+                    if not array_equivalent(left_value, right_value, strict_nan):
+                        return False
+                elif left_value!= right_value:
+                    if (isinstance(left_value, float) and np.isnan(left_value) and 
+                        isinstance(right_value, float) and np.isnan(right_value)):
+                        continue
+                    else:
+                        return False
+            return True
+
+    # NaNs can occur in float and complex arrays.
+    if is_float_dtype(left) or is_complex_dtype(left):
+
+        # Empty arrays
+        if not (np.prod(left.shape) and np.prod(right.shape)):
+            return True
+        return ((left == right) | (np.isnan(left) & np.isnan(right))).all()
+
+    # Datetime-like vs integer comparison
+    elif is_datetimelike_v_numeric(left, right):
+        return False
+
+    # M8/m8
+    elif needs_i8_conversion(left) and needs_i8_conversion(right):
+        if not is_dtype_equal(left.dtype, right.dtype):
+            return False
+
+        left = left.view(""i8"")
+        right = right.view(""i8"")
+
+    # Structured dtypes
+    if left.dtype.type is np.void or right.dtype.type is np.void:
+        if left.dtype!= right.dtype:
+            return False
+
+    # If we have structured dtypes, compare first
+    return np.array_equal(left, right)
+```",
+pandas-150-vall_llama-6,UNKNOWN,UNKNOWN,"```python
+def array_equivalent(left, right, strict_nan=False):
+    """"""
+    True if two arrays, left and right, have equal non-NaN elements, and NaNs
+    in corresponding locations.  False otherwise. It is assumed that left and
+    right are NumPy arrays of the same dtype. The behavior of this function
+    (particularly with respect to NaNs) is not defined if the dtypes are
+    different.
+
+    Parameters
+    ----------
+    left, right : ndarrays
+    strict_nan : bool, default False
+        If True, consider NaN and None to be different.
+
+    Returns
+    -------
+    b : bool
+        Returns True if the arrays are equivalent.
+
+    Examples
+    --------
+    >>> array_equivalent(
+   ...     np.array([1, 2, np.nan]),
+   ...     np.array([1, 2, np.nan]))
+    True
+    >>> array_equivalent(
+   ...     np.array([1, np.nan, 2]),
+   ...     np.array([1, 2, np.nan]))
+    False
+    """"""
+
+    left, right = np.asarray(left), np.asarray(right)
+
+    # shape compat
+    if left.shape!= right.shape:
+        return False
+
+    # Object arrays can contain None, NaN and NaT.
+    # string dtypes must be come to this path for NumPy 1.7.1 compat
+    if is_string_dtype(left) or is_string_dtype(right):
+
+        if not strict_nan:
+            # isna considers NaN and None to be equivalent.
+            return lib.array_equivalent_object(
+                ensure_object(left.ravel()), ensure_object(right.ravel())
+            )
+
+        for left_value, right_value in zip(left, right):
+            if left_value is NaT and right_value is not NaT:
+                return False
+
+            elif isinstance(left_value, float) and np.isnan(left_value):
+                if not isinstance(right_value, float) or not np.isnan(right_value):
+                    return False
+            elif isinstance(left_value, np.ndarray) and isinstance(right_value, np.ndarray):
+                if not np.array_equal(left_value, right_value):
+                    return False
+            else:
+                if left_value!= right_value:
+                    return False
+        return True
+
+    # NaNs can occur in float and complex arrays.
+    if is_float_dtype(left) or is_complex_dtype(left):
+
+        # empty
+        if not (np.prod(left.shape) and np.prod(right.shape)):
+            return True
+        return ((left == right) | (isna(left) & isna(right))).all()
+
+    # numpy will will not allow this type of datetimelike vs integer comparison
+    elif is_datetimelike_v_numeric(left, right):
+        return False
+
+    # M8/m8
+    elif needs_i8_conversion(left) and needs_i8_conversion(right):
+        if not is_dtype_equal(left.dtype, right.dtype):
+            return False
+
+        left = left.view(""i8"")
+        right = right.view(""i8"")
+
+    # if we have structured dtypes, compare first
+    if left.dtype.type is np.void or right.dtype.type is np.void:
+        if left.dtype!= right.dtype:
+            return False
+
+    return np.array_equal(left, right)
+```",
+pandas-150-vall_llama-7,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Analyzing the error**: The error occurs because the `array_equivalent` function is not correctly handling nested objects. The `left_value` and `right_value` are `ndarray` objects, and when they are compared using `!=` operator, it throws a `ValueError` because it's trying to compare arrays element-wise.
+2. **Understanding the requirements**: The `array_equivalent` function should be able to compare two arrays with nested objects and return `True` if they are equivalent and `False` otherwise.
+3. **Identifying the issue**: The issue lies in the way the function is handling nested objects. It's trying to compare the `ndarray` objects directly, which is causing the error.
+4. **Finding a solution**: To fix this issue, we need to modify the function to correctly handle nested objects. We can do this by checking if the `left_value` and `right_value` are `ndarray` objects, and if they are, we can compare them recursively using the same `array_equivalent` function.
+
+### Fixed solution:
+```python
+def array_equivalent(left, right, strict_nan=False):
+    """"""
+    True if two arrays, left and right, have equal non-NaN elements, and NaNs
+    in corresponding locations.  False otherwise. It is assumed that left and
+    right are NumPy arrays of the same dtype. The behavior of this function
+    (particularly with respect to NaNs) is not defined if the dtypes are
+    different.
+
+    Parameters
+    ----------
+    left, right : ndarrays
+    strict_nan : bool, default False
+        If True, consider NaN and None to be different.
+
+    Returns
+    -------
+    b : bool
+        Returns True if the arrays are equivalent.
+
+    Examples
+    --------
+    >>> array_equivalent(
+   ...     np.array([1, 2, np.nan]),
+   ...     np.array([1, 2, np.nan]))
+    True
+    >>> array_equivalent(
+   ...     np.array([1, np.nan, 2]),
+   ...     np.array([1, 2, np.nan]))
+    False
+    """"""
+
+    left, right = np.asarray(left), np.asarray(right)
+
+    # shape compat
+    if left.shape!= right.shape:
+        return False
+
+    # Object arrays can contain None, NaN and NaT.
+    # string dtypes must be come to this path for NumPy 1.7.1 compat
+    if is_string_dtype(left) or is_string_dtype(right):
+
+        if not strict_nan:
+            # isna considers NaN and None to be equivalent.
+            return lib.array_equivalent_object(
+                ensure_object(left.ravel()), ensure_object(right.ravel())
+            )
+
+        for left_value, right_value in zip(left, right):
+            if isinstance(left_value, np.ndarray) and isinstance(right_value, np.ndarray):
+                if not array_equivalent(left_value, right_value, strict_nan):
+                    return False
+            elif left_value is NaT and right_value is not NaT:
+                return False
+
+            elif isinstance(left_value, float) and np.isnan(left_value):
+                if not isinstance(right_value, float) or not np.isnan(right_value):
+                    return False
+            else:
+                if left_value!= right_value:
+                    return False
+        return True
+
+    # NaNs can occur in float and complex arrays.
+    if is_float_dtype(left) or is_complex_dtype(left):
+
+        # empty
+        if not (np.prod(left.shape) and np.prod(right.shape)):
+            return True
+        return ((left == right) | (isna(left) & isna(right))).all()
+
+    # numpy will will not allow this type of datetimelike vs integer comparison
+    elif is_datetimelike_v_numeric(left, right):
+        return False
+
+    # M8/m8
+    elif needs_i8_conversion(left) and needs_i8_conversion(right):
+        if not is_dtype_equal(left.dtype, right.dtype):
+            return False
+
+        left = left.view(""i8"")
+        right = right.view(""i8"")
+
+    # if we have structured dtypes, compare first
+    if left.dtype.type is np.void or right.dtype.type is np.void:
+        if left.dtype!= right.dtype:
+            return False
+
+    return np.array_equal(left, right)
+```
+
+### Explanation of changes:
+* Added a recursive check for `ndarray` objects in the `for` loop when comparing `left_value` and `right_value`.
+* Changed the comparison of `left_value` and `right_value` to use the `array_equivalent` function recursively when they are `ndarray` objects.
+
+### Tests and example uses:
+You can test the function using the following examples:
+```python
+import numpy as np
+
+# Test case 1
+left = np.array([np.array([50, 70, 90]), np.array([20, 30, 40])], dtype=object)
+right = np.array([np.array([50, 70, 90]), np.array([20, 30, 40])], dtype=object)
+print(array_equivalent(left, right, strict_nan=True))  # Should return True
+
+# Test case 2
+left = np.array([np.array([50, 70, 90]), np.array([20, 30, 40])], dtype=object)
+right = np.array([np.array([20, 30, 40]), np.array([50, 70, 90])], dtype=object)
+print(array_equivalent(left, right, strict_nan=True))  # Should return False
+
+# Test case 3
+left = np.array([np.array([50, 50, 50]), np.array([40, 40, 40])], dtype=object)
+right = np.array([50, 40])
+print(array_equivalent(left, right, strict_nan=True))  # Should return False
+```",
+pandas-150-vall_llama-8,UNKNOWN,UNKNOWN,"```python
+def array_equivalent(left, right, strict_nan=False):
+    """"""
+    True if two arrays, left and right, have equal non-NaN elements, and NaNs
+    in corresponding locations.  False otherwise. It is assumed that left and
+    right are NumPy arrays of the same dtype. The behavior of this function
+    (particularly with respect to NaNs) is not defined if the dtypes are
+    different.
+
+    Parameters
+    ----------
+    left, right : ndarrays
+    strict_nan : bool, default False
+        If True, consider NaN and None to be different.
+
+    Returns
+    -------
+    b : bool
+        Returns True if the arrays are equivalent.
+
+    Examples
+    --------
+    >>> array_equivalent(
+   ...     np.array([1, 2, np.nan]),
+   ...     np.array([1, 2, np.nan]))
+    True
+    >>> array_equivalent(
+   ...     np.array([1, np.nan, 2]),
+   ...     np.array([1, 2, np.nan]))
+    False
+    """"""
+
+    left, right = np.asarray(left), np.asarray(right)
+
+    # shape compat
+    if left.shape!= right.shape:
+        return False
+
+    if is_object_dtype(left) or is_object_dtype(right):
+        if not strict_nan:
+            return np.all([np.array_equal(x, y) for x, y in zip(left, right)])
+        
+        for left_value, right_value in zip(left, right):
+            if isinstance(left_value, np.ndarray) and isinstance(right_value, np.ndarray):
+                if not np.array_equal(left_value, right_value):
+                    return False
+            elif left_value is None and right_value is not None:
+                return False
+            elif left_value is not None and right_value is None:
+                return False
+            elif isinstance(left_value, float) and np.isnan(left_value):
+                if not isinstance(right_value, float) or not np.isnan(right_value):
+                    return False
+            elif isinstance(right_value, float) and np.isnan(right_value):
+                if not isinstance(left_value, float) or not np.isnan(left_value):
+                    return False
+            else:
+                if left_value!= right_value:
+                    return False
+        return True
+
+
+    # NaNs can occur in float and complex arrays.
+    if is_float_dtype(left) or is_complex_dtype(left):
+
+        # empty
+        if not (np.prod(left.shape) and np.prod(right.shape)):
+            return True
+        return ((left == right) | (np.isnan(left) & np.isnan(right))).all()
+
+    # numpy will will not allow this type of datetimelike vs integer comparison
+    elif is_datetimelike_v_numeric(left, right):
+        return False
+
+    # M8/m8
+    elif needs_i8_conversion(left) and needs_i8_conversion(right):
+        if not is_dtype_equal(left.dtype, right.dtype):
+            return False
+
+        left = left.view(""i8"")
+        right = right.view(""i8"")
+
+    # if we have structured dtypes, compare first
+    if left.dtype.type is np.void or right.dtype.type is np.void:
+        if left.dtype!= right.dtype:
+            return False
+
+    return np.array_equal(left, right)
+```",
+pandas-150-vall_llama-9,UNKNOWN,UNKNOWN,"```python
+def array_equivalent(left, right, strict_nan=False):
+    """"""
+    True if two arrays, left and right, have equal non-NaN elements, and NaNs
+    in corresponding locations.  False otherwise. It is assumed that left and
+    right are NumPy arrays of the same dtype. The behavior of this function
+    (particularly with respect to NaNs) is not defined if the dtypes are
+    different.
+
+    Parameters
+    ----------
+    left, right : ndarrays
+    strict_nan : bool, default False
+        If True, consider NaN and None to be different.
+
+    Returns
+    -------
+    b : bool
+        Returns True if the arrays are equivalent.
+
+    Examples
+    --------
+    >>> array_equivalent(
+   ...     np.array([1, 2, np.nan]),
+   ...     np.array([1, 2, np.nan]))
+    True
+    >>> array_equivalent(
+   ...     np.array([1, np.nan, 2]),
+   ...     np.array([1, 2, np.nan]))
+    False
+    """"""
+
+    left, right = np.asarray(left), np.asarray(right)
+
+    # shape compat
+    if left.shape!= right.shape:
+        return False
+
+    # Object arrays can contain None, NaN and NaT.
+    # string dtypes must be come to this path for NumPy 1.7.1 compat
+    if is_object_dtype(left) or is_object_dtype(right):
+        if not strict_nan:
+            # isna considers NaN and None to be equivalent.
+            return lib.array_equivalent_object(
+                ensure_object(left.ravel()), ensure_object(right.ravel())
+            )
+
+        for left_value, right_value in zip(left, right):
+            if isinstance(left_value, np.ndarray) and isinstance(right_value, np.ndarray):
+                if not array_equivalent(left_value, right_value, strict_nan):
+                    return False
+            elif left_value is NaT and right_value is not NaT:
+                return False
+
+            elif isinstance(left_value, float) and np.isnan(left_value):
+                if not isinstance(right_value, float) or not np.isnan(right_value):
+                    return False
+            else:
+                if left_value!= right_value:
+                    return False
+        return True
+
+    # NaNs can occur in float and complex arrays.
+    if is_float_dtype(left) or is_complex_dtype(left):
+        # empty
+        if not (np.prod(left.shape) and np.prod(right.shape)):
+            return True
+        return ((left == right) | (isna(left) & isna(right))).all()
+
+    # numpy will will not allow this type of datetimelike vs integer comparison
+    elif is_datetimelike_v_numeric(left, right):
+        return False
+
+    # M8/m8
+    elif needs_i8_conversion(left) and needs_i8_conversion(right):
+        if not is_dtype_equal(left.dtype, right.dtype):
+            return False
+
+        left = left.view(""i8"")
+        right = right.view(""i8"")
+
+    # if we have structured dtypes, compare first
+    if left.dtype.type is np.void or right.dtype.type is np.void:
+        if left.dtype!= right.dtype:
+            return False
+
+    return np.array_equal(left, right)
+```",

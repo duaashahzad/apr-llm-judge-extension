@@ -1,0 +1,261 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-10-v0_gpt-0,UNKNOWN,UNKNOWN,"```python
+def putmask(
+    self, mask, new, inplace: bool = False, axis: int = 0, transpose: bool = False,
+) -> List[""Block""]:
+    """"""
+    See Block.putmask.__doc__
+    """"""
+    inplace = validate_bool_kwarg(inplace, ""inplace"")
+
+    mask = _extract_bool_array(mask)
+
+    new_values = self.values if inplace else self.values.copy()
+
+    # Ensure new is aligned with the mask. If new is a Sequence, extract the relevant values.
+    if isinstance(new, (np.ndarray, list)) and len(new) == len(mask):
+        new = np.asarray(new)[mask]
+
+    mask = _safe_reshape(mask, new_values.shape)
+
+    # Ensure that new is of the right length to avoid shape mismatch errors.
+    new_length = new[mask].size if isinstance(new, (np.ndarray, list)) else 0
+
+    if new_length > 0:
+        new_values[mask] = new
+
+    return [self.make_block(values=new_values)]
+```",
+pandas-10-v0_gpt-1,UNKNOWN,UNKNOWN,"```python
+def putmask(
+    self, mask, new, inplace: bool = False, axis: int = 0, transpose: bool = False,
+) -> List[""Block""]:
+    """"""
+    See Block.putmask.__doc__
+    """"""
+    inplace = validate_bool_kwarg(inplace, ""inplace"")
+
+    mask = _extract_bool_array(mask)
+
+    new_values = self.values if inplace else self.values.copy()
+
+    # Check the length of 'new' against the length of 'mask' and adjust accordingly
+    if isinstance(new, np.ndarray):
+        if len(new) != len(mask):
+            new = np.asarray([new[i] for i in range(len(new)) if mask[i]])
+        else:
+            new = new[mask]
+
+    mask = _safe_reshape(mask, new_values.shape)
+
+    # Ensure the assignment to new_values works correctly with possibly differing shapes
+    new_values[mask] = new
+    return [self.make_block(values=new_values)]
+```",
+pandas-10-v0_gpt-2,UNKNOWN,UNKNOWN,"```python
+def putmask(
+    self, mask, new, inplace: bool = False, axis: int = 0, transpose: bool = False,
+) -> List[""Block""]:
+    """"""
+    See Block.putmask.__doc__
+    """"""
+    inplace = validate_bool_kwarg(inplace, ""inplace"")
+
+    mask = _extract_bool_array(mask)
+
+    new_values = self.values if inplace else self.values.copy()
+
+    # Ensure that new is reshaped according to the mask
+    if isinstance(new, np.ndarray) and len(new) != len(mask):
+        new = np.broadcast_to(new, mask.shape)[mask]
+
+    mask = _safe_reshape(mask, new_values.shape)
+
+    # Handle case where new contains missing values
+    if isinstance(new, (np.ndarray)) and len(new) == 1:
+        new = np.repeat(new, mask.sum())
+
+    new_values[mask] = new
+    return [self.make_block(values=new_values)]
+```",
+pandas-10-v0_gpt-3,UNKNOWN,UNKNOWN,"```python
+def putmask(
+    self, mask, new, inplace: bool = False, axis: int = 0, transpose: bool = False,
+) -> List[""Block""]:
+    """"""
+    See Block.putmask.__doc__
+    """"""
+    inplace = validate_bool_kwarg(inplace, ""inplace"")
+
+    mask = _extract_bool_array(mask)
+
+    new_values = self.values if inplace else self.values.copy()
+
+    if isinstance(new, np.ndarray):
+        new = new[mask]
+
+    mask = _safe_reshape(mask, new_values.shape)
+
+    if len(new) > mask.sum():
+        # If the number of new values is more than the number of True entries in mask,
+        # we need to extract only as many new values as there are True entries in the mask.
+        new = new[:mask.sum()]
+
+    new_values[mask] = new
+    return [self.make_block(values=new_values)]
+```",
+pandas-10-v0_gpt-4,UNKNOWN,UNKNOWN,"```python
+def putmask(
+    self, mask, new, inplace: bool = False, axis: int = 0, transpose: bool = False,
+) -> List[""Block""]:
+    """"""
+    See Block.putmask.__doc__
+    """"""
+    inplace = validate_bool_kwarg(inplace, ""inplace"")
+
+    mask = _extract_bool_array(mask)
+
+    new_values = self.values if inplace else self.values.copy()
+
+    # Reshape the new array based on the mask before applying it
+    if isinstance(new, np.ndarray) and len(new) != len(mask):
+        new = new[mask]
+
+    mask = _safe_reshape(mask, new_values.shape)
+
+    # Ensure that new_values can accept a new shape from new
+    if isinstance(new, np.ndarray) and len(new) > 0 and len(new) < mask.sum():
+        if isinstance(new_values, (pd.StringArray, pd.BooleanArray, pd.IntegerArray)):
+            new_values[mask[:len(new)]] = new
+        else:
+            new_values[mask] = new[:len(new_values[mask])]
+    else:
+        new_values[mask] = new
+
+    return [self.make_block(values=new_values)]
+```",
+pandas-10-v0_gpt-5,UNKNOWN,UNKNOWN,"```python
+def putmask(
+    self, mask, new, inplace: bool = False, axis: int = 0, transpose: bool = False,
+) -> List[""Block""]:
+    """"""
+    See Block.putmask.__doc__
+    """"""
+    inplace = validate_bool_kwarg(inplace, ""inplace"")
+
+    mask = _extract_bool_array(mask)
+
+    new_values = self.values if inplace else self.values.copy()
+
+    # Ensure that `new` is properly indexed according to the mask, allowing for nullable dtypes
+    if isinstance(new, np.ndarray):
+        if len(new) == len(mask):
+            # Use the mask to create a smaller array if necessary
+            new = new[mask]
+        else:
+            # Only take assigned values
+            new = new[mask.nonzero()[0]]
+
+    mask = _safe_reshape(mask, new_values.shape)
+
+    # Make sure to broadcast `new` to match `mask` and `new_values`
+    new_values[mask] = np.where(mask, new, new_values[mask])
+    
+    return [self.make_block(values=new_values)]
+```",
+pandas-10-v0_gpt-6,UNKNOWN,UNKNOWN,"```python
+def putmask(
+    self, mask, new, inplace: bool = False, axis: int = 0, transpose: bool = False,
+) -> List[""Block""]:
+    """"""
+    See Block.putmask.__doc__
+    """"""
+    inplace = validate_bool_kwarg(inplace, ""inplace"")
+
+    mask = _extract_bool_array(mask)
+
+    new_values = self.values if inplace else self.values.copy()
+
+    if isinstance(new, np.ndarray) and len(new) == len(new_values):
+        new = new[mask]
+
+    mask = _safe_reshape(mask, new_values.shape)
+
+    if isinstance(new, np.ndarray) and new.ndim == 1:
+        new = new[mask]
+
+    new_values[mask] = new
+    return [self.make_block(values=new_values)]
+```",
+pandas-10-v0_gpt-7,UNKNOWN,UNKNOWN,"```python
+def putmask(
+    self, mask, new, inplace: bool = False, axis: int = 0, transpose: bool = False,
+) -> List[""Block""]:
+    """"""
+    See Block.putmask.__doc__
+    """"""
+    inplace = validate_bool_kwarg(inplace, ""inplace"")
+
+    mask = _extract_bool_array(mask)
+
+    new_values = self.values if inplace else self.values.copy()
+
+    if isinstance(new, np.ndarray) and len(new) != len(mask):
+        new = np.repeat(new[mask], mask.sum())
+
+    mask = _safe_reshape(mask, new_values.shape)
+
+    new_values[mask] = new
+    return [self.make_block(values=new_values)]
+```",
+pandas-10-v0_gpt-8,UNKNOWN,UNKNOWN,"```python
+def putmask(
+    self, mask, new, inplace: bool = False, axis: int = 0, transpose: bool = False,
+) -> List[""Block""]:
+    """"""
+    See Block.putmask.__doc__
+    """"""
+    inplace = validate_bool_kwarg(inplace, ""inplace"")
+
+    mask = _extract_bool_array(mask)
+
+    new_values = self.values if inplace else self.values.copy()
+
+    if isinstance(new, np.ndarray):
+        # Ensure we are working with the correct shape
+        if len(new) != len(mask):
+            raise ValueError(""Shape of new must match that of mask."")
+
+    mask = _safe_reshape(mask, new_values.shape)
+
+    # Select only the elements of new that correspond to True in mask
+    new_values[mask] = new[mask]
+
+    return [self.make_block(values=new_values)]
+```",
+pandas-10-v0_gpt-9,UNKNOWN,UNKNOWN,"```python
+def putmask(
+    self, mask, new, inplace: bool = False, axis: int = 0, transpose: bool = False,
+) -> List[""Block""]:
+    """"""
+    See Block.putmask.__doc__
+    """"""
+    inplace = validate_bool_kwarg(inplace, ""inplace"")
+
+    mask = _extract_bool_array(mask)
+
+    new_values = self.values if inplace else self.values.copy()
+
+    if isinstance(new, np.ndarray):
+        # Modify this section to ensure we are not indexing `new` incorrectly
+        new = new[mask] if len(new) == len(mask) else new
+
+    mask = _safe_reshape(mask, new_values.shape)
+
+    # Ensure that we only assign to the appropriate sized array
+    if isinstance(new, np.ndarray) and len(new) != mask.sum():
+        raise ValueError(""Mismatch between the length of new values and the mask."")
+
+    new_values[mask] = new[mask]
+    return [self.make_block(values=new_values)]
+```",

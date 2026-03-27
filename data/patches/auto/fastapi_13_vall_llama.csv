@@ -1,0 +1,619 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+fastapi-13-vall_llama-0,UNKNOWN,UNKNOWN,"```python
+def include_router(
+    self,
+    router: ""APIRouter"",
+    *,
+    prefix: str = """",
+    tags: List[str] = None,
+    responses: Dict[Union[int, str], Dict[str, Any]] = None,
+) -> None:
+    if prefix:
+        assert prefix.startswith(""/""), ""A path prefix must start with '/'""
+        assert not prefix.endswith(
+            ""/""
+        ), ""A path prefix must not end with '/', as the routes will start with '/'""
+    for route in router.routes:
+        if isinstance(route, APIRoute):
+            combined_responses = route.responses.copy()
+            if responses is not None:
+                combined_responses.update(responses)
+            self.add_api_route(
+                prefix + route.path,
+                route.endpoint,
+                response_model=route.response_model,
+                status_code=route.status_code,
+                tags=(route.tags or []) + (tags or []),
+                summary=route.summary,
+                description=route.description,
+                response_description=route.response_description,
+                responses=combined_responses,
+                deprecated=route.deprecated,
+                methods=route.methods,
+                operation_id=route.operation_id,
+                include_in_schema=route.include_in_schema,
+                content_type=route.content_type,
+                name=route.name,
+            )
+        elif isinstance(route, routing.Route):
+            self.add_route(
+                prefix + route.path,
+                route.endpoint,
+                methods=route.methods,
+                include_in_schema=route.include_in_schema,
+                name=route.name,
+            )
+        elif isinstance(route, routing.WebSocketRoute):
+            self.add_websocket_route(
+                prefix + route.path, route.endpoint, name=route.name
+            )
+```",
+fastapi-13-vall_llama-1,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the Issue**: The primary problem here is that when using `APIRouter` from FastAPI, routes defined with the same router instance share their alternative responses. This leads to incorrect OpenAPI documentation and unexpected behavior.
+2. **Analyzing Provided Code and Documentation**: The given code for `include_router` merges responses from all routes in a router, which causes the sharing issue.
+3. **Reviewing Expected Behavior**: FastAPI's documentation and the expected behavior suggest that responses should not be shared across different routes, even if they are part of the same router.
+4. **Identifying the Cause**: The cause of the bug is in how responses are merged in the `include_router` function. When iterating over routes, it merges all route responses into a single `responses` dictionary without considering individual routes' unique responses.
+
+### Fixed solution:
+```python
+def include_router(
+    self,
+    router: ""APIRouter"",
+    *,
+    prefix: str = """",
+    tags: List[str] = None,
+    responses: Dict[Union[int, str], Dict[str, Any]] = None,
+) -> None:
+    if prefix:
+        assert prefix.startswith(""/""), ""A path prefix must start with '/'""
+        assert not prefix.endswith(
+            ""/""
+        ), ""A path prefix must not end with '/', as the routes will start with '/'""
+    for route in router.routes:
+        if isinstance(route, APIRoute):
+            # Create a copy of the responses to avoid sharing across routes
+            route_responses = route.responses.copy()
+            if responses is not None:
+                # Update route responses with custom responses if provided
+                route_responses.update(responses)
+            self.add_api_route(
+                prefix + route.path,
+                route.endpoint,
+                response_model=route.response_model,
+                status_code=route.status_code,
+                tags=(route.tags or []) + (tags or []),
+                summary=route.summary,
+                description=route.description,
+                response_description=route.response_description,
+                responses=route_responses,
+                deprecated=route.deprecated,
+                methods=route.methods,
+                operation_id=route.operation_id,
+                include_in_schema=route.include_in_schema,
+                content_type=route.content_type,
+                name=route.name,
+            )
+        elif isinstance(route, routing.Route):
+            self.add_route(
+                prefix + route.path,
+                route.endpoint,
+                methods=route.methods,
+                include_in_schema=route.include_in_schema,
+                name=route.name,
+            )
+        elif isinstance(route, routing.WebSocketRoute):
+            self.add_websocket_route(
+                prefix + route.path, route.endpoint, name=route.name
+            )
+```
+
+### Explanation of changes:
+*   **Created a Copy of Route Responses**: In the fixed solution, `route.responses.copy()` is used to create a copy of each route's responses. This ensures that responses are not shared across routes.
+*   **Updated Route Responses with Custom Responses**: If custom responses are provided through the `responses` parameter, they are updated in the `route_responses` dictionary using `route_responses.update(responses)`. This allows for overriding or adding responses to individual routes.
+
+### Tests and example uses:
+To test this fix, use the example provided in the GitHub issue description, ensuring that responses for different paths are not merged incorrectly. Specifically, routes `/a`, `/b`, and `/c` should have their responses as defined in their respective decorators, without any unexpected sharing of responses.",
+fastapi-13-vall_llama-2,UNKNOWN,UNKNOWN,"```python
+def include_router(
+    self,
+    router: ""APIRouter"",
+    *,
+    prefix: str = """",
+    tags: List[str] = None,
+    responses: Dict[Union[int, str], Dict[str, Any]] = None,
+) -> None:
+    if prefix:
+        assert prefix.startswith(""/""), ""A path prefix must start with '/'""
+        assert not prefix.endswith(
+            ""/""
+        ), ""A path prefix must not end with '/', as the routes will start with '/'""
+    for route in router.routes:
+        if isinstance(route, APIRoute):
+            combined_responses = route.responses.copy()
+            if responses is not None:
+                combined_responses.update(responses)
+            self.add_api_route(
+                prefix + route.path,
+                route.endpoint,
+                response_model=route.response_model,
+                status_code=route.status_code,
+                tags=(route.tags or []) + (tags or []),
+                summary=route.summary,
+                description=route.description,
+                response_description=route.response_description,
+                responses=combined_responses,
+                deprecated=route.deprecated,
+                methods=route.methods,
+                operation_id=route.operation_id,
+                include_in_schema=route.include_in_schema,
+                content_type=route.content_type,
+                name=route.name,
+            )
+        elif isinstance(route, routing.Route):
+            self.add_route(
+                prefix + route.path,
+                route.endpoint,
+                methods=route.methods,
+                include_in_schema=route.include_in_schema,
+                name=route.name,
+            )
+        elif isinstance(route, routing.WebSocketRoute):
+            self.add_websocket_route(
+                prefix + route.path, route.endpoint, name=route.name
+            )
+```",
+fastapi-13-vall_llama-3,UNKNOWN,UNKNOWN,"```python
+def include_router(
+    self,
+    router: ""APIRouter"",
+    *,
+    prefix: str = """",
+    tags: List[str] = None,
+    responses: Dict[Union[int, str], Dict[str, Any]] = None,
+) -> None:
+    if prefix:
+        assert prefix.startswith(""/""), ""A path prefix must start with '/'""
+        assert not prefix.endswith(
+            ""/""
+        ), ""A path prefix must not end with '/', as the routes will start with '/'""
+    for route in router.routes:
+        if isinstance(route, APIRoute):
+            combined_responses = route.responses.copy()
+            if responses is not None:
+                combined_responses.update(responses)
+            self.add_api_route(
+                prefix + route.path,
+                route.endpoint,
+                response_model=route.response_model,
+                status_code=route.status_code,
+                tags=(route.tags or []) + (tags or []),
+                summary=route.summary,
+                description=route.description,
+                response_description=route.response_description,
+                responses=combined_responses,
+                deprecated=route.deprecated,
+                methods=route.methods,
+                operation_id=route.operation_id,
+                include_in_schema=route.include_in_schema,
+                content_type=route.content_type,
+                name=route.name,
+            )
+        elif isinstance(route, routing.Route):
+            self.add_route(
+                prefix + route.path,
+                route.endpoint,
+                methods=route.methods,
+                include_in_schema=route.include_in_schema,
+                name=route.name,
+            )
+        elif isinstance(route, routing.WebSocketRoute):
+            self.add_websocket_route(
+                prefix + route.path, route.endpoint, name=route.name
+            )
+```",
+fastapi-13-vall_llama-4,UNKNOWN,UNKNOWN,"```python
+def include_router(
+    self,
+    router: ""APIRouter"",
+    *,
+    prefix: str = """",
+    tags: List[str] = None,
+    responses: Dict[Union[int, str], Dict[str, Any]] = None,
+) -> None:
+    if prefix:
+        assert prefix.startswith(""/""), ""A path prefix must start with '/'""
+        assert not prefix.endswith(
+            ""/""
+        ), ""A path prefix must not end with '/', as the routes will start with '/'""
+    for route in router.routes:
+        if isinstance(route, APIRoute):
+            combined_responses = route.responses.copy()
+            if responses is not None:
+                combined_responses.update(responses)
+            self.add_api_route(
+                prefix + route.path,
+                route.endpoint,
+                response_model=route.response_model,
+                status_code=route.status_code,
+                tags=(route.tags or []) + (tags or []),
+                summary=route.summary,
+                description=route.description,
+                response_description=route.response_description,
+                responses=combined_responses,
+                deprecated=route.deprecated,
+                methods=route.methods,
+                operation_id=route.operation_id,
+                include_in_schema=route.include_in_schema,
+                content_type=route.content_type,
+                name=route.name,
+            )
+        elif isinstance(route, routing.Route):
+            self.add_route(
+                prefix + route.path,
+                route.endpoint,
+                methods=route.methods,
+                include_in_schema=route.include_in_schema,
+                name=route.name,
+            )
+        elif isinstance(route, routing.WebSocketRoute):
+            self.add_websocket_route(
+                prefix + route.path, route.endpoint, name=route.name
+            )
+```",
+fastapi-13-vall_llama-5,UNKNOWN,UNKNOWN,"### Fixed Solution
+```python
+def include_router(
+    self,
+    router: ""APIRouter"",
+    *,
+    prefix: str = """",
+    tags: List[str] = None,
+    responses: Dict[Union[int, str], Dict[str, Any]] = None,
+) -> None:
+    if prefix:
+        assert prefix.startswith(""/""), ""A path prefix must start with '/'""
+        assert not prefix.endswith(
+            ""/""
+        ), ""A path prefix must not end with '/', as the routes will start with '/'""
+    for route in router.routes:
+        if isinstance(route, APIRoute):
+            combined_responses = route.responses.copy()
+            if responses is not None:
+                combined_responses.update(responses)
+            self.add_api_route(
+                prefix + route.path,
+                route.endpoint,
+                response_model=route.response_model,
+                status_code=route.status_code,
+                tags=(route.tags or []) + (tags or []),
+                summary=route.summary,
+                description=route.description,
+                response_description=route.response_description,
+                responses=combined_responses,
+                deprecated=route.deprecated,
+                methods=route.methods,
+                operation_id=route.operation_id,
+                include_in_schema=route.include_in_schema,
+                content_type=route.content_type,
+                name=route.name,
+            )
+        elif isinstance(route, routing.Route):
+            self.add_route(
+                prefix + route.path,
+                route.endpoint,
+                methods=route.methods,
+                include_in_schema=route.include_in_schema,
+                name=route.name,
+            )
+        elif isinstance(route, routing.WebSocketRoute):
+            self.add_websocket_route(
+                prefix + route.path, route.endpoint, name=route.name
+            )
+```
+
+### Explanation of Changes
+*   Introduced a new variable `combined_responses` to hold the merged responses from the router's route and the `responses` parameter.
+*   Used the `copy()` method to create a copy of `route.responses` and assigned it to `combined_responses`. This ensures that `route.responses` is not modified directly.
+*   If `responses` is provided, updated `combined_responses` with the key-value pairs from `responses` using the `update()` method. This merges the responses without overwriting existing ones.
+*   Passed `combined_responses` to the `add_api_route()` method instead of the original `responses` parameter.
+
+### Tests and Example Uses
+To test the corrected function, use the following example:
+```python
+from fastapi import FastAPI, APIRouter
+
+app = FastAPI()
+router = APIRouter()
+
+@router.get(""/a"", responses={501: {""description"": ""Error 1""}})
+async def a():
+    return ""a""
+
+@router.get(""/b"", responses={502: {""description"": ""Error 2""}})
+async def b():
+    return ""b""
+
+@router.get(""/c"", responses={501: {""description"": ""Error 1 overwriten""}})
+async def c():
+    return ""c""
+
+app.include_router(router)
+
+# Test the API
+from fastapi.testclient import TestClient
+
+client = TestClient(app)
+
+response = client.get(""/a"")
+assert response.status_code == 200
+assert response.json() == ""a""
+
+response = client.get(""/b"")
+assert response.status_code == 200
+assert response.json() == ""b""
+
+response = client.get(""/c"")
+assert response.status_code == 200
+assert response.json() == ""c""
+```",
+fastapi-13-vall_llama-6,UNKNOWN,UNKNOWN,"```python
+def include_router(
+    self,
+    router: ""APIRouter"",
+    *,
+    prefix: str = """",
+    tags: List[str] = None,
+    responses: Dict[Union[int, str], Dict[str, Any]] = None,
+) -> None:
+    if prefix:
+        assert prefix.startswith(""/""), ""A path prefix must start with '/'""
+        assert not prefix.endswith(
+            ""/""
+        ), ""A path prefix must not end with '/', as the routes will start with '/'""
+    for route in router.routes:
+        if isinstance(route, APIRoute):
+            combined_responses = route.responses.copy()
+            if responses is not None:
+                combined_responses.update(responses)
+            self.add_api_route(
+                prefix + route.path,
+                route.endpoint,
+                response_model=route.response_model,
+                status_code=route.status_code,
+                tags=(route.tags or []) + (tags or []),
+                summary=route.summary,
+                description=route.description,
+                response_description=route.response_description,
+                responses=combined_responses,
+                deprecated=route.deprecated,
+                methods=route.methods,
+                operation_id=route.operation_id,
+                include_in_schema=route.include_in_schema,
+                content_type=route.content_type,
+                name=route.name,
+            )
+        elif isinstance(route, routing.Route):
+            self.add_route(
+                prefix + route.path,
+                route.endpoint,
+                methods=route.methods,
+                include_in_schema=route.include_in_schema,
+                name=route.name,
+            )
+        elif isinstance(route, routing.WebSocketRoute):
+            self.add_websocket_route(
+                prefix + route.path, route.endpoint, name=route.name
+            )
+```",
+fastapi-13-vall_llama-7,UNKNOWN,UNKNOWN,"### Fixed Solution
+```python
+def include_router(
+    self,
+    router: ""APIRouter"",
+    *,
+    prefix: str = """",
+    tags: List[str] = None,
+    responses: Dict[Union[int, str], Dict[str, Any]] = None,
+) -> None:
+    if prefix:
+        assert prefix.startswith(""/""), ""A path prefix must start with '/'""
+        assert not prefix.endswith(
+            ""/""
+        ), ""A path prefix must not end with '/', as the routes will start with '/'""
+    for route in router.routes:
+        if isinstance(route, APIRoute):
+            combined_responses = route.responses.copy()  # Create a copy for each route
+            if responses is not None:
+                combined_responses.update(responses)
+            self.add_api_route(
+                prefix + route.path,
+                route.endpoint,
+                response_model=route.response_model,
+                status_code=route.status_code,
+                tags=(route.tags or []) + (tags or []),
+                summary=route.summary,
+                description=route.description,
+                response_description=route.response_description,
+                responses=combined_responses,
+                deprecated=route.deprecated,
+                methods=route.methods,
+                operation_id=route.operation_id,
+                include_in_schema=route.include_in_schema,
+                content_type=route.content_type,
+                name=route.name,
+            )
+        elif isinstance(route, routing.Route):
+            self.add_route(
+                prefix + route.path,
+                route.endpoint,
+                methods=route.methods,
+                include_in_schema=route.include_in_schema,
+                name=route.name,
+            )
+        elif isinstance(route, routing.WebSocketRoute):
+            self.add_websocket_route(
+                prefix + route.path, route.endpoint, name=route.name
+            )
+```
+
+### Explanation of Changes
+*   **Copied the responses dictionary**: For each `APIRoute`, a copy of its `responses` dictionary is created and updated with the provided `responses`. This prevents the sharing of response dictionaries between routes.
+*   **Updated the add_api_route call**: Now, each `add_api_route` call uses the `combined_responses` dictionary specific to the current route, ensuring that responses are not shared across routes.
+
+### Tests and Example Uses
+To test this fix, create separate routers for each route and include them in the main application. Verify that the OpenAPI schema generated reflects the correct responses for each endpoint.
+
+```python
+from fastapi import FastAPI, APIRouter
+
+app = FastAPI()
+
+router1 = APIRouter()
+router2 = APIRouter()
+router3 = APIRouter()
+
+@router1.get(""/a"", responses={501: {""description"": ""Error 1""}})
+async def a():
+    return ""a""
+
+@router2.get(""/b"", responses={502: {""description"": ""Error 2""}})
+async def b():
+    return ""b""
+
+@router3.get(""/c"", responses={501: {""description"": ""Error 1 overwriten""}})
+async def c():
+    return ""c""
+
+app.include_router(router1)
+app.include_router(router2)
+app.include_router(router3)
+
+# Test the OpenAPI schema
+from fastapi.testclient import TestClient
+
+client = TestClient(app)
+
+response = client.get(""/openapi.json"")
+assert response.status_code == 200
+# Verify the responses in the OpenAPI schema
+openapi_schema = response.json()
+paths = openapi_schema[""paths""]
+assert paths[""/a""][""get""][""responses""] == {200: {""description"": ""Successful Response""}, 501: {""description"": ""Error 1""}}
+assert paths[""/b""][""get""][""responses""] == {200: {""description"": ""Successful Response""}, 502: {""description"": ""Error 2""}}
+assert paths[""/c""][""get""][""responses""] == {200: {""description"": ""Successful Response""}, 501: {""description"": ""Error 1 overwriten""}}
+```",
+fastapi-13-vall_llama-8,UNKNOWN,UNKNOWN,"```python
+def include_router(
+    self,
+    router: ""APIRouter"",
+    *,
+    prefix: str = """",
+    tags: List[str] = None,
+    responses: Dict[Union[int, str], Dict[str, Any]] = None,
+) -> None:
+    if prefix:
+        assert prefix.startswith(""/""), ""A path prefix must start with '/'""
+        assert not prefix.endswith(
+            ""/""
+        ), ""A path prefix must not end with '/', as the routes will start with '/'""
+    for route in router.routes:
+        if isinstance(route, APIRoute):
+            combined_responses = route.responses.copy()
+            if responses is not None:
+                combined_responses.update(responses)
+            self.add_api_route(
+                prefix + route.path,
+                route.endpoint,
+                response_model=route.response_model,
+                status_code=route.status_code,
+                tags=(route.tags or []) + (tags or []),
+                summary=route.summary,
+                description=route.description,
+                response_description=route.response_description,
+                responses=combined_responses,
+                deprecated=route.deprecated,
+                methods=route.methods,
+                operation_id=route.operation_id,
+                include_in_schema=route.include_in_schema,
+                content_type=route.content_type,
+                name=route.name,
+            )
+        elif isinstance(route, routing.Route):
+            self.add_route(
+                prefix + route.path,
+                route.endpoint,
+                methods=route.methods,
+                include_in_schema=route.include_in_schema,
+                name=route.name,
+            )
+        elif isinstance(route, routing.WebSocketRoute):
+            self.add_websocket_route(
+                prefix + route.path, route.endpoint, name=route.name
+            )
+```",
+fastapi-13-vall_llama-9,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Identify the bug cause**: The provided GitHub issue describes a scenario where routes defined with the same APIRouter instance share responses. This suggests that the issue lies in how responses are merged or handled when including routers.
+
+2. **Understand the code flow**: The `include_router` function iterates over each route in the provided router. For each `APIRoute`, it merges the route's responses with the `responses` parameter passed to `include_router`, and then uses this merged responses dictionary when adding the route to the application.
+
+3. **Pinpoint the bug location**: The bug seems to be in the line where responses are merged: `responses = {**responses, **route.responses}`. This line does not correctly handle the case when multiple routes have the same status code but different descriptions. The descriptions from later routes overwrite those from earlier routes.
+
+4. **Consider the implications**: This behavior is problematic because it means that the responses seen in the OpenAPI schema (and thus the API documentation) for different endpoints can be incorrectly merged, leading to confusion and potential errors when using the API.
+
+5. **Develop a fix strategy**: To fix this issue, we need to ensure that each route's responses are handled independently. One approach is to avoid merging responses at the router inclusion level and instead let each route define its responses without overwriting others.
+
+### Fixed solution:
+```python
+def include_router(
+    self,
+    router: ""APIRouter"",
+    *,
+    prefix: str = """",
+    tags: List[str] = None,
+    responses: Dict[Union[int, str], Dict[str, Any]] = None,
+) -> None:
+    if prefix:
+        assert prefix.startswith(""/""), ""A path prefix must start with '/'""
+        assert not prefix.endswith(
+            ""/""
+        ), ""A path prefix must not end with '/', as the routes will start with '/'""
+    for route in router.routes:
+        if isinstance(route, APIRoute):
+            # Pass the route's responses directly without merging
+            self.add_api_route(
+                prefix + route.path,
+                route.endpoint,
+                response_model=route.response_model,
+                status_code=route.status_code,
+                tags=(route.tags or []) + (tags or []),
+                summary=route.summary,
+                description=route.description,
+                response_description=route.response_description,
+                responses=route.responses,  # Directly use route.responses
+                deprecated=route.deprecated,
+                methods=route.methods,
+                operation_id=route.operation_id,
+                include_in_schema=route.include_in_schema,
+                content_type=route.content_type,
+                name=route.name,
+            )
+        elif isinstance(route, routing.Route):
+            self.add_route(
+                prefix + route.path,
+                route.endpoint,
+                methods=route.methods,
+                include_in_schema=route.include_in_schema,
+                name=route.name,
+            )
+        elif isinstance(route, routing.WebSocketRoute):
+            self.add_websocket_route(
+                prefix + route.path, route.endpoint, name=route.name
+            )
+```
+
+### Explanation of changes:
+- **Removed responses merging**: Instead of merging `responses` with `route.responses` and passing the merged dictionary, we now directly pass `route.responses` to `add_api_route`. This ensures each route's responses are independent and not overwritten by other routes.
+
+### Tests and example uses:
+- **Test case**: Repeat the test case provided in the GitHub issue description to ensure the bug is fixed. Specifically, verify that `/a`, `/b`, and `/c` have the correct responses as defined in their respective routes, without any overwriting.
+- **Example use**: Include multiple routers with different routes and verify that the OpenAPI schema correctly reflects each route's responses without merging or overwriting.",

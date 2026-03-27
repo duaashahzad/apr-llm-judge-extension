@@ -1,0 +1,468 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+cookiecutter-1-v0_llama-0,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the error message**: The error message indicates a `UnicodeDecodeError` when reading the `cookiecutter.json` file. This error occurs when the system tries to decode a byte sequence using an encoding that doesn't support certain bytes.
+2. **Identifying the potential error location**: The error happens in the `generate_context` function when it tries to load the JSON file using `json.load()`.
+3. **Analyzing the test failure**: The test `test_generate_context_decodes_non_ascii_chars` fails because the `FileNotFoundError` exception is raised, indicating that the file `non_ascii.json` does not exist in the specified path. However, this is not directly related to the decoding error.
+4. **Cause of the bug**: The bug is likely due to the system's default encoding not supporting certain characters in the JSON file. This issue arises when the `open()` function uses the system's default encoding to read the file, which may not be UTF-8.
+
+### Fixed solution:
+```python
+def generate_context(
+    context_file='cookiecutter.json', default_context=None, extra_context=None
+):
+    """"""Generate the context for a Cookiecutter project template.
+
+    Loads the JSON file as a Python object, with key being the JSON filename.
+
+    :param context_file: JSON file containing key/value pairs for populating
+        the cookiecutter's variables.
+    :param default_context: Dictionary containing config to take into account.
+    :param extra_context: Dictionary containing configuration overrides
+    """"""
+    context = OrderedDict([])
+
+    try:
+        # Open the file with UTF-8 encoding to handle non-ASCII characters
+        with open(context_file, encoding='utf-8') as file_handle:
+            obj = json.load(file_handle, object_pairs_hook=OrderedDict)
+    except ValueError as e:
+        # JSON decoding error.  Let's throw a new exception that is more
+        # friendly for the developer or user.
+        full_fpath = os.path.abspath(context_file)
+        json_exc_message = str(e)
+        our_exc_message = (
+            'JSON decoding error while loading ""{0}"".  Decoding'
+            ' error details: ""{1}""'.format(full_fpath, json_exc_message)
+        )
+        raise ContextDecodingException(our_exc_message)
+
+    # Add the Python object to the context dictionary
+    file_name = os.path.split(context_file)[1]
+    file_stem = file_name.split('.')[0]
+    context[file_stem] = obj
+
+    # Overwrite context variable defaults with the default context from the
+    # user's global config, if available
+    if default_context:
+        apply_overwrites_to_context(obj, default_context)
+    if extra_context:
+        apply_overwrites_to_context(obj, extra_context)
+
+    logger.debug('Context generated is %s', context)
+    return context
+```
+
+### Explanation of changes:
+* **Specify encoding when opening the file**: We added the `encoding='utf-8'` parameter to the `open()` function to ensure that the file is read using the UTF-8 encoding, which supports a wide range of characters.
+
+### Tests and example uses:
+You can test the corrected function using the provided test case `test_generate_context_decodes_non_ascii_chars`. Make sure the `non_ascii.json` file exists in the specified path and contains the expected JSON data.",
+cookiecutter-1-v0_llama-1,UNKNOWN,UNKNOWN,"```python
+def generate_context(
+    context_file='cookiecutter.json', default_context=None, extra_context=None
+):
+    """"""Generate the context for a Cookiecutter project template.
+
+    Loads the JSON file as a Python object, with key being the JSON filename.
+
+    :param context_file: JSON file containing key/value pairs for populating
+        the cookiecutter's variables.
+    :param default_context: Dictionary containing config to take into account.
+    :param extra_context: Dictionary containing configuration overrides
+    """"""
+    context = OrderedDict([])
+
+    try:
+        with open(context_file, encoding='utf-8') as file_handle:
+            obj = json.load(file_handle, object_pairs_hook=OrderedDict)
+    except json.JSONDecodeError as e:
+        # JSON decoding error.  Let's throw a new exception that is more
+        # friendly for the developer or user.
+        full_fpath = os.path.abspath(context_file)
+        json_exc_message = str(e)
+        our_exc_message = (
+            'JSON decoding error while loading ""{0}"".  Decoding'
+            ' error details: ""{1}""'.format(full_fpath, json_exc_message)
+        )
+        raise ContextDecodingException(our_exc_message)
+
+    # Add the Python object to the context dictionary
+    file_name = os.path.split(context_file)[1]
+    file_stem = file_name.split('.')[0]
+    context[file_stem] = obj
+
+    # Overwrite context variable defaults with the default context from the
+    # user's global config, if available
+    if default_context:
+        apply_overwrites_to_context(obj, default_context)
+    if extra_context:
+        apply_overwrites_to_context(obj, extra_context)
+
+    logger.debug('Context generated is %s', context)
+    return context
+```",
+cookiecutter-1-v0_llama-2,UNKNOWN,UNKNOWN,"```python
+def generate_context(
+    context_file='cookiecutter.json', default_context=None, extra_context=None
+):
+    """"""Generate the context for a Cookiecutter project template.
+
+    Loads the JSON file as a Python object, with key being the JSON filename.
+
+    :param context_file: JSON file containing key/value pairs for populating
+        the cookiecutter's variables.
+    :param default_context: Dictionary containing config to take into account.
+    :param extra_context: Dictionary containing configuration overrides
+    """"""
+    context = OrderedDict([])
+
+    try:
+        with open(context_file, encoding='utf-8') as file_handle:
+            obj = json.load(file_handle, object_pairs_hook=OrderedDict)
+    except json.JSONDecodeError as e:
+        # JSON decoding error.  Let's throw a new exception that is more
+        # friendly for the developer or user.
+        full_fpath = os.path.abspath(context_file)
+        json_exc_message = str(e)
+        our_exc_message = (
+            'JSON decoding error while loading ""{0}"".  Decoding'
+            ' error details: ""{1}""'.format(full_fpath, json_exc_message)
+        )
+        raise ContextDecodingException(our_exc_message)
+
+    # Add the Python object to the context dictionary
+    file_name = os.path.split(context_file)[1]
+    file_stem = file_name.split('.')[0]
+    context[file_stem] = obj
+
+    # Overwrite context variable defaults with the default context from the
+    # user's global config, if available
+    if default_context:
+        apply_overwrites_to_context(obj, default_context)
+    if extra_context:
+        apply_overwrites_to_context(obj, extra_context)
+
+    logger.debug('Context generated is %s', context)
+    return context
+```",
+cookiecutter-1-v0_llama-3,UNKNOWN,UNKNOWN,"```python
+def generate_context(
+    context_file='cookiecutter.json', default_context=None, extra_context=None
+):
+    """"""Generate the context for a Cookiecutter project template.
+
+    Loads the JSON file as a Python object, with key being the JSON filename.
+
+    :param context_file: JSON file containing key/value pairs for populating
+        the cookiecutter's variables.
+    :param default_context: Dictionary containing config to take into account.
+    :param extra_context: Dictionary containing configuration overrides
+    """"""
+    context = OrderedDict([])
+
+    try:
+        with open(context_file, encoding='utf-8') as file_handle:
+            obj = json.load(file_handle, object_pairs_hook=OrderedDict)
+    except ValueError as e:
+        # JSON decoding error.  Let's throw a new exception that is more
+        # friendly for the developer or user.
+        full_fpath = os.path.abspath(context_file)
+        json_exc_message = str(e)
+        our_exc_message = (
+            'JSON decoding error while loading ""{0}"".  Decoding'
+            ' error details: ""{1}""'.format(full_fpath, json_exc_message)
+        )
+        raise ContextDecodingException(our_exc_message)
+
+    # Add the Python object to the context dictionary
+    file_name = os.path.split(context_file)[1]
+    file_stem = file_name.split('.')[0]
+    context[file_stem] = obj
+
+    # Overwrite context variable defaults with the default context from the
+    # user's global config, if available
+    if default_context:
+        apply_overwrites_to_context(obj, default_context)
+    if extra_context:
+        apply_overwrites_to_context(obj, extra_context)
+
+    logger.debug('Context generated is %s', context)
+    return context
+```",
+cookiecutter-1-v0_llama-4,UNKNOWN,UNKNOWN,"```python
+def generate_context(
+    context_file='cookiecutter.json', default_context=None, extra_context=None
+):
+    """"""Generate the context for a Cookiecutter project template.
+
+    Loads the JSON file as a Python object, with key being the JSON filename.
+
+    :param context_file: JSON file containing key/value pairs for populating
+        the cookiecutter's variables.
+    :param default_context: Dictionary containing config to take into account.
+    :param extra_context: Dictionary containing configuration overrides
+    """"""
+    context = OrderedDict([])
+
+    try:
+        with open(context_file, encoding='utf-8') as file_handle:
+            obj = json.load(file_handle, object_pairs_hook=OrderedDict)
+    except ValueError as e:
+        # JSON decoding error.  Let's throw a new exception that is more
+        # friendly for the developer or user.
+        full_fpath = os.path.abspath(context_file)
+        json_exc_message = str(e)
+        our_exc_message = (
+            'JSON decoding error while loading ""{0}"".  Decoding'
+            ' error details: ""{1}""'.format(full_fpath, json_exc_message)
+        )
+        raise ContextDecodingException(our_exc_message)
+
+    # Add the Python object to the context dictionary
+    file_name = os.path.split(context_file)[1]
+    file_stem = file_name.split('.')[0]
+    context[file_stem] = obj
+
+    # Overwrite context variable defaults with the default context from the
+    # user's global config, if available
+    if default_context:
+        apply_overwrites_to_context(obj, default_context)
+    if extra_context:
+        apply_overwrites_to_context(obj, extra_context)
+
+    logger.debug('Context generated is %s', context)
+    return context
+```",
+cookiecutter-1-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+def generate_context(
+    context_file='cookiecutter.json', default_context=None, extra_context=None
+):
+    """"""Generate the context for a Cookiecutter project template.
+
+    Loads the JSON file as a Python object, with key being the JSON filename.
+
+    :param context_file: JSON file containing key/value pairs for populating
+        the cookiecutter's variables.
+    :param default_context: Dictionary containing config to take into account.
+    :param extra_context: Dictionary containing configuration overrides
+    """"""
+    context = OrderedDict([])
+
+    try:
+        with open(context_file, encoding='utf-8') as file_handle:
+            obj = json.load(file_handle, object_pairs_hook=OrderedDict)
+    except ValueError as e:
+        # JSON decoding error.  Let's throw a new exception that is more
+        # friendly for the developer or user.
+        full_fpath = os.path.abspath(context_file)
+        json_exc_message = str(e)
+        our_exc_message = (
+            'JSON decoding error while loading ""{0}"".  Decoding'
+            ' error details: ""{1}""'.format(full_fpath, json_exc_message)
+        )
+        raise ContextDecodingException(our_exc_message)
+
+    # Add the Python object to the context dictionary
+    file_name = os.path.split(context_file)[1]
+    file_stem = file_name.split('.')[0]
+    context[file_stem] = obj
+
+    # Overwrite context variable defaults with the default context from the
+    # user's global config, if available
+    if default_context:
+        apply_overwrites_to_context(obj, default_context)
+    if extra_context:
+        apply_overwrites_to_context(obj, extra_context)
+
+    logger.debug('Context generated is %s', context)
+    return context
+```",
+cookiecutter-1-v0_llama-6,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Analyzing the error message**: The error message is `UnicodeDecodeError: 'charmap' codec can't decode byte 0x98 in position 548: character maps to <undefined>`. This suggests that the issue is related to decoding non-ASCII characters in the JSON file.
+2. **Identifying the cause**: The `json.load()` function is used to parse the JSON file, but it does not specify an encoding. On Windows, the default encoding is `cp1251`, which cannot decode certain non-ASCII characters.
+3. **Identifying potential error locations**: The error occurs when opening the JSON file using `open(context_file) as file_handle`. The `open()` function should be told to use the correct encoding to read the file.
+
+### Fixed solution:
+```python
+def generate_context(
+    context_file='cookiecutter.json', default_context=None, extra_context=None
+):
+    """"""Generate the context for a Cookiecutter project template.
+
+    Loads the JSON file as a Python object, with key being the JSON filename.
+
+    :param context_file: JSON file containing key/value pairs for populating
+        the cookiecutter's variables.
+    :param default_context: Dictionary containing config to take into account.
+    :param extra_context: Dictionary containing configuration overrides
+    """"""
+    context = OrderedDict([])
+
+    try:
+        # Specify the encoding when opening the file
+        with open(context_file, encoding='utf-8') as file_handle:
+            obj = json.load(file_handle, object_pairs_hook=OrderedDict)
+    except ValueError as e:
+        # JSON decoding error.  Let's throw a new exception that is more
+        # friendly for the developer or user.
+        full_fpath = os.path.abspath(context_file)
+        json_exc_message = str(e)
+        our_exc_message = (
+            'JSON decoding error while loading ""{0}"".  Decoding'
+            ' error details: ""{1}""'.format(full_fpath, json_exc_message)
+        )
+        raise ContextDecodingException(our_exc_message)
+
+    # Add the Python object to the context dictionary
+    file_name = os.path.split(context_file)[1]
+    file_stem = file_name.split('.')[0]
+    context[file_stem] = obj
+
+    # Overwrite context variable defaults with the default context from the
+    # user's global config, if available
+    if default_context:
+        apply_overwrites_to_context(obj, default_context)
+    if extra_context:
+        apply_overwrites_to_context(obj, extra_context)
+
+    logger.debug('Context generated is %s', context)
+    return context
+```
+
+### Explanation of changes:
+* Added the `encoding='utf-8'` parameter to the `open()` function to specify the correct encoding when reading the JSON file.
+
+### Tests and example uses:
+The provided test function `test_generate_context_decodes_non_ascii_chars()` can be used to verify that the corrected function works as expected. Additionally, you can test the function with different JSON files containing non-ASCII characters to ensure that it can handle them correctly.",
+cookiecutter-1-v0_llama-7,UNKNOWN,UNKNOWN,"```python
+def generate_context(
+    context_file='cookiecutter.json', default_context=None, extra_context=None
+):
+    """"""Generate the context for a Cookiecutter project template.
+
+    Loads the JSON file as a Python object, with key being the JSON filename.
+
+    :param context_file: JSON file containing key/value pairs for populating
+        the cookiecutter's variables.
+    :param default_context: Dictionary containing config to take into account.
+    :param extra_context: Dictionary containing configuration overrides
+    """"""
+    context = OrderedDict([])
+
+    try:
+        with open(context_file, encoding='utf-8') as file_handle:
+            obj = json.load(file_handle, object_pairs_hook=OrderedDict)
+    except ValueError as e:
+        # JSON decoding error.  Let's throw a new exception that is more
+        # friendly for the developer or user.
+        full_fpath = os.path.abspath(context_file)
+        json_exc_message = str(e)
+        our_exc_message = (
+            'JSON decoding error while loading ""{0}"".  Decoding'
+            ' error details: ""{1}""'.format(full_fpath, json_exc_message)
+        )
+        raise ContextDecodingException(our_exc_message)
+
+    # Add the Python object to the context dictionary
+    file_name = os.path.split(context_file)[1]
+    file_stem = file_name.split('.')[0]
+    context[file_stem] = obj
+
+    # Overwrite context variable defaults with the default context from the
+    # user's global config, if available
+    if default_context:
+        apply_overwrites_to_context(obj, default_context)
+    if extra_context:
+        apply_overwrites_to_context(obj, extra_context)
+
+    logger.debug('Context generated is %s', context)
+    return context
+```",
+cookiecutter-1-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+def generate_context(
+    context_file='cookiecutter.json', default_context=None, extra_context=None
+):
+    """"""Generate the context for a Cookiecutter project template.
+
+    Loads the JSON file as a Python object, with key being the JSON filename.
+
+    :param context_file: JSON file containing key/value pairs for populating
+        the cookiecutter's variables.
+    :param default_context: Dictionary containing config to take into account.
+    :param extra_context: Dictionary containing configuration overrides
+    """"""
+    context = OrderedDict([])
+
+    try:
+        with open(context_file, encoding='utf-8') as file_handle:
+            obj = json.load(file_handle, object_pairs_hook=OrderedDict)
+    except ValueError as e:
+        # JSON decoding error.  Let's throw a new exception that is more
+        # friendly for the developer or user.
+        full_fpath = os.path.abspath(context_file)
+        json_exc_message = str(e)
+        our_exc_message = (
+            'JSON decoding error while loading ""{0}"".  Decoding'
+            ' error details: ""{1}""'.format(full_fpath, json_exc_message)
+        )
+        raise ContextDecodingException(our_exc_message)
+
+    # Add the Python object to the context dictionary
+    file_name = os.path.split(context_file)[1]
+    file_stem = file_name.split('.')[0]
+    context[file_stem] = obj
+
+    # Overwrite context variable defaults with the default context from the
+    # user's global config, if available
+    if default_context:
+        apply_overwrites_to_context(obj, default_context)
+    if extra_context:
+        apply_overwrites_to_context(obj, extra_context)
+
+    logger.debug('Context generated is %s', context)
+    return context
+```",
+cookiecutter-1-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+def generate_context(
+    context_file='cookiecutter.json', default_context=None, extra_context=None
+):
+    """"""Generate the context for a Cookiecutter project template.
+
+    Loads the JSON file as a Python object, with key being the JSON filename.
+
+    :param context_file: JSON file containing key/value pairs for populating
+        the cookiecutter's variables.
+    :param default_context: Dictionary containing config to take into account.
+    :param extra_context: Dictionary containing configuration overrides
+    """"""
+    context = OrderedDict([])
+
+    try:
+        with open(context_file, encoding='utf-8') as file_handle:
+            obj = json.load(file_handle, object_pairs_hook=OrderedDict)
+    except ValueError as e:
+        # JSON decoding error.  Let's throw a new exception that is more
+        # friendly for the developer or user.
+        full_fpath = os.path.abspath(context_file)
+        json_exc_message = str(e)
+        our_exc_message = (
+            'JSON decoding error while loading ""{0}"".  Decoding'
+            ' error details: ""{1}""'.format(full_fpath, json_exc_message)
+        )
+        raise ContextDecodingException(our_exc_message)
+
+    # Add the Python object to the context dictionary
+    file_name = os.path.split(context_file)[1]
+    file_stem = file_name.split('.')[0]
+    context[file_stem] = obj
+
+    # Overwrite context variable defaults with the default context from the
+    # user's global config, if available
+    if default_context:
+        apply_overwrites_to_context(obj, default_context)
+    if extra_context:
+        apply_overwrites_to_context(obj, extra_context)
+
+    logger.debug('Context generated is %s', context)
+    return context
+```",

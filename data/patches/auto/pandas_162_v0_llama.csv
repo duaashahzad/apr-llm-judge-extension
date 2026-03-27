@@ -1,0 +1,711 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-162-v0_llama-0,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the issue**: The bug arises when using `pd.crosstab` with both `margins=True` and `normalize=0` (or `'index'`), which results in a `KeyError: ""['Sub-Total'] not found in axis""`. This error occurs because the code attempts to drop the `margins_name` from the table's index and columns after normalizing, but `margins_name` is not present in the axis.
+2. **Locating the problematic code**: The issue lies in the `_normalize` function, specifically when `margins` is `True` and `normalize` is either `0` (or `'index'`), `1` (or `'columns'`), or `True` (for both). The code incorrectly tries to drop `margins_name` from the table, leading to the error.
+3. **Identifying the cause**: The problem arises because the `margins_name` is used as an index and column name when `margins=True`, but after normalization, this name is not correctly handled when trying to access or drop it from the table.
+
+### Fixed solution:
+```python
+def _normalize(table, normalize, margins, margins_name=""All""):
+    if not isinstance(normalize, (bool, str)):
+        axis_subs = {0: ""index"", 1: ""columns""}
+        try:
+            normalize = axis_subs[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+
+    if margins is False:
+        # Actual Normalizations
+        normalizers = {
+            ""all"": lambda x: x / x.sum(axis=1).sum(axis=0),
+            ""columns"": lambda x: x / x.sum(),
+            ""index"": lambda x: x.div(x.sum(axis=1), axis=0),
+        }
+        normalizers[True] = normalizers[""all""]
+
+        try:
+            f = normalizers[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+
+        table = f(table)
+        table = table.fillna(0)
+
+    elif margins is True:
+        # Store original index and column names
+        table_index_names = table.index.names
+        table_columns_names = table.columns.names
+        
+        # Normalize core
+        core_table = table.drop(margins_name, axis=0).drop(margins_name, axis=1)
+        core_table = _normalize(core_table, normalize=normalize, margins=False)
+
+        # Fix Margins
+        if normalize == ""columns"":
+            column_margin = table.loc[:, margins_name].drop(margins_name) / table.loc[:, margins_name].drop(margins_name).sum()
+            table = pd.concat([core_table, column_margin], axis=1)
+        elif normalize == ""index"":
+            index_margin = table.loc[margins_name, :].drop(margins_name) / table.loc[margins_name, :].drop(margins_name).sum()
+            table = pd.concat([core_table, index_margin.to_frame().T], axis=0)
+        elif normalize == ""all"" or normalize is True:
+            column_margin = table.loc[:, margins_name].drop(margins_name) / table.loc[:, margins_name].drop(margins_name).sum()
+            index_margin = table.loc[margins_name, :].drop(margins_name) / table.loc[margins_name, :].drop(margins_name).sum()
+            table = pd.concat([core_table, column_margin], axis=1)
+            table = pd.concat([table, index_margin.to_frame().T], axis=0)
+
+        table = table.fillna(0)
+        
+        # Restore original index and column names
+        table.index.names = table_index_names
+        table.columns.names = table_columns_names
+
+    else:
+        raise ValueError(""Not a valid margins argument"")
+
+    return table
+```
+
+### Explanation of changes:
+- The original code had issues with handling `margins_name` when `margins=True` and `normalize` was specified. It incorrectly tried to access and drop `margins_name` from the table after normalization.
+- The corrected code first separates the core table (without margins) and normalizes it. Then, it calculates the margins separately based on the normalization type and recombines them with the normalized core table.
+- The normalization for margins is now correctly applied based on whether `normalize` is set to `'index'`, `'columns'`, or `True` (for both).
+- After normalization and recombination, the code restores the original index and column names to ensure the output matches the expected format.
+
+### Tests and example uses:
+The provided test cases in the `test_margin_normalize` function should now pass without errors, demonstrating the correctness of the `_normalize` function's modifications.",
+pandas-162-v0_llama-1,UNKNOWN,UNKNOWN,"```python
+def _normalize(table, normalize, margins, margins_name=""All""):
+
+    if not isinstance(normalize, (bool, str, int)):
+        axis_subs = {0: ""index"", 1: ""columns""}
+        try:
+            normalize = axis_subs[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+
+    if margins is False:
+
+        # Actual Normalizations
+        normalizers = {
+            ""all"": lambda x: x / x.sum(axis=1).sum(axis=0),
+            ""columns"": lambda x: x / x.sum(),
+            ""index"": lambda x: x.div(x.sum(axis=1), axis=0),
+        }
+
+        normalizers[True] = normalizers[""all""]
+
+        try:
+            f = normalizers[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+
+        table = f(table)
+        table = table.fillna(0)
+
+    elif margins is True:
+
+        column_margin = table.loc[:, margins_name].drop(margins_name)
+        index_margin = table.loc[margins_name, :].drop(margins_name)
+        table = table.drop(margins_name, axis=1).drop(margins_name, axis=0)
+        # to keep index and columns names
+        table_index_names = table.index.names
+        table_columns_names = table.columns.names
+
+        # Normalize core
+        table = _normalize(table, normalize=normalize, margins=False)
+
+        # Fix Margins
+        if normalize == ""columns"":
+            column_margin = column_margin / column_margin.sum()
+            table = pd.concat([table, column_margin.to_frame().T], axis=1)
+            table = table.fillna(0)
+
+        elif normalize == ""index"":
+            index_margin = index_margin / index_margin.sum()
+            table.loc[margins_name] = index_margin
+            table = table.fillna(0)
+
+        elif normalize == ""all"" or normalize is True:
+            column_margin = column_margin / column_margin.sum()
+            index_margin = index_margin / index_margin.sum()
+            table = pd.concat([table, column_margin.to_frame().T], axis=1)
+            table.loc[margins_name] = index_margin
+            table = table.fillna(0)
+
+        else:
+            raise ValueError(""Not a valid normalize argument"")
+
+        table.index.names = table_index_names
+        table.columns.names = table_columns_names
+
+    else:
+        raise ValueError(""Not a valid margins argument"")
+
+    return table
+```",
+pandas-162-v0_llama-2,UNKNOWN,UNKNOWN,"```python
+def _normalize(table, normalize, margins, margins_name=""All""):
+
+    if not isinstance(normalize, (bool, str)):
+        axis_subs = {0: ""index"", 1: ""columns""}
+        try:
+            normalize = axis_subs[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+
+    if margins is False:
+
+        # Actual Normalizations
+        normalizers = {
+            ""all"": lambda x: x / x.sum(axis=1).sum(axis=0),
+            ""columns"": lambda x: x / x.sum(),
+            ""index"": lambda x: x.div(x.sum(axis=1), axis=0),
+        }
+
+        normalizers[True] = normalizers[""all""]
+
+        try:
+            f = normalizers[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+
+        table = f(table)
+        table = table.fillna(0)
+
+    elif margins is True:
+
+        column_margin = table.loc[:, margins_name].drop(margins_name, errors='ignore')
+        index_margin = table.loc[margins_name, :].drop(margins_name, errors='ignore')
+        table = table.drop(margins_name, axis=1, errors='ignore').drop(margins_name, axis=0, errors='ignore')
+        
+        # to keep index and columns names
+        table_index_names = table.index.names
+        table_columns_names = table.columns.names
+
+        # Normalize core
+        table = _normalize(table, normalize=normalize, margins=False)
+
+        # Fix Margins
+        if normalize == ""columns"":
+            column_margin = column_margin / column_margin.sum()
+            table = pd.concat([table, column_margin.to_frame().T], axis=1)
+            table = table.fillna(0)
+
+        elif normalize == ""index"":
+            index_margin = index_margin / index_margin.sum()
+            table = pd.concat([table, index_margin.to_frame().T], axis=0)
+            table = table.fillna(0)
+
+        elif normalize == ""all"" or normalize is True:
+            column_margin = column_margin / column_margin.sum()
+            index_margin = index_margin / index_margin.sum()
+            index_margin.loc[margins_name] = 1
+            table = pd.concat([table, column_margin.to_frame().T], axis=1)
+            table = pd.concat([table, index_margin.to_frame().T], axis=0)
+
+            table = table.fillna(0)
+
+        else:
+            raise ValueError(""Not a valid normalize argument"")
+
+        table.index.names = table_index_names
+        table.columns.names = table_columns_names
+
+    else:
+        raise ValueError(""Not a valid margins argument"")
+
+    return table
+```",
+pandas-162-v0_llama-3,UNKNOWN,UNKNOWN,"```python
+def _normalize(table, normalize, margins, margins_name=""All""):
+
+    if not isinstance(normalize, (bool, str, int)):
+        axis_subs = {0: ""index"", 1: ""columns""}
+        try:
+            normalize = axis_subs[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+
+    if margins is False:
+
+        # Actual Normalizations
+        normalizers = {
+            ""all"": lambda x: x / x.sum(axis=1).sum(axis=0),
+            ""columns"": lambda x: x / x.sum(),
+            ""index"": lambda x: x.div(x.sum(axis=1), axis=0),
+        }
+
+        normalizers[True] = normalizers[""all""]
+
+        try:
+            f = normalizers[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+
+        table = f(table)
+        table = table.fillna(0)
+
+    elif margins is True:
+
+        column_margin = table.loc[:, margins_name].drop(margins_name)
+        index_margin = table.loc[margins_name, :].drop(margins_name)
+        table = table.drop(margins_name, axis=1).drop(margins_name, axis=0)
+        # to keep index and columns names
+        table_index_names = table.index.names
+        table_columns_names = table.columns.names
+
+        # Normalize core
+        table = _normalize(table, normalize=normalize, margins=False)
+
+        # Fix Margins
+        if normalize == ""columns"":
+            column_margin = column_margin / column_margin.sum()
+            table = pd.concat([table, column_margin.to_frame().T], axis=1)
+            table = table.fillna(0)
+
+        elif normalize == ""index"":
+            index_margin = index_margin / index_margin.sum()
+            table = pd.concat([table, index_margin.to_frame().T], axis=0)
+            table = table.fillna(0)
+
+        elif normalize == ""all"" or normalize is True:
+            column_margin = column_margin / column_margin.sum()
+            index_margin = index_margin / index_margin.sum()
+            index_margin.loc[margins_name] = 1
+            table = pd.concat([table, column_margin.to_frame().T], axis=1)
+            table = pd.concat([table, index_margin.to_frame().T], axis=0)
+
+            table = table.fillna(0)
+
+        else:
+            raise ValueError(""Not a valid normalize argument"")
+
+        table.index.names = table_index_names
+        table.columns.names = table_columns_names
+
+    else:
+        raise ValueError(""Not a valid margins argument"")
+
+    return table
+```",
+pandas-162-v0_llama-4,UNKNOWN,UNKNOWN,"```python
+def _normalize(table, normalize, margins, margins_name=""All""):
+
+    if not isinstance(normalize, (bool, str, int)):
+        axis_subs = {0: ""index"", 1: ""columns""}
+        try:
+            normalize = axis_subs[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+
+    if margins is False:
+
+        # Actual Normalizations
+        normalizers = {
+            ""all"": lambda x: x / x.sum(axis=1).sum(axis=0),
+            ""columns"": lambda x: x / x.sum(),
+            ""index"": lambda x: x.div(x.sum(axis=1), axis=0),
+        }
+
+        normalizers[True] = normalizers[""all""]
+
+        try:
+            f = normalizers[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+
+        table = f(table)
+        table = table.fillna(0)
+
+    elif margins is True:
+
+        column_margin = table.loc[:, margins_name].drop(margins_name, errors='ignore')
+        index_margin = table.loc[margins_name, :].drop(margins_name, errors='ignore')
+        table = table.drop(margins_name, axis=1, errors='ignore').drop(margins_name, axis=0, errors='ignore')
+        # to keep index and columns names
+        table_index_names = table.index.names
+        table_columns_names = table.columns.names
+
+        # Normalize core
+        table = _normalize(table, normalize=normalize, margins=False)
+
+        # Fix Margins
+        if normalize == ""columns"":
+            column_margin = column_margin / column_margin.sum()
+            table = pd.concat([table, column_margin.to_frame().T], axis=1)
+            table = table.fillna(0)
+
+        elif normalize == ""index"":
+            index_margin = index_margin / index_margin.sum()
+            table = pd.concat([table, index_margin.to_frame().T], axis=0)
+            table = table.fillna(0)
+
+        elif normalize == ""all"" or normalize is True:
+            column_margin = column_margin / column_margin.sum()
+            index_margin = index_margin / index_margin.sum()
+            index_margin.loc[margins_name] = 1
+            table = pd.concat([table, column_margin.to_frame().T], axis=1)
+            table = pd.concat([table, index_margin.to_frame().T], axis=0)
+
+            table = table.fillna(0)
+
+        else:
+            raise ValueError(""Not a valid normalize argument"")
+
+        table.index.names = table_index_names
+        table.columns.names = table_columns_names
+
+    else:
+        raise ValueError(""Not a valid margins argument"")
+
+    return table
+```",
+pandas-162-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+def _normalize(table, normalize, margins, margins_name=""All""):
+    if not isinstance(normalize, (bool, str)):
+        axis_subs = {0: ""index"", 1: ""columns""}
+        try:
+            normalize = axis_subs[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+
+    if margins is False:
+        normalizers = {
+            ""all"": lambda x: x / x.sum(axis=1).sum(axis=0),
+            ""columns"": lambda x: x / x.sum(),
+            ""index"": lambda x: x.div(x.sum(axis=1), axis=0),
+        }
+        normalizers[True] = normalizers[""all""]
+        try:
+            f = normalizers[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+        table = f(table)
+        table = table.fillna(0)
+
+    elif margins is True:
+        column_margin = table.loc[:, margins_name].drop(margins_name, errors='ignore')
+        index_margin = table.loc[margins_name, :].drop(margins_name, errors='ignore')
+        table = table.drop(margins_name, axis=1, errors='ignore').drop(margins_name, axis=0, errors='ignore')
+        
+        table_index_names = table.index.names
+        table_columns_names = table.columns.names
+        
+        table = _normalize(table, normalize=normalize, margins=False)
+        
+        if normalize == ""columns"":
+            column_margin = column_margin / column_margin.sum()
+            table = pd.concat([table, column_margin.to_frame().T], axis=1)
+            table = table.fillna(0)
+
+        elif normalize == ""index"":
+            index_margin = index_margin / index_margin.sum()
+            table = pd.concat([table, index_margin.to_frame().T], axis=0)
+            table = table.fillna(0)
+
+        elif normalize == ""all"" or normalize is True:
+            column_margin = column_margin / column_margin.sum()
+            index_margin = index_margin / index_margin.sum()
+            table = pd.concat([table, column_margin.to_frame().T], axis=1)
+            table = pd.concat([table, index_margin.to_frame().T], axis=0)
+            table = table.fillna(0)
+
+        else:
+            raise ValueError(""Not a valid normalize argument"")
+
+        table.index.names = table_index_names
+        table.columns.names = table_columns_names
+
+    else:
+        raise ValueError(""Not a valid margins argument"")
+
+    return table
+```",
+pandas-162-v0_llama-6,UNKNOWN,UNKNOWN,"```python
+def _normalize(table, normalize, margins, margins_name=""All""):
+
+    if not isinstance(normalize, (bool, str)):
+        axis_subs = {0: ""index"", 1: ""columns""}
+        try:
+            normalize = axis_subs[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+
+    if margins is False:
+
+        # Actual Normalizations
+        normalizers = {
+            ""all"": lambda x: x / x.sum(axis=1).sum(axis=0),
+            ""columns"": lambda x: x / x.sum(),
+            ""index"": lambda x: x.div(x.sum(axis=1), axis=0),
+        }
+
+        normalizers[True] = normalizers[""all""]
+
+        try:
+            f = normalizers[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+
+        table = f(table)
+        table = table.fillna(0)
+
+    elif margins is True:
+
+        column_margin = table.loc[:, margins_name].drop(margins_name, level=0, axis=0)
+        index_margin = table.loc[margins_name, :].drop(margins_name, level=0, axis=0)
+        table = table.drop(margins_name, level=0, axis=1).drop(margins_name, level=0)
+        
+        # to keep index and columns names
+        table_index_names = table.index.names
+        table_columns_names = table.columns.names
+
+        # Normalize core
+        table = _normalize(table, normalize=normalize, margins=False)
+
+        # Fix Margins
+        if normalize == ""columns"":
+            column_margin = column_margin / column_margin.sum()
+            table = pd.concat([table, column_margin.to_frame().T], axis=1)
+            table = table.fillna(0)
+
+        elif normalize == ""index"":
+            index_margin = index_margin / index_margin.sum()
+            table = pd.concat([table, index_margin.to_frame().T], axis=0)
+            table = table.fillna(0)
+
+        elif normalize == ""all"" or normalize is True:
+            column_margin = column_margin / column_margin.sum()
+            index_margin = index_margin / index_margin.sum()
+            table = pd.concat([table, column_margin.to_frame().T], axis=1)
+            table = pd.concat([table, index_margin.to_frame().T], axis=0)
+            table = table.fillna(0)
+
+        else:
+            raise ValueError(""Not a valid normalize argument"")
+
+        table.index.names = table_index_names
+        table.columns.names = table_columns_names
+
+    else:
+        raise ValueError(""Not a valid margins argument"")
+
+    return table
+```",
+pandas-162-v0_llama-7,UNKNOWN,UNKNOWN,"```python
+def _normalize(table, normalize, margins, margins_name=""All""):
+
+    if not isinstance(normalize, (bool, str, int)):
+        axis_subs = {0: ""index"", 1: ""columns""}
+        try:
+            normalize = axis_subs[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+
+    if margins is False:
+
+        # Actual Normalizations
+        normalizers = {
+            ""all"": lambda x: x / x.sum(axis=1).sum(axis=0),
+            ""columns"": lambda x: x / x.sum(),
+            ""index"": lambda x: x.div(x.sum(axis=1), axis=0),
+        }
+
+        normalizers[True] = normalizers[""all""]
+        normalizers[0] = normalizers[""index""]
+        normalizers[1] = normalizers[""columns""]
+
+        try:
+            f = normalizers[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+
+        table = f(table)
+        table = table.fillna(0)
+
+    elif margins is True:
+
+        column_margin = table.loc[:, margins_name].drop(margins_name)
+        index_margin = table.loc[margins_name, :].drop(margins_name)
+        table = table.drop(margins_name, axis=1).drop(margins_name, axis=0)
+        # to keep index and columns names
+        table_index_names = table.index.names
+        table_columns_names = table.columns.names
+
+        # Normalize core
+        table = _normalize(table, normalize=normalize, margins=False)
+
+        # Fix Margins
+        if normalize == ""columns"":
+            column_margin = column_margin / column_margin.sum()
+            table = pd.concat([table, column_margin.to_frame().T], axis=1)
+            table = table.fillna(0)
+
+        elif normalize == ""index"":
+            index_margin = index_margin / index_margin.sum()
+            table.loc[margins_name] = index_margin
+            table = table.fillna(0)
+
+        elif normalize == ""all"" or normalize is True:
+            column_margin = column_margin / column_margin.sum()
+            index_margin = index_margin / index_margin.sum()
+            table = pd.concat([table, column_margin.to_frame().T], axis=1)
+            table.loc[margins_name] = index_margin
+            table = table.fillna(0)
+
+        else:
+            raise ValueError(""Not a valid normalize argument"")
+
+        table.index.names = table_index_names
+        table.columns.names = table_columns_names
+
+    else:
+        raise ValueError(""Not a valid margins argument"")
+
+    return table
+```",
+pandas-162-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+def _normalize(table, normalize, margins, margins_name=""All""):
+
+    if not isinstance(normalize, (bool, str, int)):
+        axis_subs = {0: ""index"", 1: ""columns""}
+        try:
+            normalize = axis_subs[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+
+    if margins is False:
+
+        # Actual Normalizations
+        normalizers = {
+            ""all"": lambda x: x / x.sum(axis=1).sum(axis=0),
+            ""columns"": lambda x: x / x.sum(),
+            ""index"": lambda x: x.div(x.sum(axis=1), axis=0),
+        }
+
+        normalizers[True] = normalizers[""all""]
+
+        try:
+            f = normalizers[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+
+        table = f(table)
+        table = table.fillna(0)
+
+    elif margins is True:
+
+        column_margin = table.loc[:, margins_name].drop(margins_name, errors='ignore')
+        index_margin = table.loc[margins_name, :].drop(margins_name, errors='ignore')
+        table = table.drop(margins_name, axis=1, errors='ignore').drop(margins_name, axis=0, errors='ignore')
+        # to keep index and columns names
+        table_index_names = table.index.names
+        table_columns_names = table.columns.names
+
+        # Normalize core
+        table = _normalize(table, normalize=normalize, margins=False)
+
+        # Fix Margins
+        if normalize == ""columns"":
+            column_margin = column_margin / column_margin.sum()
+            table = pd.concat([table, column_margin.to_frame().T], axis=1)
+            table = table.fillna(0)
+
+        elif normalize == ""index"":
+            index_margin = index_margin / index_margin.sum()
+            table = pd.concat([table, index_margin.to_frame().T], axis=0)
+            table = table.fillna(0)
+
+        elif normalize == ""all"" or normalize is True:
+            column_margin = column_margin / column_margin.sum()
+            index_margin = index_margin / index_margin.sum()
+            index_margin.loc[margins_name] = 1
+            table = pd.concat([table, column_margin.to_frame().T], axis=1)
+            table = pd.concat([table, index_margin.to_frame().T], axis=0)
+
+            table = table.fillna(0)
+
+        else:
+            raise ValueError(""Not a valid normalize argument"")
+
+        table.index.names = table_index_names
+        table.columns.names = table_columns_names
+
+    else:
+        raise ValueError(""Not a valid margins argument"")
+
+    return table
+```",
+pandas-162-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+def _normalize(table, normalize, margins, margins_name=""All""):
+
+    if not isinstance(normalize, (bool, str, int)):
+        axis_subs = {0: ""index"", 1: ""columns""}
+        try:
+            normalize = axis_subs[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+
+    if margins is False:
+
+        # Actual Normalizations
+        normalizers = {
+            ""all"": lambda x: x / x.sum(axis=1).sum(axis=0),
+            ""columns"": lambda x: x / x.sum(),
+            ""index"": lambda x: x.div(x.sum(axis=1), axis=0),
+        }
+
+        normalizers[True] = normalizers[""all""]
+        normalizers[0] = normalizers[""index""]
+        normalizers[1] = normalizers[""columns""]
+
+        try:
+            f = normalizers[normalize]
+        except KeyError:
+            raise ValueError(""Not a valid normalize argument"")
+
+        table = f(table)
+        table = table.fillna(0)
+
+    elif margins is True:
+
+        column_margin = table.loc[:, margins_name].drop(margins_name)
+        index_margin = table.loc[margins_name, :].drop(margins_name)
+        table = table.drop(margins_name, axis=1).drop(margins_name, axis=0)
+        # to keep index and columns names
+        table_index_names = table.index.names
+        table_columns_names = table.columns.names
+
+        # Normalize core
+        table = _normalize(table, normalize=normalize, margins=False)
+
+        # Fix Margins
+        if normalize == ""columns"":
+            column_margin = column_margin / column_margin.sum()
+            table = pd.concat([table, column_margin.to_frame().T], axis=1)
+            table = table.fillna(0)
+
+        elif normalize == ""index"":
+            index_margin = index_margin / index_margin.sum()
+            table.loc[margins_name] = index_margin
+            table = table.fillna(0)
+
+        elif normalize == ""all"" or normalize is True:
+            column_margin = column_margin / column_margin.sum()
+            index_margin = index_margin / index_margin.sum()
+            index_margin.loc[margins_name] = 1
+            table = pd.concat([table, column_margin.to_frame().T], axis=1)
+            table.loc[margins_name] = index_margin
+            table = table.fillna(0)
+
+        else:
+            raise ValueError(""Not a valid normalize argument"")
+
+        table.index.names = table_index_names
+        table.columns.names = table_columns_names
+
+    else:
+        raise ValueError(""Not a valid margins argument"")
+
+    return table
+```",

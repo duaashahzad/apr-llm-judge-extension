@@ -1,0 +1,214 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-159-v0_gpt-0,UNKNOWN,UNKNOWN,"```python
+def _combine_frame(self, other, func, fill_value=None, level=None):
+    this, other = self.align(other, join=""outer"", level=level, copy=False)
+    new_index, new_columns = this.index, this.columns
+
+    def _arith_op(left, right):
+        left, right = ops.fill_binop(left, right, fill_value)
+        if np.any(np.isnan(left)) or np.any(np.isnan(right)):
+            # Apply fill_value if NaN encountered
+            left = np.where(np.isnan(left), fill_value, left)
+            right = np.where(np.isnan(right), fill_value, right)
+        return func(left, right)
+
+    if ops.should_series_dispatch(this, other, func):
+        return ops.dispatch_to_series(this, other, _arith_op)
+    else:
+        result = _arith_op(this.values, other.values)
+        return self._constructor(
+            result, index=new_index, columns=new_columns, copy=False
+        )
+```",
+pandas-159-v0_gpt-1,UNKNOWN,UNKNOWN,"```python
+def _combine_frame(self, other, func, fill_value=None, level=None):
+    this, other = self.align(other, join=""outer"", level=level, copy=False)
+    new_index, new_columns = this.index, this.columns
+
+    def _arith_op(left, right):
+        left, right = ops.fill_binop(left, right, fill_value)
+        # Check if the operation should apply special handling for 'fill_value'
+        if fill_value is not None:
+            right = np.where(np.isnan(right), fill_value, right)
+        return func(left, right)
+
+    if ops.should_series_dispatch(this, other, func):
+        return ops.dispatch_to_series(this, other, _arith_op)
+    else:
+        result = _arith_op(this.values, other.values)
+        return self._constructor(
+            result, index=new_index, columns=new_columns, copy=False
+        )
+```",
+pandas-159-v0_gpt-2,UNKNOWN,UNKNOWN,"```python
+def _combine_frame(self, other, func, fill_value=None, level=None):
+    this, other = self.align(other, join=""outer"", level=level, copy=False)
+    new_index, new_columns = this.index.union(other.index), this.columns.union(other.columns)
+
+    def _arith_op(left, right):
+        # Fill NaN with the fill_value from the context for the operation
+        left, right = ops.fill_binop(left, right, fill_value)
+        return func(left, right)
+
+    if ops.should_series_dispatch(this, other, func):
+        # iterate over columns
+        return ops.dispatch_to_series(this, other, _arith_op)
+    else:
+        result = _arith_op(this.values, other.values)
+        return self._constructor(
+            result, index=new_index, columns=new_columns, copy=False
+        )
+```",
+pandas-159-v0_gpt-3,UNKNOWN,UNKNOWN,"```python
+def _combine_frame(self, other, func, fill_value=None, level=None):
+    this, other = self.align(other, join=""outer"", level=level, copy=False)
+    new_index, new_columns = this.index, this.columns
+
+    def _arith_op(left, right):
+        # for the mixed_type case where we iterate over columns,
+        # _arith_op(left, right) is equivalent to
+        # left._binop(right, func, fill_value=fill_value)
+        left, right = ops.fill_binop(left, right, fill_value)
+        # Here we need to handle the division where we replace infinities.
+        result = func(left, right)
+        # If left is 0 and right is finite non-zero, return np.inf.
+        result[(left == 0) & (right != 0)] = np.inf
+        return result
+
+    if ops.should_series_dispatch(this, other, func):
+        # iterate over columns
+        return ops.dispatch_to_series(this, other, _arith_op)
+    else:
+        result = _arith_op(this.values, other.values)
+        return self._constructor(
+            result, index=new_index, columns=new_columns, copy=False
+        )
+```",
+pandas-159-v0_gpt-4,UNKNOWN,UNKNOWN,"```python
+def _combine_frame(self, other, func, fill_value=None, level=None):
+    this, other = self.align(other, join=""outer"", level=level, copy=False)
+    new_index, new_columns = this.index, this.columns
+
+    def _arith_op(left, right):
+        # Use fill_value for operations
+        left, right = ops.fill_binop(left, right, fill_value)
+        # Manage division by zero: replace 0 in left with inf
+        if func == ops.rfloordiv:
+            left = np.where(left == 0, np.inf, left)
+        return func(left, right)
+
+    if ops.should_series_dispatch(this, other, func):
+        # iterate over columns
+        return ops.dispatch_to_series(this, other, _arith_op)
+    else:
+        result = _arith_op(this.values, other.values)
+        return self._constructor(
+            result, index=new_index, columns=new_columns, copy=False
+        )
+```",
+pandas-159-v0_gpt-5,UNKNOWN,UNKNOWN,"```python
+def _combine_frame(self, other, func, fill_value=None, level=None):
+    this, other = self.align(other, join=""outer"", level=level, copy=False)
+    new_index, new_columns = this.index, this.columns
+
+    def _arith_op(left, right):
+        left, right = ops.fill_binop(left, right, fill_value)
+        result = func(left, right)
+        if np.isnan(result).all():
+            return np.full(left.shape, np.inf)  # Adjust the behavior to fill with inf
+        return result
+
+    if ops.should_series_dispatch(this, other, func):
+        return ops.dispatch_to_series(this, other, _arith_op)
+    else:
+        result = _arith_op(this.values, other.values)
+        return self._constructor(
+            result, index=new_index, columns=new_columns, copy=False
+        )
+```",
+pandas-159-v0_gpt-6,UNKNOWN,UNKNOWN,"```python
+def _combine_frame(self, other, func, fill_value=None, level=None):
+    this, other = self.align(other, join=""outer"", level=level, copy=False)
+    new_index, new_columns = this.index, this.columns
+
+    def _arith_op(left, right):
+        left, right = ops.fill_binop(left, right, fill_value)
+        result = func(left, right)
+        # Handle cases where the right operand is 0 with fill_value adjustment
+        # We want to set the result to np.inf where applicable
+        if func == ops.rfloordiv:
+            result = np.where(np.isnan(result), np.inf, result)
+        return result
+
+    if ops.should_series_dispatch(this, other, func):
+        return ops.dispatch_to_series(this, other, _arith_op)
+    else:
+        result = _arith_op(this.values, other.values)
+        return self._constructor(
+            result, index=new_index, columns=new_columns, copy=False
+        )
+```",
+pandas-159-v0_gpt-7,UNKNOWN,UNKNOWN,"```python
+def _combine_frame(self, other, func, fill_value=None, level=None):
+    this, other = self.align(other, join=""outer"", level=level, copy=False)
+    new_index, new_columns = this.index, this.columns
+
+    def _arith_op(left, right):
+        left, right = ops.fill_binop(left, right, fill_value)
+        return func(left, right)
+
+    if ops.should_series_dispatch(this, other, func):
+        return ops.dispatch_to_series(this, other, _arith_op)
+    else:
+        # Ensure correct handling of fill_value when both values are 0.
+        result = _arith_op(this.values, other.values)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            result = np.where((this.values == 0) & (other.values != 0), np.inf, result)
+        return self._constructor(
+            result, index=new_index, columns=new_columns, copy=False
+        )
+```",
+pandas-159-v0_gpt-8,UNKNOWN,UNKNOWN,"```python
+def _combine_frame(self, other, func, fill_value=None, level=None):
+    this, other = self.align(other, join=""outer"", level=level, copy=False)
+    new_index, new_columns = this.index, this.columns
+
+    def _arith_op(left, right):
+        left, right = ops.fill_binop(left, right, fill_value)
+        # Ensure we handle fill_value for division correctly
+        if func is ops.rfloordiv:
+            left = np.where(left == fill_value, np.inf, left)
+        return func(left, right)
+
+    if ops.should_series_dispatch(this, other, func):
+        # iterate over columns
+        return ops.dispatch_to_series(this, other, _arith_op)
+    else:
+        result = _arith_op(this.values, other.values)
+        return self._constructor(
+            result, index=new_index, columns=new_columns, copy=False
+        )
+```",
+pandas-159-v0_gpt-9,UNKNOWN,UNKNOWN,"```python
+def _combine_frame(self, other, func, fill_value=None, level=None):
+    this, other = self.align(other, join=""outer"", level=level, copy=False)
+    new_index, new_columns = this.index, this.columns
+
+    def _arith_op(left, right):
+        left, right = ops.fill_binop(left, right, fill_value)
+        # Promote any zero division to inf here if the provided fill_value is used
+        with np.errstate(divide='raise'):
+            try:
+                return func(left, right)
+            except FloatingPointError:
+                # handle division by zero scenario and replace with inf
+                return np.where(right == 0, np.inf, func(left, right))
+
+    if ops.should_series_dispatch(this, other, func):
+        return ops.dispatch_to_series(this, other, _arith_op)
+    else:
+        result = _arith_op(this.values, other.values)
+        return self._constructor(
+            result, index=new_index, columns=new_columns, copy=False
+        )
+```",

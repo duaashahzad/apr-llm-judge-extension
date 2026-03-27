@@ -1,0 +1,780 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+keras-25-vall_gpt-0,UNKNOWN,UNKNOWN,"```python
+def _preprocess_numpy_input(x, data_format, mode):
+    """"""Preprocesses a Numpy array encoding a batch of images.
+
+    # Arguments
+        x: Input array, 3D or 4D.
+        data_format: Data format of the image array.
+        mode: One of ""caffe"", ""tf"" or ""torch"".
+            - caffe: will convert the images from RGB to BGR,
+                then will zero-center each color channel with
+                respect to the ImageNet dataset,
+                without scaling.
+            - tf: will scale pixels between -1 and 1,
+                sample-wise.
+            - torch: will scale pixels between 0 and 1 and then
+                will normalize each channel with respect to the
+                ImageNet dataset.
+
+    # Returns
+        Preprocessed Numpy array.
+    """"""
+    if x.ndim not in [3, 4]:
+        raise ValueError(""Input array must be 3D or 4D."")
+    
+    if mode == 'tf':
+        x /= 127.5
+        x -= 1.
+        return x.astype(np.float32)
+
+    if mode == 'torch':
+        x /= 255.
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+    else:  # Caffe mode
+        if data_format == 'channels_first':
+            if x.ndim == 3:
+                x = x[::-1, ...]  # Convert RGB to BGR
+            else:
+                x = x[:, ::-1, ...]  # Convert RGB to BGR
+        else:
+            x = x[..., ::-1]  # Convert RGB to BGR
+        
+        mean = [103.939, 116.779, 123.68]
+        std = None
+
+    # Zero-center by mean pixel
+    if data_format == 'channels_first':
+        if x.ndim == 3:
+            x[0, :, :] -= mean[0]
+            x[1, :, :] -= mean[1]
+            x[2, :, :] -= mean[2]
+        else:
+            x[:, 0, :, :] -= mean[0]
+            x[:, 1, :, :] -= mean[1]
+            x[:, 2, :, :] -= mean[2]
+    else:
+        x[..., 0] -= mean[0]
+        x[..., 1] -= mean[1]
+        x[..., 2] -= mean[2]
+    
+    # Apply standard deviation if defined
+    if std is not None:
+        if data_format == 'channels_first':
+            if x.ndim == 3:
+                x[0, :, :] /= std[0]
+                x[1, :, :] /= std[1]
+                x[2, :, :] /= std[2]
+            else:
+                x[:, 0, :, :] /= std[0]
+                x[:, 1, :, :] /= std[1]
+                x[:, 2, :, :] /= std[2]
+        else:
+            x[..., 0] /= std[0]
+            x[..., 1] /= std[1]
+            x[..., 2] /= std[2]
+
+    return x.astype(np.float32)
+```",
+keras-25-vall_gpt-1,UNKNOWN,UNKNOWN,"```python
+def _preprocess_numpy_input(x, data_format, mode):
+    """"""Preprocesses a Numpy array encoding a batch of images.
+
+    # Arguments
+        x: Input array, 3D or 4D.
+        data_format: Data format of the image array.
+        mode: One of ""caffe"", ""tf"" or ""torch"".
+            - caffe: will convert the images from RGB to BGR,
+                then will zero-center each color channel with
+                respect to the ImageNet dataset,
+                without scaling.
+            - tf: will scale pixels between -1 and 1,
+                sample-wise.
+            - torch: will scale pixels between 0 and 1 and then
+                will normalize each channel with respect to the
+                ImageNet dataset.
+
+    # Returns
+        Preprocessed Numpy array.
+    """"""
+    if x.ndim not in [3, 4]:
+        raise ValueError(""Input x must be a 3D or 4D array."")
+    
+    # Convert int arrays to float32 type for the preprocessing
+    if x.dtype == 'int32' or x.dtype == 'int64':
+        x = x.astype('float32')
+
+    if mode == 'tf':
+        x /= 127.5
+        x -= 1.
+        return x
+
+    if mode == 'torch':
+        x /= 255.
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+    else:
+        if data_format == 'channels_first':
+            # 'RGB'->'BGR'
+            if x.ndim == 3:
+                x = x[::-1, ...]
+            else:
+                x = x[:, ::-1, ...]
+        else:
+            # 'RGB'->'BGR'
+            x = x[..., ::-1]
+        mean = [103.939, 116.779, 123.68]
+        std = None
+
+    # Zero-center by mean pixel
+    if data_format == 'channels_first':
+        if x.ndim == 3:
+            x[0, :, :] -= mean[0]
+            x[1, :, :] -= mean[1]
+            x[2, :, :] -= mean[2]
+            if std is not None:
+                x[0, :, :] /= std[0]
+                x[1, :, :] /= std[1]
+                x[2, :, :] /= std[2]
+        else:
+            x[:, 0, :, :] -= mean[0]
+            x[:, 1, :, :] -= mean[1]
+            x[:, 2, :, :] -= mean[2]
+            if std is not None:
+                x[:, 0, :, :] /= std[0]
+                x[:, 1, :, :] /= std[1]
+                x[:, 2, :, :] /= std[2]
+    else:
+        x[..., 0] -= mean[0]
+        x[..., 1] -= mean[1]
+        x[..., 2] -= mean[2]
+        if std is not None:
+            x[..., 0] /= std[0]
+            x[..., 1] /= std[1]
+            x[..., 2] /= std[2]
+
+    return x
+```",
+keras-25-vall_gpt-2,UNKNOWN,UNKNOWN,"```python
+def _preprocess_numpy_input(x, data_format, mode):
+    """"""Preprocesses a Numpy array encoding a batch of images.
+
+    # Arguments
+        x: Input array, 3D or 4D.
+        data_format: Data format of the image array.
+        mode: One of ""caffe"", ""tf"" or ""torch"".
+
+    # Returns
+        Preprocessed Numpy array.
+    """"""
+    if not isinstance(x, np.ndarray) or x.ndim not in {3, 4}:
+        raise ValueError(""Input must be a Numpy array with 3 or 4 dimensions."")
+    
+    if mode == 'tf':
+        x = x / 127.5 - 1.0
+        return x.astype(np.float32)
+
+    if mode == 'torch':
+        x = x / 255.0
+        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+    else:  # Assume 'caffe'
+        if data_format == 'channels_first':
+            if x.ndim == 3:
+                x = x[::-1, ...]
+            else:
+                x = x[:, ::-1, ...]
+        else:
+            x = x[..., ::-1]
+        mean = np.array([103.939, 116.779, 123.68], dtype=np.float32)
+        std = None
+
+    # Zero-center by mean pixel
+    if data_format == 'channels_first':
+        if x.ndim == 3:
+            x[0] -= mean[0]
+            x[1] -= mean[1]
+            x[2] -= mean[2]
+            if std is not None:
+                x[0] /= std[0]
+                x[1] /= std[1]
+                x[2] /= std[2]
+        else:
+            x[:, 0, :, :] -= mean[0]
+            x[:, 1, :, :] -= mean[1]
+            x[:, 2, :, :] -= mean[2]
+            if std is not None:
+                x[:, 0, :, :] /= std[0]
+                x[:, 1, :, :] /= std[1]
+                x[:, 2, :, :] /= std[2]
+    else:
+        x[..., 0] -= mean[0]
+        x[..., 1] -= mean[1]
+        x[..., 2] -= mean[2]
+        if std is not None:
+            x[..., 0] /= std[0]
+            x[..., 1] /= std[1]
+            x[..., 2] /= std[2]
+
+    return x.astype(np.float32)
+```",
+keras-25-vall_gpt-3,UNKNOWN,UNKNOWN,"```python
+def _preprocess_numpy_input(x, data_format, mode):
+    """"""Preprocesses a Numpy array encoding a batch of images.
+
+    # Arguments
+        x: Input array, 3D or 4D.
+        data_format: Data format of the image array.
+        mode: One of ""caffe"", ""tf"" or ""torch"".
+            - caffe: will convert the images from RGB to BGR,
+                then will zero-center each color channel with
+                respect to the ImageNet dataset,
+                without scaling.
+            - tf: will scale pixels between -1 and 1,
+                sample-wise.
+            - torch: will scale pixels between 0 and 1 and then
+                will normalize each channel with respect to the
+                ImageNet dataset.
+
+    # Returns
+        Preprocessed Numpy array.
+    """"""
+    # Check input dimensions
+    if x.ndim not in [3, 4]:
+        raise ValueError(""Input array must be 3D or 4D."")
+
+    if mode == 'tf':
+        x = x / 127.5 - 1.0
+        return x.astype('float32')
+
+    if mode == 'torch':
+        x = x / 255.0
+        mean = np.array([0.485, 0.456, 0.406])
+        std = np.array([0.229, 0.224, 0.225])
+    else:  # Default is 'caffe'
+        if data_format == 'channels_first':
+            if x.ndim == 3:
+                x = x[::-1, ...]
+            else:
+                x = x[:, ::-1, ...]
+        else:
+            x = x[..., ::-1]
+        mean = np.array([103.939, 116.779, 123.68])
+        std = None
+
+    # Zero-center by mean pixel
+    if data_format == 'channels_first':
+        if x.ndim == 3:
+            x[0, :, :] -= mean[0]
+            x[1, :, :] -= mean[1]
+            x[2, :, :] -= mean[2]
+        else:
+            x[:, 0, :, :] -= mean[0]
+            x[:, 1, :, :] -= mean[1]
+            x[:, 2, :, :] -= mean[2]
+    else:
+        x[..., 0] -= mean[0]
+        x[..., 1] -= mean[1]
+        x[..., 2] -= mean[2]
+    
+    # Apply standard deviation if defined
+    if std is not None:
+        if data_format == 'channels_first':
+            if x.ndim == 3:
+                x[0, :, :] /= std[0]
+                x[1, :, :] /= std[1]
+                x[2, :, :] /= std[2]
+            else:
+                x[:, 0, :, :] /= std[0]
+                x[:, 1, :, :] /= std[1]
+                x[:, 2, :, :] /= std[2]
+        else:
+            x[..., 0] /= std[0]
+            x[..., 1] /= std[1]
+            x[..., 2] /= std[2]
+
+    return x.astype('float32')
+```",
+keras-25-vall_gpt-4,UNKNOWN,UNKNOWN,"```python
+def _preprocess_numpy_input(x, data_format, mode):
+    """"""Preprocesses a Numpy array encoding a batch of images.
+
+    # Arguments
+        x: Input array, 3D or 4D.
+        data_format: Data format of the image array.
+        mode: One of ""caffe"", ""tf"" or ""torch"".
+            - caffe: will convert the images from RGB to BGR,
+                then will zero-center each color channel with
+                respect to the ImageNet dataset,
+                without scaling.
+            - tf: will scale pixels between -1 and 1,
+                sample-wise.
+            - torch: will scale pixels between 0 and 1 and then
+                will normalize each channel with respect to the
+                ImageNet dataset.
+
+    # Returns
+        Preprocessed Numpy array.
+    """"""
+    if not isinstance(x, np.ndarray):
+        raise ValueError(""Input x must be a numpy array."")
+    
+    if x.ndim not in [3, 4]:
+        raise ValueError(""Input x must be a 3D or 4D array."")
+    
+    if mode == 'tf':
+        x = x.astype(np.float32) / 127.5 - 1.0
+        return x
+
+    if mode == 'torch':
+        x = x.astype(np.float32) / 255.0
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+    else:  # mode == 'caffe'
+        if data_format == 'channels_first':
+            if x.ndim == 3:
+                x = x[::-1, ...]  # Convert RGB to BGR
+            else:
+                x = x[:, ::-1, ...]  # Convert RGB to BGR
+        else:
+            x = x[..., ::-1]  # Convert RGB to BGR
+        
+        mean = [103.939, 116.779, 123.68]
+        std = None
+
+    # Zero-center by mean pixel
+    if data_format == 'channels_first':
+        if x.ndim == 3:
+            x[0, :, :] -= mean[0]
+            x[1, :, :] -= mean[1]
+            x[2, :, :] -= mean[2]
+        else:
+            x[:, 0, :, :] -= mean[0]
+            x[:, 1, :, :] -= mean[1]
+            x[:, 2, :, :] -= mean[2]
+    else:
+        x[..., 0] -= mean[0]
+        x[..., 1] -= mean[1]
+        x[..., 2] -= mean[2]
+
+    # Apply standard deviation if defined
+    if std is not None:
+        if data_format == 'channels_first':
+            if x.ndim == 3:
+                x[0, :, :] /= std[0]
+                x[1, :, :] /= std[1]
+                x[2, :, :] /= std[2]
+            else:
+                x[:, 0, :, :] /= std[0]
+                x[:, 1, :, :] /= std[1]
+                x[:, 2, :, :] /= std[2]
+        else:
+            x[..., 0] /= std[0]
+            x[..., 1] /= std[1]
+            x[..., 2] /= std[2]
+
+    return x
+```",
+keras-25-vall_gpt-5,UNKNOWN,UNKNOWN,"```python
+def _preprocess_numpy_input(x, data_format, mode):
+    """"""Preprocesses a Numpy array encoding a batch of images.
+
+    # Arguments
+        x: Input array, 3D or 4D.
+        data_format: Data format of the image array.
+        mode: One of ""caffe"", ""tf"" or ""torch"".
+            - caffe: will convert the images from RGB to BGR,
+                then will zero-center each color channel with
+                respect to the ImageNet dataset,
+                without scaling.
+            - tf: will scale pixels between -1 and 1,
+                sample-wise.
+            - torch: will scale pixels between 0 and 1 and then
+                will normalize each channel with respect to the
+                ImageNet dataset.
+
+    # Returns
+        Preprocessed Numpy array.
+    """"""
+    if not isinstance(x, np.ndarray):
+        raise ValueError(""Input must be a numpy array."")
+    if x.ndim not in [3, 4]:
+        raise ValueError(""Input array must be 3D or 4D."")
+
+    # Ensure correct data type for calculations
+    x = x.astype('float32')
+
+    if mode == 'tf':
+        x /= 127.5
+        x -= 1.
+        return x
+
+    if mode == 'torch':
+        x /= 255.
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+    else:
+        if data_format == 'channels_first':
+            if x.ndim == 3:
+                x = x[::-1, ...]  # 'RGB' -> 'BGR'
+            else:
+                x = x[:, ::-1, ...]  # 'RGB' -> 'BGR'
+        else:
+            x = x[..., ::-1]  # 'RGB' -> 'BGR'
+        mean = [103.939, 116.779, 123.68]
+        std = None
+
+    # Zero-center by mean pixel
+    if data_format == 'channels_first': 
+        if x.ndim == 3:
+            x[0, :, :] -= mean[0]
+            x[1, :, :] -= mean[1]
+            x[2, :, :] -= mean[2]
+        else:
+            x[:, 0, :, :] -= mean[0]
+            x[:, 1, :, :] -= mean[1]
+            x[:, 2, :, :] -= mean[2]
+    else:
+        x[..., 0] -= mean[0]
+        x[..., 1] -= mean[1]
+        x[..., 2] -= mean[2]
+
+    # Apply standard deviation if defined
+    if std is not None:
+        if data_format == 'channels_first':
+            if x.ndim == 3:
+                x[0, :, :] /= std[0]
+                x[1, :, :] /= std[1]
+                x[2, :, :] /= std[2]
+            else:
+                x[:, 0, :, :] /= std[0]
+                x[:, 1, :, :] /= std[1]
+                x[:, 2, :, :] /= std[2]
+        else:
+            x[..., 0] /= std[0]
+            x[..., 1] /= std[1]
+            x[..., 2] /= std[2]
+
+    return x
+```",
+keras-25-vall_gpt-6,UNKNOWN,UNKNOWN,"```python
+def _preprocess_numpy_input(x, data_format, mode):
+    """"""Preprocesses a Numpy array encoding a batch of images.
+
+    # Arguments
+        x: Input array, 3D or 4D.
+        data_format: Data format of the image array.
+        mode: One of ""caffe"", ""tf"" or ""torch"".
+            - caffe: will convert the images from RGB to BGR,
+                then will zero-center each color channel with
+                respect to the ImageNet dataset,
+                without scaling.
+            - tf: will scale pixels between -1 and 1,
+                sample-wise.
+            - torch: will scale pixels between 0 and 1 and then
+                will normalize each channel with respect to the
+                ImageNet dataset.
+
+    # Returns
+        Preprocessed Numpy array.
+    """"""
+    # Ensure input is a numpy array
+    if not isinstance(x, np.ndarray):
+        raise ValueError(""Input must be a numpy array."")
+
+    # Check input dimensions
+    if x.ndim not in [3, 4]:
+        raise ValueError(""Input array must be 3D or 4D."")
+
+    if mode == 'tf':
+        x /= 127.5
+        x -= 1.
+        return x.astype(np.float32)
+
+    if mode == 'torch':
+        x /= 255.
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+    else:  # Caffe mode
+        if data_format == 'channels_first':
+            if x.ndim == 3:
+                x = x[::-1, ...]  # Convert RGB to BGR
+            else:
+                x = x[:, ::-1, ...]
+        else:
+            x = x[..., ::-1]  # Convert RGB to BGR
+
+        mean = [103.939, 116.779, 123.68]
+        std = None
+
+    # Zero-center by mean pixel
+    if data_format == 'channels_first':
+        if x.ndim == 3:
+            x[0, :, :] -= mean[0]
+            x[1, :, :] -= mean[1]
+            x[2, :, :] -= mean[2]
+            if std is not None:
+                x[0, :, :] /= std[0]
+                x[1, :, :] /= std[1]
+                x[2, :, :] /= std[2]
+        else:
+            x[:, 0, :, :] -= mean[0]
+            x[:, 1, :, :] -= mean[1]
+            x[:, 2, :, :] -= mean[2]
+            if std is not None:
+                x[:, 0, :, :] /= std[0]
+                x[:, 1, :, :] /= std[1]
+                x[:, 2, :, :] /= std[2]
+    else:
+        x[..., 0] -= mean[0]
+        x[..., 1] -= mean[1]
+        x[..., 2] -= mean[2]
+        if std is not None:
+            x[..., 0] /= std[0]
+            x[..., 1] /= std[1]
+            x[..., 2] /= std[2]
+
+    return x.astype(np.float32)
+```",
+keras-25-vall_gpt-7,UNKNOWN,UNKNOWN,"```python
+def _preprocess_numpy_input(x, data_format, mode):
+    """"""Preprocesses a Numpy array encoding a batch of images.
+
+    # Arguments
+        x: Input array, 3D or 4D.
+        data_format: Data format of the image array.
+        mode: One of ""caffe"", ""tf"" or ""torch"".
+            - caffe: will convert the images from RGB to BGR,
+                then will zero-center each color channel with
+                respect to the ImageNet dataset,
+                without scaling.
+            - tf: will scale pixels between -1 and 1,
+                sample-wise.
+            - torch: will scale pixels between 0 and 1 and then
+                will normalize each channel with respect to the
+                ImageNet dataset.
+
+    # Returns
+        Preprocessed Numpy array.
+    """"""
+    if not isinstance(x, np.ndarray):
+        raise ValueError(""Input must be a numpy array."")
+    if x.ndim not in [3, 4]:
+        raise ValueError(""Input array must be 3D or 4D."")
+
+    # Convert input to float if it's int
+    if x.dtype == 'int32' or x.dtype == 'int64':
+        x = x.astype('float32')
+
+    if mode == 'tf':
+        x /= 127.5
+        x -= 1.
+        return x
+
+    if mode == 'torch':
+        x /= 255.
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+    else:
+        if data_format == 'channels_first':
+            # 'RGB'->'BGR'
+            if x.ndim == 3:
+                x = x[::-1, ...]
+            else:
+                x = x[:, ::-1, ...]
+        else:
+            # 'RGB'->'BGR'
+            x = x[..., ::-1]
+        mean = [103.939, 116.779, 123.68]
+        std = None
+
+    # Zero-center by mean pixel
+    if data_format == 'channels_first':
+        if x.ndim == 3:
+            x[0, :, :] -= mean[0]
+            x[1, :, :] -= mean[1]
+            x[2, :, :] -= mean[2]
+            if std is not None:
+                x[0, :, :] /= std[0]
+                x[1, :, :] /= std[1]
+                x[2, :, :] /= std[2]
+        else:
+            x[:, 0, :, :] -= mean[0]
+            x[:, 1, :, :] -= mean[1]
+            x[:, 2, :, :] -= mean[2]
+            if std is not None:
+                x[:, 0, :, :] /= std[0]
+                x[:, 1, :, :] /= std[1]
+                x[:, 2, :, :] /= std[2]
+    else:
+        x[..., 0] -= mean[0]
+        x[..., 1] -= mean[1]
+        x[..., 2] -= mean[2]
+        if std is not None:
+            x[..., 0] /= std[0]
+            x[..., 1] /= std[1]
+            x[..., 2] /= std[2]
+
+    return x
+```",
+keras-25-vall_gpt-8,UNKNOWN,UNKNOWN,"```python
+def _preprocess_numpy_input(x, data_format, mode):
+    """"""Preprocesses a Numpy array encoding a batch of images.
+
+    # Arguments
+        x: Input array, 3D or 4D.
+        data_format: Data format of the image array.
+        mode: One of ""caffe"", ""tf"" or ""torch"".
+            - caffe: will convert the images from RGB to BGR,
+                then will zero-center each color channel with
+                respect to the ImageNet dataset,
+                without scaling.
+            - tf: will scale pixels between -1 and 1,
+                sample-wise.
+            - torch: will scale pixels between 0 and 1 and then
+                will normalize each channel with respect to the
+                ImageNet dataset.
+
+    # Returns
+        Preprocessed Numpy array.
+    """"""
+    if x.ndim not in [3, 4]:
+        raise ValueError(""Input array must be 3D or 4D."")
+
+    x = x.astype('float32')  # Ensure x is of type float32 for processing
+
+    if mode == 'tf':
+        x /= 127.5
+        x -= 1.
+        return x
+
+    if mode == 'torch':
+        x /= 255.
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+    else:
+        if data_format == 'channels_first':
+            if x.ndim == 3:
+                x = x[::-1, ...]  # Convert RGB to BGR
+            else:
+                x = x[:, ::-1, ...]  # Convert RGB to BGR
+        else:
+            x = x[..., ::-1]  # Convert RGB to BGR
+
+        mean = [103.939, 116.779, 123.68]
+        std = None
+
+    # Zero-center by mean pixel
+    if data_format == 'channels_first':
+        if x.ndim == 3:
+            x[0, :, :] -= mean[0]
+            x[1, :, :] -= mean[1]
+            x[2, :, :] -= mean[2]
+        else:
+            x[:, 0, :, :] -= mean[0]
+            x[:, 1, :, :] -= mean[1]
+            x[:, 2, :, :] -= mean[2]
+    else:
+        x[..., 0] -= mean[0]
+        x[..., 1] -= mean[1]
+        x[..., 2] -= mean[2]
+
+    # Apply standard deviation if defined
+    if std is not None:
+        if data_format == 'channels_first':
+            if x.ndim == 3:
+                x[0, :, :] /= std[0]
+                x[1, :, :] /= std[1]
+                x[2, :, :] /= std[2]
+            else:
+                x[:, 0, :, :] /= std[0]
+                x[:, 1, :, :] /= std[1]
+                x[:, 2, :, :] /= std[2]
+        else:
+            x[..., 0] /= std[0]
+            x[..., 1] /= std[1]
+            x[..., 2] /= std[2]
+
+    return x
+```",
+keras-25-vall_gpt-9,UNKNOWN,UNKNOWN,"```python
+def _preprocess_numpy_input(x, data_format, mode):
+    """"""Preprocesses a Numpy array encoding a batch of images.
+
+    # Arguments
+        x: Input array, 3D or 4D.
+        data_format: Data format of the image array.
+        mode: One of ""caffe"", ""tf"" or ""torch"".
+            - caffe: will convert the images from RGB to BGR,
+                then will zero-center each color channel with
+                respect to the ImageNet dataset,
+                without scaling.
+            - tf: will scale pixels between -1 and 1,
+                sample-wise.
+            - torch: will scale pixels between 0 and 1 and then
+                will normalize each channel with respect to the
+                ImageNet dataset.
+
+    # Returns
+        Preprocessed Numpy array.
+    """"""
+    if x.ndim not in [3, 4]:
+        raise ValueError(""Input must be a 3D or 4D array."")
+    
+    if mode not in {'caffe', 'tf', 'torch'}:
+        raise ValueError('Unknown mode ' + str(mode))
+
+    # Convert int arrays to float for preprocessing
+    x = x.astype('float32')
+
+    if mode == 'tf':
+        x /= 127.5
+        x -= 1.
+        return x
+
+    if mode == 'torch':
+        x /= 255.
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+    else:
+        mean = [103.939, 116.779, 123.68]
+        std = None
+        if data_format == 'channels_first':
+            x = x[..., ::-1] if x.ndim == 4 else x[::-1, ...]  # 'RGB' -> 'BGR'
+        else:
+            x = x[..., ::-1]  # 'RGB' -> 'BGR'
+
+    # Zero-center by mean pixel
+    if data_format == 'channels_first':
+        if x.ndim == 3:
+            x[0, :, :] -= mean[0]
+            x[1, :, :] -= mean[1]
+            x[2, :, :] -= mean[2]
+        else:
+            x[:, 0, :, :] -= mean[0]
+            x[:, 1, :, :] -= mean[1]
+            x[:, 2, :, :] -= mean[2]
+    else:
+        x[..., 0] -= mean[0]
+        x[..., 1] -= mean[1]
+        x[..., 2] -= mean[2]
+    
+    # Apply standard deviation if defined
+    if std is not None:
+        if data_format == 'channels_first':
+            if x.ndim == 3:
+                x[0, :, :] /= std[0]
+                x[1, :, :] /= std[1]
+                x[2, :, :] /= std[2]
+            else:
+                x[:, 0, :, :] /= std[0]
+                x[:, 1, :, :] /= std[1]
+                x[:, 2, :, :] /= std[2]
+        else:
+            x[..., 0] /= std[0]
+            x[..., 1] /= std[1]
+            x[..., 2] /= std[2]
+
+    return x
+```",

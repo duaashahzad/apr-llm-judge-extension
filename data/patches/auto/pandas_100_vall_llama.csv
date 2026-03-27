@@ -1,0 +1,354 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-100-vall_llama-0,UNKNOWN,UNKNOWN,"```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    # TODO: Not sure if above is correct - need someone to confirm.
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    if fill_method is None:
+        data = self
+    else:
+        # Handle groupby object nivel for correct column alignment
+        if isinstance(self, pd.core.groupby.generic.DataFrameGroupBy):
+            data = self.apply(lambda x: x.fillna(method=fill_method, limit=limit, axis=axis))
+        else:
+            data = self.fillna(method=fill_method, limit=limit, axis=axis)
+
+    rs = data.div(data.shift(periods=periods, freq=freq, axis=axis, **kwargs)) - 1
+    if isinstance(self, pd.core.groupby.generic.DataFrameGroupBy):
+        rs = rs.groupby(self.grouper.labels)
+    else:
+        rs = rs.loc[~rs.index.duplicated()]
+    rs = rs.reindex_like(data)
+    if freq is None:
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+    return rs
+```",
+pandas-100-vall_llama-1,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Reading the GitHub issue:** There's a problem with `pct_change` when used in combination with `groupby`, particularly when `fill_method=None`.
+2. **Understanding the error:** The error occurs because when `fill_method=None`, `getattr(self, fill_method)(limit=limit)` tries to get an attribute of `None`, which is not allowed.
+3. **Identifying the cause:** The issue arises because `pct_change` within `groupby` does not correctly handle the case when `fill_method=None`.
+
+### Fixed solution:
+```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    
+    # Special handling for fill_method=None to avoid TypeError
+    if fill_method is None:
+        data = self
+    else:
+        data = self.fillna(method=fill_method, limit=limit, axis=axis)
+
+    rs = data.div(data.shift(periods=periods, freq=freq, axis=axis, **kwargs)) - 1
+    rs = rs.loc[~rs.index.duplicated()]
+    rs = rs.reindex_like(data)
+    if freq is None:
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+    
+    return rs
+```
+
+### Explanation of changes:
+*   **Checking `fill_method`:** Before calling `self.fillna()`, we check if `fill_method` is `None`. If it is, we directly use `self` without calling `fillna`.
+*   **Removed `if fill_method is not None` block:** Instead of checking for `fill_method` not being `None` and then calling `self.fillna()`, we handle the case when `fill_method` is `None` separately by using `self` directly.
+*   **Rest of the logic remains the same:** After handling the `fill_method=None` case, the rest of the function logic remains unchanged, including the calculation of percentage change and handling of duplicated indices.
+
+### Tests and example uses:
+```python
+import pandas as pd
+import numpy as np
+
+# Example DataFrame
+data = pd.DataFrame(np.random.random((10,2)), index=['a', 'b']*5)
+
+# Test pct_change with groupby
+grouped = data.groupby('index')
+result = grouped[0].pct_change(fill_method=None)
+
+# Verify the result
+print(result)
+```",
+pandas-100-vall_llama-2,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Analyzing the Bug**: The bug arises from how the `pct_change` function handles the `fill_method` parameter when used with groupby operations.
+2. **Understanding `pct_change`**: The `pct_change` function calculates the percentage change for each element in a Series or DataFrame. It accepts parameters such as `periods` (the number of periods to shift), `fill_method`, and `limit`.
+3. **Issue with `fill_method=None`**: When `fill_method=None`, the function should not fill missing values. However, it seems there's an issue with how this is handled when `pct_change` is used with groupby, leading to incorrect results.
+4. **Analyzing the Provided Test Cases**: The test cases indicate that when `fill_method` is `'pad'` or `'ffill'`, the function behaves as expected but fails when `fill_method=None`.
+5. **Error in Handling `fill_method=None` with Groupby**: The error message `TypeError: getattr(): attribute name must be string` suggests that there's an attempt to use `None` as if it were a string attribute, indicating a misunderstanding in how `fill_method` is being applied, especially in the context of groupby operations.
+
+### Fixed solution:
+```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    
+    if fill_method is not None:
+        data = self.fillna(method=fill_method, limit=limit, axis=axis)
+    else:
+        data = self  # If fill_method is None, do not fill NaNs
+
+    rs = data.div(data.shift(periods=periods, freq=freq, axis=axis, **kwargs)) - 1
+    rs = rs.loc[~rs.index.duplicated()]
+    rs = rs.reindex_like(data)
+    
+    if freq is None:
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+
+    return rs
+```
+
+### Explanation of changes:
+* **Handling of `fill_method=None`**: We added a condition to check if `fill_method` is `None`. If it is, we directly use `self` (the original DataFrame) without filling NaNs.
+* **Removed Unnecessary Filling**: By setting `data = self` when `fill_method=None`, we avoid unnecessary filling of NaNs, which was potentially causing issues with groupby operations.
+
+### Tests and example uses:
+You can test the corrected function using the provided test cases:
+```python
+@pytest.mark.parametrize(""fill_method"", [""pad"", ""ffill"", None])
+def test_pct_change_with_duplicated_indices(fill_method):
+    # GH30463
+    data = DataFrame(
+        {0: [np.nan, 1, 2, 3, 9, 18], 1: [0, 1, np.nan, 3, 9, 18]}, index=[""a"", ""b""] * 3
+    )
+    result = data.pct_change(fill_method=fill_method)
+    if fill_method is None:
+        second_column = [np.nan, np.inf, np.nan, np.nan, 2.0, 1.0]
+    else:
+        second_column = [np.nan, np.inf, 0.0, 2.0, 2.0, 1.0]
+    expected = DataFrame(
+        {0: [np.nan, np.nan, 1.0, 0.5, 2.0, 1.0], 1: second_column},
+        index=[""a"", ""b""] * 3,
+    )
+    tm.assert_frame_equal(result, expected)
+```",
+pandas-100-vall_llama-3,UNKNOWN,UNKNOWN,"```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    
+    # Handle NaNs based on the fill_method
+    data = self if fill_method is None else self.fillna(method=fill_method, limit=limit, axis=axis)
+
+    # Verify data type
+    if not np.issubdtype(data.dtype, np.number):
+        raise TypeError(""Data must be numeric for percentage change calculation."")
+
+    # Compute percentage change
+    rs = data.div(data.shift(periods=periods, freq=freq, axis=axis, **kwargs)) - 1
+    
+    if fill_method is None:
+        rs = rs.reindex_like(data)
+    else:
+        rs = rs.loc[~rs.index.duplicated()].reindex_like(data)
+
+    # Handle NaN values appropriately
+    if freq is None:
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+
+    return rs.astype(data.dtype)  # Ensure return type consistency
+```",
+pandas-100-vall_llama-4,UNKNOWN,UNKNOWN,"```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    # TODO: Not sure if above is correct - need someone to confirm.
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    if fill_method is None:
+        data = self
+    else:
+        data = self.fillna(method=fill_method, limit=limit, axis=axis)
+
+    rs = data.div(data.shift(periods=periods, freq=freq, axis=axis, **kwargs)) - 1
+    # Correctly handle the case when fill_method is None
+    if fill_method is None:
+        # mask NaN values in the data to NaN in the result
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+    rs = rs.loc[~rs.index.duplicated()]
+    rs = rs.reindex_like(data)
+    if freq is None:
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+    return rs
+```",
+pandas-100-vall_llama-5,UNKNOWN,UNKNOWN,"```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    # TODO: Not sure if above is correct - need someone to confirm.
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    if fill_method is None:
+        data = self
+    else:
+        data = self.fillna(method=fill_method, limit=limit, axis=axis)
+
+    rs = data.div(data.shift(periods=periods, freq=freq, axis=axis, **kwargs)) - 1
+    if fill_method is None:
+        rs = rs
+    else:
+        rs = rs.fillna(method=fill_method, limit=limit, axis=axis)
+    
+    rs = rs.loc[~rs.index.duplicated()]
+    rs = rs.reindex_like(data)
+    if freq is None:
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+    return rs
+```",
+pandas-100-vall_llama-6,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the Issue**: The `pct_change` function fails when used with `groupby` if `fill_method=None`. This is due to how `groupby` interacts with `fill_method` in the `pct_change` function.
+2. **Analyzing the Error**: The error message indicates a `TypeError` related to `getattr()`, suggesting that the issue lies in how the `fill_method` parameter is used within the function.
+3. **Identifying the Cause**: The cause of the bug is the incorrect handling of the `fill_method=None` case when used with `groupby`. The function attempts to use `getattr(self, fill_method)` when `fill_method` is `None`, leading to a `TypeError`.
+4. **Considering the Expected Behavior**: The expected behavior is for `pct_change` to work correctly with `groupby`, even when `fill_method=None`. This means the function should not attempt to fill NaN values if `fill_method` is `None`.
+
+### Fixed solution:
+```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    
+    # Handle NaNs based on the fill_method
+    if fill_method is not None:
+        data = self.fillna(method=fill_method, limit=limit, axis=axis)
+    else:
+        data = self
+    
+    # Compute percentage change
+    rs = data.div(data.shift(periods=periods, freq=freq, axis=axis, **kwargs)) - 1
+    rs = rs.loc[~rs.index.duplicated()]
+    rs = rs.reindex_like(data)
+
+    # Handle NaN values appropriately
+    if freq is None:
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+
+    return rs
+```
+
+### Explanation of changes:
+- **Conditional Filling**: Added a conditional statement to check if `fill_method` is not `None` before attempting to fill NaN values. If `fill_method` is `None`, the original data is used without modification.
+- **Removed Unnecessary Check**: The check for `freq` being `None` was not modified, as it is necessary for handling NaN values correctly in the resulting Series.
+
+### Tests and example uses:
+To test the corrected function, use the provided test cases with different `fill_method` values, including `None`, and verify that the function behaves as expected. For example:
+```python
+import pandas as pd
+
+# Create a sample DataFrame
+data = pd.DataFrame({0: [np.nan, 1, 2, 3, 9, 18], 1: [0, 1, np.nan, 3, 9, 18]}, index=[""a"", ""b""] * 3)
+
+# Test pct_change with different fill_methods
+print(data.pct_change(fill_method=""pad""))
+print(data.pct_change(fill_method=""ffill""))
+print(data.pct_change(fill_method=None))
+```
+These tests should demonstrate the corrected behavior of the `pct_change` function with `groupby` and different `fill_method` values.",
+pandas-100-vall_llama-7,UNKNOWN,UNKNOWN,"```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    
+    # Check for missing values
+    if fill_method is None:
+        data = self
+    else:
+        data = self.fillna(method=fill_method, limit=limit, axis=axis)
+
+    # Verify data type
+    if not np.issubdtype(data.dtype, np.number):
+        raise TypeError(""Data must be numeric for percentage change calculation."")
+
+    # Compute percentage change
+    rs = data.div(data.shift(periods=periods, freq=freq, axis=axis, **kwargs)) - 1
+    
+    # Remove duplicate indices if present
+    if rs.index.duplicated().any():
+        rs = rs.loc[~rs.index.duplicated(keep='first')]
+
+    rs = rs.reindex_like(data)
+
+    # Handle NaN values
+    if freq is None:
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+
+    return rs
+```",
+pandas-100-vall_llama-8,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. The error occurs because the `fill_method` parameter in the `pct_change` function is set to `None` when used with `groupby`, causing a `TypeError` when trying to use `getattr` to fill the values.
+2. The `pct_change` function uses `fillna` method with `limit` parameter which should be greater than 0 when `fill_method` is not `None`.
+3. To fix this issue, we need to modify the `pct_change` function to handle the case when `fill_method` is `None` and used with `groupby`.
+
+### Fixed solution:
+```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    if fill_method is not None:
+        if limit is not None and limit <= 0:
+            raise ValueError(""Limit must be greater than 0"")
+        data = self.fillna(method=fill_method, limit=limit, axis=axis)
+    else:
+        data = self
+
+    rs = data.div(data.shift(periods=periods, freq=freq, axis=axis, **kwargs)) - 1
+    rs = rs.loc[~rs.index.duplicated()]
+    rs = rs.reindex_like(data)
+    if freq is None:
+        mask = isna(com.values_from_object(data))
+        np.putmask(rs.values, mask, np.nan)
+    return rs
+```
+
+### Explanation of changes:
+* Added a check to raise a `ValueError` when `limit` is less than or equal to 0 and `fill_method` is not `None`.
+* Modified the condition to check if `fill_method` is `None` to handle the case when used with `groupby`.
+* Removed the line that was causing the `TypeError` when `fill_method` is `None`.
+
+### Tests and example uses:
+You can test the modified `pct_change` function with the following examples:
+```python
+import pandas as pd
+import numpy as np
+
+# Create a sample DataFrame
+data = pd.DataFrame(np.random.random((10,2)), index=['a', 'b']*5)
+data.iloc[1:3,:] = np.nan
+
+# Test the pct_change function
+result = data.pct_change()
+print(result)
+
+# Test the pct_change function with groupby
+result = data.reset_index().groupby('index')[0].pct_change()
+print(result)
+```",
+pandas-100-vall_llama-9,UNKNOWN,UNKNOWN,"```python
+@Appender(_shared_docs[""pct_change""] % _shared_doc_kwargs)
+def pct_change(self, periods=1, fill_method=""pad"", limit=None, freq=None, **kwargs):
+    # TODO: Not sure if above is correct - need someone to confirm.
+    axis = self._get_axis_number(kwargs.pop(""axis"", self._stat_axis_name))
+    
+    # Use fill method to handle missing values if specified
+    if fill_method is not None:
+        data = self.fillna(method=fill_method, limit=limit, axis=axis)
+    else:
+        data = self  # No filling if fill_method is None
+
+    # Shift data by specified periods
+    shifted_data = data.shift(periods=periods, freq=freq, axis=axis, **kwargs)
+
+    # Calculate percentage change
+    rs = (data - shifted_data) / shifted_data
+
+    # Handle NaN values where division by zero occurred
+    rs = rs.replace([np.inf, -np.inf], np.nan)
+
+    # Remove duplicate indices if any, and reindex to match original data
+    rs = rs.loc[~rs.index.duplicated()].reindex_like(data)
+
+    return rs
+```",

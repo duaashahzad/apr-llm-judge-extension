@@ -1,0 +1,824 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+fastapi-5-v0_llama-0,UNKNOWN,UNKNOWN,"```python
+def create_cloned_field(field: ModelField, parent_model: Type[BaseModel] = None) -> ModelField:
+    """"""
+    Creates a cloned field from the given field, taking into account the parent model's fields.
+
+    Args:
+        field (ModelField): The field to clone.
+        parent_model (Type[BaseModel], optional): The parent model of the field. Defaults to None.
+
+    Returns:
+        ModelField: The cloned field.
+    """"""
+
+    original_type = field.type_
+    if is_dataclass(original_type) and hasattr(original_type, ""__pydantic_model__""):
+        original_type = original_type.__pydantic_model__  # type: ignore
+
+    use_type = original_type
+    if lenient_issubclass(original_type, BaseModel):
+        original_type = cast(Type[BaseModel], original_type)
+        use_type = create_model(
+            original_type.__name__, __config__=original_type.__config__
+        )
+
+        # Filter fields based on the parent model's fields
+        for f in original_type.__fields__.values():
+            if parent_model and f.name not in parent_model.__fields__:
+                continue
+            use_type.__fields__[f.name] = f
+
+        use_type.__validators__ = original_type.__validators__
+
+    if PYDANTIC_1:
+        new_field = ModelField(
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            field_info=FieldInfo(None),
+        )
+    else:  # pragma: nocover
+        new_field = ModelField(  # type: ignore
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            schema=FieldInfo(None),
+        )
+
+    new_field.has_alias = field.has_alias
+    new_field.alias = field.alias
+    new_field.class_validators = field.class_validators
+    new_field.default = field.default
+    new_field.required = field.required
+    new_field.model_config = field.model_config
+    if PYDANTIC_1:
+        new_field.field_info = field.field_info
+    else:  # pragma: nocover
+        new_field.schema = field.schema  # type: ignore
+    new_field.allow_none = field.allow_none
+    new_field.validate_always = field.validate_always
+
+    if field.sub_fields:
+        new_field.sub_fields = [
+            create_cloned_field(sub_field, parent_model=use_type) for sub_field in field.sub_fields
+        ]
+
+    if field.key_field:
+        new_field.key_field = create_cloned_field(field.key_field, parent_model=use_type)
+
+    new_field.validators = field.validators
+    if PYDANTIC_1:
+        new_field.pre_validators = field.pre_validators
+        new_field.post_validators = field.post_validators
+    else:  # pragma: nocover
+        new_field.whole_pre_validators = field.whole_pre_validators  # type: ignore
+        new_field.whole_post_validators = field.whole_post_validators  # type: ignore
+    new_field.parse_json = field.parse_json
+    new_field.shape = field.shape
+
+    try:
+        new_field.populate_validators()
+    except AttributeError:  # pragma: nocover
+        # TODO: remove when removing support for Pydantic < 1.0.0
+        new_field._populate_validators()  # type: ignore
+
+    return new_field
+```",
+fastapi-5-v0_llama-1,UNKNOWN,UNKNOWN,"```python
+def create_cloned_field(field: ModelField) -> ModelField:
+    original_type = field.type_
+    if is_dataclass(original_type) and hasattr(original_type, ""__pydantic_model__""):
+        original_type = original_type.__pydantic_model__  # type: ignore
+    use_type = original_type
+    if lenient_issubclass(original_type, BaseModel):
+        original_type = cast(Type[BaseModel], original_type)
+        use_type = create_model(
+            original_type.__name__, __config__=original_type.__config__
+        )
+        # Filter out fields that are not defined in the model
+        for f in original_type.__fields__.values():
+            if f.name in original_type.__fields__:
+                use_type.__fields__[f.name] = f
+        use_type.__validators__ = original_type.__validators__
+    if PYDANTIC_1:
+        new_field = ModelField(
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            field_info=FieldInfo(None),
+        )
+    else:  # pragma: nocover
+        new_field = ModelField(  # type: ignore
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            schema=FieldInfo(None),
+        )
+    new_field.has_alias = field.has_alias
+    new_field.alias = field.alias
+    new_field.class_validators = field.class_validators
+    new_field.default = field.default
+    new_field.required = field.required
+    new_field.model_config = field.model_config
+    if PYDANTIC_1:
+        new_field.field_info = field.field_info
+    else:  # pragma: nocover
+        new_field.schema = field.schema  # type: ignore
+    new_field.allow_none = field.allow_none
+    new_field.validate_always = field.validate_always
+    if field.sub_fields:
+        new_field.sub_fields = [
+            create_cloned_field(sub_field) for sub_field in field.sub_fields
+        ]
+    if field.key_field:
+        new_field.key_field = create_cloned_field(field.key_field)
+    new_field.validators = field.validators
+    if PYDANTIC_1:
+        new_field.pre_validators = field.pre_validators
+        new_field.post_validators = field.post_validators
+    else:  # pragma: nocover
+        new_field.whole_pre_validators = field.whole_pre_validators  # type: ignore
+        new_field.whole_post_validators = field.whole_post_validators  # type: ignore
+    new_field.parse_json = field.parse_json
+    new_field.shape = field.shape
+    try:
+        new_field.populate_validators()
+    except AttributeError:  # pragma: nocover
+        # TODO: remove when removing support for Pydantic < 1.0.0
+        new_field._populate_validators()  # type: ignore
+    return new_field
+```",
+fastapi-5-v0_llama-2,UNKNOWN,UNKNOWN,"```python
+def create_cloned_field(field: ModelField) -> ModelField:
+    original_type = field.type_
+    if is_dataclass(original_type) and hasattr(original_type, ""__pydantic_model__""):
+        original_type = original_type.__pydantic_model__  # type: ignore
+    use_type = original_type
+    if lenient_issubclass(original_type, BaseModel):
+        original_type = cast(Type[BaseModel], original_type)
+        use_type = create_model(
+            original_type.__name__, __config__=original_type.__config__
+        )
+        for f in original_type.__fields__.values():
+            use_type.__fields__[f.name] = f
+        use_type.__validators__ = original_type.__validators__
+        
+        # Filter out extra fields from the nested model
+        if hasattr(original_type, '__fields__'):
+            for field_name in list(use_type.__fields__.keys()):
+                if field_name not in original_type.__fields__:
+                    del use_type.__fields__[field_name]
+                    
+    if PYDANTIC_1:
+        new_field = ModelField(
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            field_info=FieldInfo(None),
+        )
+    else:  # pragma: nocover
+        new_field = ModelField(  # type: ignore
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            schema=FieldInfo(None),
+        )
+    new_field.has_alias = field.has_alias
+    new_field.alias = field.alias
+    new_field.class_validators = field.class_validators
+    new_field.default = field.default
+    new_field.required = field.required
+    new_field.model_config = field.model_config
+    if PYDANTIC_1:
+        new_field.field_info = field.field_info
+    else:  # pragma: nocover
+        new_field.schema = field.schema  # type: ignore
+    new_field.allow_none = field.allow_none
+    new_field.validate_always = field.validate_always
+    if field.sub_fields:
+        new_field.sub_fields = [
+            create_cloned_field(sub_field) for sub_field in field.sub_fields
+        ]
+    if field.key_field:
+        new_field.key_field = create_cloned_field(field.key_field)
+    new_field.validators = field.validators
+    if PYDANTIC_1:
+        new_field.pre_validators = field.pre_validators
+        new_field.post_validators = field.post_validators
+    else:  # pragma: nocover
+        new_field.whole_pre_validators = field.whole_pre_validators  # type: ignore
+        new_field.whole_post_validators = field.whole_post_validators  # type: ignore
+    new_field.parse_json = field.parse_json
+    new_field.shape = field.shape
+    try:
+        new_field.populate_validators()
+    except AttributeError:  # pragma: nocover
+        # TODO: remove when removing support for Pydantic < 1.0.0
+        new_field._populate_validators()  # type: ignore
+    return new_field
+```",
+fastapi-5-v0_llama-3,UNKNOWN,UNKNOWN,"```python
+def create_cloned_field(field: ModelField) -> ModelField:
+    original_type = field.type_
+    if is_dataclass(original_type) and hasattr(original_type, ""__pydantic_model__""):
+        original_type = original_type.__pydantic_model__  # type: ignore
+    use_type = original_type
+    if lenient_issubclass(original_type, BaseModel):
+        original_type = cast(Type[BaseModel], original_type)
+        # Create a new model with only the declared fields
+        use_type = create_model(
+            original_type.__name__, 
+            **{f.name: (f.type_,...) for f in original_type.__fields__.values() if not f.name.startswith(""_"")}
+        )
+        # Copy validators from the original model
+        use_type.__validators__ = original_type.__validators__
+    if PYDANTIC_1:
+        new_field = ModelField(
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            field_info=FieldInfo(None),
+        )
+    else:  # pragma: nocover
+        new_field = ModelField(  # type: ignore
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            schema=FieldInfo(None),
+        )
+    new_field.has_alias = field.has_alias
+    new_field.alias = field.alias
+    new_field.class_validators = field.class_validators
+    new_field.default = field.default
+    new_field.required = field.required
+    new_field.model_config = field.model_config
+    if PYDANTIC_1:
+        new_field.field_info = field.field_info
+    else:  # pragma: nocover
+        new_field.schema = field.schema  # type: ignore
+    new_field.allow_none = field.allow_none
+    new_field.validate_always = field.validate_always
+    if field.sub_fields:
+        new_field.sub_fields = [
+            create_cloned_field(sub_field) for sub_field in field.sub_fields
+        ]
+    if field.key_field:
+        new_field.key_field = create_cloned_field(field.key_field)
+    new_field.validators = field.validators
+    if PYDANTIC_1:
+        new_field.pre_validators = field.pre_validators
+        new_field.post_validators = field.post_validators
+    else:  # pragma: nocover
+        new_field.whole_pre_validators = field.whole_pre_validators  # type: ignore
+        new_field.whole_post_validators = field.whole_post_validators  # type: ignore
+    new_field.parse_json = field.parse_json
+    new_field.shape = field.shape
+    try:
+        new_field.populate_validators()
+    except AttributeError:  # pragma: nocover
+        # TODO: remove when removing support for Pydantic < 1.0.0
+        new_field._populate_validators()  # type: ignore
+    return new_field
+```",
+fastapi-5-v0_llama-4,UNKNOWN,UNKNOWN,"```python
+def create_cloned_field(field: ModelField) -> ModelField:
+    original_type = field.type_
+    if is_dataclass(original_type) and hasattr(original_type, ""__pydantic_model__""):
+        original_type = original_type.__pydantic_model__  # type: ignore
+    use_type = original_type
+    if lenient_issubclass(original_type, BaseModel):
+        original_type = cast(Type[BaseModel], original_type)
+        use_type = create_model(
+            original_type.__name__, __config__=original_type.__config__
+        )
+        for f in original_type.__fields__.values():
+            use_type.__fields__[f.name] = f
+        use_type.__validators__ = original_type.__validators__
+        
+        # Filter out fields that are not declared in the output model
+        if hasattr(original_type, 'response_model') and original_type.response_model:
+            response_model = original_type.response_model
+            for field_name in list(use_type.__fields__.keys()):
+                if field_name not in response_model.__fields__:
+                    del use_type.__fields__[field_name]
+                    
+    if PYDANTIC_1:
+        new_field = ModelField(
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            field_info=FieldInfo(None),
+        )
+    else:  # pragma: nocover
+        new_field = ModelField(  # type: ignore
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            schema=FieldInfo(None),
+        )
+    new_field.has_alias = field.has_alias
+    new_field.alias = field.alias
+    new_field.class_validators = field.class_validators
+    new_field.default = field.default
+    new_field.required = field.required
+    new_field.model_config = field.model_config
+    if PYDANTIC_1:
+        new_field.field_info = field.field_info
+    else:  # pragma: nocover
+        new_field.schema = field.schema  # type: ignore
+    new_field.allow_none = field.allow_none
+    new_field.validate_always = field.validate_always
+    if field.sub_fields:
+        new_field.sub_fields = [
+            create_cloned_field(sub_field) for sub_field in field.sub_fields
+        ]
+    if field.key_field:
+        new_field.key_field = create_cloned_field(field.key_field)
+    new_field.validators = field.validators
+    if PYDANTIC_1:
+        new_field.pre_validators = field.pre_validators
+        new_field.post_validators = field.post_validators
+    else:  # pragma: nocover
+        new_field.whole_pre_validators = field.whole_pre_validators  # type: ignore
+        new_field.whole_post_validators = field.whole_post_validators  # type: ignore
+    new_field.parse_json = field.parse_json
+    new_field.shape = field.shape
+    try:
+        new_field.populate_validators()
+    except AttributeError:  # pragma: nocover
+        # TODO: remove when removing support for Pydantic < 1.0.0
+        new_field._populate_validators()  # type: ignore
+    return new_field
+```",
+fastapi-5-v0_llama-5,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the goal of the `create_cloned_field` function**: This function is designed to create a cloned version of a given `ModelField`. If the field's type is a Pydantic model, it creates a new model with the same fields and validators, effectively cloning the original model's structure.
+
+2. **Identifying the issue**: The problem arises when the original model contains nested models. The current implementation does not handle nested models correctly, leading to all fields of the nested model being included in the response, not just the ones defined in the response model.
+
+3. **Analyzing the test case**: The failing test `test_filter_sub_model` demonstrates this issue. It expects the response to filter out the `password` field from `ModelB` (which is nested in `ModelA`), but instead, the entire `ModelB` object, including the `password` field, is returned.
+
+4. **Recognizing the need to filter nested models**: To fix this, we need to modify the `create_cloned_field` function so that it correctly filters fields from nested models, only including fields that are explicitly defined in the model.
+
+### Fixed solution:
+```python
+def create_cloned_field(field: ModelField) -> ModelField:
+    original_type = field.type_
+    if is_dataclass(original_type) and hasattr(original_type, ""__pydantic_model__""):
+        original_type = original_type.__pydantic_model__  # type: ignore
+    
+    use_type = original_type
+    if lenient_issubclass(original_type, BaseModel):
+        original_type = cast(Type[BaseModel], original_type)
+        
+        # Create a new model with only the declared fields
+        use_type = create_model(
+            original_type.__name__, 
+            __config__=original_type.__config__
+        )
+        
+        # Filter fields to only include those explicitly defined in the model
+        for field_name in original_type.__fields__:
+            field_info = original_type.__fields__[field_name]
+            use_type.__fields__[field_name] = field_info
+            
+        use_type.__validators__ = original_type.__validators__
+    
+    if PYDANTIC_1:
+        new_field = ModelField(
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            field_info=FieldInfo(None),
+        )
+    else:  # pragma: nocover
+        new_field = ModelField(  # type: ignore
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            schema=FieldInfo(None),
+        )
+    
+    new_field.has_alias = field.has_alias
+    new_field.alias = field.alias
+    new_field.class_validators = field.class_validators
+    new_field.default = field.default
+    new_field.required = field.required
+    new_field.model_config = field.model_config
+    if PYDANTIC_1:
+        new_field.field_info = field.field_info
+    else:  # pragma: nocover
+        new_field.schema = field.schema  # type: ignore
+    new_field.allow_none = field.allow_none
+    new_field.validate_always = field.validate_always
+    
+    if field.sub_fields:
+        new_field.sub_fields = [
+            create_cloned_field(sub_field) for sub_field in field.sub_fields
+        ]
+    
+    if field.key_field:
+        new_field.key_field = create_cloned_field(field.key_field)
+    
+    new_field.validators = field.validators
+    if PYDANTIC_1:
+        new_field.pre_validators = field.pre_validators
+        new_field.post_validators = field.post_validators
+    else:  # pragma: nocover
+        new_field.whole_pre_validators = field.whole_pre_validators  # type: ignore
+        new_field.whole_post_validators = field.whole_post_validators  # type: ignore
+    new_field.parse_json = field.parse_json
+    new_field.shape = field.shape
+    
+    try:
+        new_field.populate_validators()
+    except AttributeError:  # pragma: nocover
+        new_field._populate_validators()  # type: ignore
+    
+    return new_field
+```
+
+### Explanation of changes:
+*   **Filtered Fields in Nested Models**: The key change is in how we handle nested models. Instead of directly copying all fields from the original model to the new model, we explicitly iterate through the fields defined in the original model (`original_type.__fields__`) and add them to the new model (`use_type.__fields__`). This ensures that only fields explicitly defined in the model are included.
+
+### Tests and example uses:
+To test the corrected function, you can use the provided test case `test_filter_sub_model`. After applying the fix, this test should pass, indicating that the function now correctly filters out unnecessary fields from nested models.
+
+Example usage remains the same as before, but now the function should work as expected for nested models:
+
+```python
+response = client.get(""/model"")
+assert response.status_code == 200
+assert response.json() == {
+    ""name"": ""model-a-name"",
+    ""description"": ""model-a-desc"",
+    ""model_b"": {""username"": ""test-user""},
+}
+```",
+fastapi-5-v0_llama-6,UNKNOWN,UNKNOWN,"```python
+def create_cloned_field(field: ModelField) -> ModelField:
+    original_type = field.type_
+    if is_dataclass(original_type) and hasattr(original_type, ""__pydantic_model__""):
+        original_type = original_type.__pydantic_model__  # type: ignore
+    use_type = original_type
+    if lenient_issubclass(original_type, BaseModel):
+        original_type = cast(Type[BaseModel], original_type)
+        use_type = create_model(
+            original_type.__name__, __config__=original_type.__config__
+        )
+        # Filter out fields that are not defined in the model
+        for f in original_type.__fields__.values():
+            if f.name in use_type.__fields__:
+                use_type.__fields__[f.name] = f
+        use_type.__validators__ = original_type.__validators__
+    if PYDANTIC_1:
+        new_field = ModelField(
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            field_info=FieldInfo(None),
+        )
+    else:  # pragma: nocover
+        new_field = ModelField(  # type: ignore
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            schema=FieldInfo(None),
+        )
+    new_field.has_alias = field.has_alias
+    new_field.alias = field.alias
+    new_field.class_validators = field.class_validators
+    new_field.default = field.default
+    new_field.required = field.required
+    new_field.model_config = field.model_config
+    if PYDANTIC_1:
+        new_field.field_info = field.field_info
+    else:  # pragma: nocover
+        new_field.schema = field.schema  # type: ignore
+    new_field.allow_none = field.allow_none
+    new_field.validate_always = field.validate_always
+    if field.sub_fields:
+        new_field.sub_fields = [
+            create_cloned_field(sub_field) for sub_field in field.sub_fields
+        ]
+    if field.key_field:
+        new_field.key_field = create_cloned_field(field.key_field)
+    new_field.validators = field.validators
+    if PYDANTIC_1:
+        new_field.pre_validators = field.pre_validators
+        new_field.post_validators = field.post_validators
+    else:  # pragma: nocover
+        new_field.whole_pre_validators = field.whole_pre_validators  # type: ignore
+        new_field.whole_post_validators = field.whole_post_validators  # type: ignore
+    new_field.parse_json = field.parse_json
+    new_field.shape = field.shape
+    try:
+        new_field.populate_validators()
+    except AttributeError:  # pragma: nocover
+        # TODO: remove when removing support for Pydantic < 1.0.0
+        new_field._populate_validators()  # type: ignore
+    return new_field
+```",
+fastapi-5-v0_llama-7,UNKNOWN,UNKNOWN,"```python
+def create_cloned_field(field: ModelField) -> ModelField:
+    original_type = field.type_
+    if is_dataclass(original_type) and hasattr(original_type, ""__pydantic_model__""):
+        original_type = original_type.__pydantic_model__  # type: ignore
+    use_type = original_type
+    if lenient_issubclass(original_type, BaseModel):
+        original_type = cast(Type[BaseModel], original_type)
+        use_type = create_model(
+            original_type.__name__, __config__=original_type.__config__
+        )
+        for f in original_type.__fields__.values():
+            if f.name in field.model_config.response_fields_include:
+                use_type.__fields__[f.name] = f
+        use_type.__validators__ = original_type.__validators__
+    if PYDANTIC_1:
+        new_field = ModelField(
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            field_info=FieldInfo(None),
+        )
+    else:  # pragma: nocover
+        new_field = ModelField(  # type: ignore
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            schema=FieldInfo(None),
+        )
+    new_field.has_alias = field.has_alias
+    new_field.alias = field.alias
+    new_field.class_validators = field.class_validators
+    new_field.default = field.default
+    new_field.required = field.required
+    new_field.model_config = field.model_config
+    if PYDANTIC_1:
+        new_field.field_info = field.field_info
+    else:  # pragma: nocover
+        new_field.schema = field.schema  # type: ignore
+    new_field.allow_none = field.allow_none
+    new_field.validate_always = field.validate_always
+    if field.sub_fields:
+        new_field.sub_fields = [
+            create_cloned_field(sub_field) for sub_field in field.sub_fields
+        ]
+    if field.key_field:
+        new_field.key_field = create_cloned_field(field.key_field)
+    new_field.validators = field.validators
+    if PYDANTIC_1:
+        new_field.pre_validators = field.pre_validators
+        new_field.post_validators = field.post_validators
+    else:  # pragma: nocover
+        new_field.whole_pre_validators = field.whole_pre_validators  # type: ignore
+        new_field.whole_post_validators = field.whole_post_validators  # type: ignore
+    new_field.parse_json = field.parse_json
+    new_field.shape = field.shape
+    try:
+        new_field.populate_validators()
+    except AttributeError:  # pragma: nocover
+        # TODO: remove when removing support for Pydantic < 1.0.0
+        new_field._populate_validators()  # type: ignore
+    return new_field
+```",
+fastapi-5-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+def create_cloned_field(field: ModelField) -> ModelField:
+    original_type = field.type_
+    if is_dataclass(original_type) and hasattr(original_type, ""__pydantic_model__""):
+        original_type = original_type.__pydantic_model__  # type: ignore
+    use_type = original_type
+    if lenient_issubclass(original_type, BaseModel):
+        original_type = cast(Type[BaseModel], original_type)
+        use_type = create_model(
+            original_type.__name__, __config__=original_type.__config__
+        )
+        for f in original_type.__fields__.values():
+            # Only include fields that are defined in the model
+            if f.name in original_type.__fields__:
+                use_type.__fields__[f.name] = f
+        use_type.__validators__ = original_type.__validators__
+    if PYDANTIC_1:
+        new_field = ModelField(
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            field_info=FieldInfo(None),
+        )
+    else:  # pragma: nocover
+        new_field = ModelField(  # type: ignore
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            schema=FieldInfo(None),
+        )
+    new_field.has_alias = field.has_alias
+    new_field.alias = field.alias
+    new_field.class_validators = field.class_validators
+    new_field.default = field.default
+    new_field.required = field.required
+    new_field.model_config = field.model_config
+    if PYDANTIC_1:
+        new_field.field_info = field.field_info
+    else:  # pragma: nocover
+        new_field.schema = field.schema  # type: ignore
+    new_field.allow_none = field.allow_none
+    new_field.validate_always = field.validate_always
+    if field.sub_fields:
+        new_field.sub_fields = [
+            create_cloned_field(sub_field) for sub_field in field.sub_fields
+        ]
+    if field.key_field:
+        new_field.key_field = create_cloned_field(field.key_field)
+    new_field.validators = field.validators
+    if PYDANTIC_1:
+        new_field.pre_validators = field.pre_validators
+        new_field.post_validators = field.post_validators
+    else:  # pragma: nocover
+        new_field.whole_pre_validators = field.whole_pre_validators  # type: ignore
+        new_field.whole_post_validators = field.whole_post_validators  # type: ignore
+    new_field.parse_json = field.parse_json
+    new_field.shape = field.shape
+    try:
+        new_field.populate_validators()
+    except AttributeError:  # pragma: nocover
+        # TODO: remove when removing support for Pydantic < 1.0.0
+        new_field._populate_validators()  # type: ignore
+    return new_field
+```",
+fastapi-5-v0_llama-9,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the issue**: The problem lies in the fact that Pydantic does not filter out extra fields from nested models by default. 
+2. **Identifying the cause**: In the provided code, the `ModelA` response model contains a `ModelB` field, which is a nested model. The `ModelC` object being returned contains an extra field `password` that is not defined in the `ModelB` model.
+3. **Analyzing the Pydantic behavior**: By default, Pydantic does not exclude extra fields from the response if they are present in the nested model.
+4. **Identifying the potential fix**: One way to fix this issue is to use the `exclude` parameter in the `response_model` to exclude the unwanted fields.
+
+### Fixed solution:
+```python
+def create_cloned_field(field: ModelField) -> ModelField:
+    original_type = field.type_
+    if is_dataclass(original_type) and hasattr(original_type, ""__pydantic_model__""):
+        original_type = original_type.__pydantic_model__  # type: ignore
+    use_type = original_type
+    if lenient_issubclass(original_type, BaseModel):
+        original_type = cast(Type[BaseModel], original_type)
+        # Create a new model with the same fields, excluding extra fields
+        use_type = create_model(
+            original_type.__name__, 
+            __config__=original_type.__config__, 
+            **{f.name: (f.type_,...) for f in original_type.__fields__.values() if f.name in original_type.__fields__}
+        )
+        for f in original_type.__fields__.values():
+            if f.name in use_type.__fields__:
+                use_type.__fields__[f.name] = f
+        use_type.__validators__ = original_type.__validators__
+    if PYDANTIC_1:
+        new_field = ModelField(
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            field_info=FieldInfo(None),
+        )
+    else:  # pragma: nocover
+        new_field = ModelField(  # type: ignore
+            name=field.name,
+            type_=use_type,
+            class_validators={},
+            default=None,
+            required=False,
+            model_config=BaseConfig,
+            schema=FieldInfo(None),
+        )
+    new_field.has_alias = field.has_alias
+    new_field.alias = field.alias
+    new_field.class_validators = field.class_validators
+    new_field.default = field.default
+    new_field.required = field.required
+    new_field.model_config = field.model_config
+    if PYDANTIC_1:
+        new_field.field_info = field.field_info
+    else:  # pragma: nocover
+        new_field.schema = field.schema  # type: ignore
+    new_field.allow_none = field.allow_none
+    new_field.validate_always = field.validate_always
+    if field.sub_fields:
+        new_field.sub_fields = [
+            create_cloned_field(sub_field) for sub_field in field.sub_fields
+        ]
+    if field.key_field:
+        new_field.key_field = create_cloned_field(field.key_field)
+    new_field.validators = field.validators
+    if PYDANTIC_1:
+        new_field.pre_validators = field.pre_validators
+        new_field.post_validators = field.post_validators
+    else:  # pragma: nocover
+        new_field.whole_pre_validators = field.whole_pre_validators  # type: ignore
+        new_field.whole_post_validators = field.whole_post_validators  # type: ignore
+    new_field.parse_json = field.parse_json
+    new_field.shape = field.shape
+    try:
+        new_field.populate_validators()
+    except AttributeError:  # pragma: nocover
+        # TODO: remove when removing support for Pydantic < 1.0.0
+        new_field._populate_validators()  # type: ignore
+    return new_field
+```
+Note that we create a new model `use_type` with only the fields defined in the original model, excluding extra fields. We then assign the fields from the original model to the new model, effectively excluding extra fields.
+
+### Explanation of changes:
+*   **Creating a new model**: We create a new model `use_type` with the same fields as the original model, excluding extra fields.
+*   **Assigning fields**: We assign the fields from the original model to the new model, effectively excluding extra fields.
+
+### Tests and example uses:
+To test the solution, you can use the following example:
+
+```python
+from fastapi import FastAPI, Depends
+from pydantic import BaseModel
+
+app = FastAPI()
+
+class ModelB(BaseModel):
+    username: str
+
+class ModelC(ModelB):
+    password: str
+
+class ModelA(BaseModel):
+    name: str
+    description: str = None
+    model_b: ModelB
+
+async def get_model_c() -> ModelC:
+    return ModelC(username=""test-user"", password=""test-password"")
+
+@app.get(""/model"", response_model=ModelA)
+async def get_model_a(model_c=Depends(get_model_c)):
+    return {""name"": ""model-a-name"", ""description"": ""model-a-desc"", ""model_b"": model_c}
+
+# Test the endpoint
+client = TestClient(app)
+response = client.get(""/model"")
+assert response.status_code == 200
+assert response.json() == {
+    ""name"": ""model-a-name"",
+    ""description"": ""model-a-desc"",
+    ""model_b"": {""username"": ""test-user""},
+}
+```",

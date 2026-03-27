@@ -1,0 +1,750 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-23-v0_gpt-0,UNKNOWN,UNKNOWN,"```python
+def intersection(self, other, sort=False):
+    self._validate_sort_keyword(sort)
+    self._assert_can_do_setop(other)
+
+    if self.equals(other):
+        return self._get_reconciled_name_object(other)
+
+    if len(self) == 0:
+        return self.copy()
+    if len(other) == 0:
+        result = other.copy()
+        if isinstance(result, type(self)):
+            result._set_freq(self.freq)
+        return result
+
+    if not isinstance(other, type(self)):
+        result = Index.intersection(self, other, sort=sort)
+        if isinstance(result, type(self)):
+            if result.freq is None:
+                result._set_freq(self.freq)
+        return result
+
+    elif (
+        other.freq is None
+        or self.freq is None
+        or other.freq != self.freq
+        or not other.freq.is_anchored()
+        or (not self.is_monotonic or not other.is_monotonic)
+    ):
+        result = Index.intersection(self, other, sort=sort)
+        # Invalidate the freq of `result`, which may not be correct at this point.
+        result._set_freq(None)
+        result = self._shallow_copy(result._data, name=result.name)
+        result._set_freq(self.freq)
+        return result
+
+    # to make our life easier, ""sort"" the two ranges
+    if self[0] <= other[0]:
+        left, right = self, other
+    else:
+        left, right = other, self
+
+    # after sorting, the intersection always starts with the right index
+    # and ends with the index of which the last elements is smallest
+    end = min(left[-1], right[-1])
+    start = right[0]
+
+    if end < start:
+        return type(self)(data=[])
+    else:
+        lslice = slice(*left.slice_locs(start, end))
+        left_chunk = left.values[lslice]
+        result = self._shallow_copy(left_chunk)
+        result._set_freq(self.freq)
+        return result
+```",
+pandas-23-v0_gpt-1,UNKNOWN,UNKNOWN,"```python
+def intersection(self, other, sort=False):
+    """"""
+    Specialized intersection for DatetimeIndex/TimedeltaIndex.
+
+    May be much faster than Index.intersection
+
+    Parameters
+    ----------
+    other : Same type as self or array-like
+    sort : False or None, default False
+        Sort the resulting index if possible.
+
+    Returns
+    -------
+    y : Index or same type as self
+    """"""
+    self._validate_sort_keyword(sort)
+    self._assert_can_do_setop(other)
+
+    if self.equals(other):
+        return self._get_reconciled_name_object(other)
+
+    if len(self) == 0:
+        return self.copy()
+    if len(other) == 0:
+        result = other.copy()
+        result._set_freq(self.freq)
+        return result
+
+    if not isinstance(other, type(self)):
+        result = Index.intersection(self, other, sort=sort)
+        if isinstance(result, type(self)):
+            if result.freq is None:
+                result._set_freq(""infer"")
+        return result
+
+    elif (
+        other.freq is None
+        or self.freq is None
+        or other.freq != self.freq
+        or not other.freq.is_anchored()
+        or (not self.is_monotonic or not other.is_monotonic)
+    ):
+        result = Index.intersection(self, other, sort=sort)
+        result._set_freq(None)
+        result = self._shallow_copy(result._data, name=result.name)
+        if result.freq is None:
+            result._set_freq(""infer"")
+        return result
+
+    if self[0] <= other[0]:
+        left, right = self, other
+    else:
+        left, right = other, self
+
+    end = min(left[-1], right[-1])
+    start = right[0]
+
+    if end < start:
+        return type(self)(data=[])
+    else:
+        lslice = slice(*left.slice_locs(start, end))
+        left_chunk = left.values[lslice]
+        result = self._shallow_copy(left_chunk)
+        result._set_freq(self.freq)  # Ensure to preserve frequency
+        return result
+```",
+pandas-23-v0_gpt-2,UNKNOWN,UNKNOWN,"```python
+def intersection(self, other, sort=False):
+    """"""
+    Specialized intersection for DatetimeIndex/TimedeltaIndex.
+
+    May be much faster than Index.intersection
+
+    Parameters
+    ----------
+    other : Same type as self or array-like
+    sort : False or None, default False
+        Sort the resulting index if possible.
+
+        .. versionadded:: 0.24.0
+
+        .. versionchanged:: 0.24.1
+
+           Changed the default to ``False`` to match the behaviour
+           from before 0.24.0.
+
+        .. versionchanged:: 0.25.0
+
+           The `sort` keyword is added
+
+    Returns
+    -------
+    y : Index or same type as self
+    """"""
+    self._validate_sort_keyword(sort)
+    self._assert_can_do_setop(other)
+
+    if self.equals(other):
+        return self._get_reconciled_name_object(other)
+
+    if len(self) == 0:
+        result = self.copy()
+        result._set_freq(self.freq)
+        return result
+    if len(other) == 0:
+        result = other.copy()
+        result._set_freq(other.freq)
+        return result
+
+    if not isinstance(other, type(self)):
+        result = Index.intersection(self, other, sort=sort)
+        if isinstance(result, type(self)):
+            if result.freq is None:
+                result._set_freq(self.freq)
+        return result
+
+    elif (
+        other.freq is None
+        or self.freq is None
+        or other.freq != self.freq
+        or not other.freq.is_anchored()
+        or (not self.is_monotonic or not other.is_monotonic)
+    ):
+        result = Index.intersection(self, other, sort=sort)
+        result._set_freq(None)
+        result = self._shallow_copy(result._data, name=result.name)
+        if result.freq is None:
+            result._set_freq(self.freq)
+        return result
+
+    if self[0] <= other[0]:
+        left, right = self, other
+    else:
+        left, right = other, self
+
+    end = min(left[-1], right[-1])
+    start = right[0]
+
+    if end < start:
+        return type(self)(data=[], freq=self.freq)
+    else:
+        lslice = slice(*left.slice_locs(start, end))
+        left_chunk = left.values[lslice]
+        result = self._shallow_copy(left_chunk)
+        result._set_freq(self.freq)
+        return result
+```",
+pandas-23-v0_gpt-3,UNKNOWN,UNKNOWN,"```python
+def intersection(self, other, sort=False):
+    """"""
+    Specialized intersection for DatetimeIndex/TimedeltaIndex.
+
+    May be much faster than Index.intersection
+
+    Parameters
+    ----------
+    other : Same type as self or array-like
+    sort : False or None, default False
+        Sort the resulting index if possible.
+
+        .. versionadded:: 0.24.0
+
+        .. versionchanged:: 0.24.1
+
+           Changed the default to ``False`` to match the behaviour
+           from before 0.24.0.
+
+        .. versionchanged:: 0.25.0
+
+           The `sort` keyword is added
+
+    Returns
+    -------
+    y : Index or same type as self
+    """"""
+    self._validate_sort_keyword(sort)
+    self._assert_can_do_setop(other)
+
+    if self.equals(other):
+        return self._get_reconciled_name_object(other)
+
+    if len(self) == 0:
+        result = self.copy()
+        result._set_freq(self.freq)  # Preserve frequency
+        return result
+    if len(other) == 0:
+        return other.copy()
+
+    if not isinstance(other, type(self)):
+        result = Index.intersection(self, other, sort=sort)
+        if isinstance(result, type(self)):
+            result._set_freq(""infer"" if result.freq is None else result.freq)
+        return result
+
+    elif (
+        other.freq is None
+        or self.freq is None
+        or other.freq != self.freq
+        or not other.freq.is_anchored()
+        or (not self.is_monotonic or not other.is_monotonic)
+    ):
+        result = Index.intersection(self, other, sort=sort)
+        # Invalidate the freq of `result`, which may not be correct at
+        # this point, depending on the values.
+        result._set_freq(None)
+        result = self._shallow_copy(result._data, name=result.name)
+        if result.freq is None:
+            result._set_freq(""infer"")
+        return result
+
+    # to make our life easier, ""sort"" the two ranges
+    if self[0] <= other[0]:
+        left, right = self, other
+    else:
+        left, right = other, self
+
+    # after sorting, the intersection always starts with the right index
+    # and ends with the index of which the last element is smallest
+    end = min(left[-1], right[-1])
+    start = right[0]
+
+    if end < start:
+        return type(self)(data=[], freq=self.freq)  # Preserve frequency on empty result
+    else:
+        lslice = slice(*left.slice_locs(start, end))
+        left_chunk = left.values[lslice]
+        result = self._shallow_copy(left_chunk)
+        result._set_freq(self.freq)  # Set the same frequency as the original
+        return result
+```",
+pandas-23-v0_gpt-4,UNKNOWN,UNKNOWN,"```python
+def intersection(self, other, sort=False):
+    """"""
+    Specialized intersection for DatetimeIndex/TimedeltaIndex.
+
+    May be much faster than Index.intersection
+
+    Parameters
+    ----------
+    other : Same type as self or array-like
+    sort : False or None, default False
+        Sort the resulting index if possible.
+
+    Returns
+    -------
+    y : Index or same type as self
+    """"""
+    self._validate_sort_keyword(sort)
+    self._assert_can_do_setop(other)
+
+    # Quick check for equality
+    if self.equals(other):
+        return self._get_reconciled_name_object(other)
+
+    if len(self) == 0:
+        return self.copy()
+    if len(other) == 0:
+        return other.copy()
+
+    if not isinstance(other, type(self)):
+        result = Index.intersection(self, other, sort=sort)
+        if isinstance(result, type(self)):
+            result._set_freq(""infer"" if result.freq is None else result.freq)
+        return result
+
+    if other.freq is None or self.freq is None or other.freq != self.freq:
+        result = Index.intersection(self, other, sort=sort)
+        result._set_freq(None)  # Invalidate the freq of `result`.
+        result = self._shallow_copy(result._data, name=result.name)
+        if result.freq is None:
+            result._set_freq(""infer"")
+        return result
+
+    # Sort the two ranges
+    left, right = (self, other) if self[0] <= other[0] else (other, self)
+
+    # Calculate the intersection
+    end = min(left[-1], right[-1])
+    start = right[0]
+
+    if end < start:
+        return type(self)(data=[], freq=self.freq)  # Maintain freq type
+    else:
+        lslice = slice(*left.slice_locs(start, end))
+        left_chunk = left.values[lslice]
+        return self._shallow_copy(left_chunk, name=self.name, freq=self.freq)  # Keep the freq
+```",
+pandas-23-v0_gpt-5,UNKNOWN,UNKNOWN,"```python
+def intersection(self, other, sort=False):
+    """"""
+    Specialized intersection for DatetimeIndex/TimedeltaIndex.
+
+    May be much faster than Index.intersection
+
+    Parameters
+    ----------
+    other : Same type as self or array-like
+    sort : False or None, default False
+        Sort the resulting index if possible.
+
+        .. versionadded:: 0.24.0
+
+        .. versionchanged:: 0.24.1
+
+           Changed the default to ``False`` to match the behaviour
+           from before 0.24.0.
+
+        .. versionchanged:: 0.25.0
+
+           The `sort` keyword is added
+
+    Returns
+    -------
+    y : Index or same type as self
+    """"""
+    self._validate_sort_keyword(sort)
+    self._assert_can_do_setop(other)
+
+    if self.equals(other):
+        return self._get_reconciled_name_object(other)
+
+    if len(self) == 0:
+        result = self.copy()
+        result._set_freq(self.freq)  # Ensure frequency is preserved
+        return result
+    if len(other) == 0:
+        result = other.copy()
+        result._set_freq(other.freq)  # Ensure frequency is preserved
+        return result
+
+    if not isinstance(other, type(self)):
+        result = Index.intersection(self, other, sort=sort)
+        if isinstance(result, type(self)):
+            if result.freq is None:
+                result._set_freq(""infer"")
+        return result
+
+    if (
+        other.freq is None
+        or self.freq is None
+        or other.freq != self.freq
+        or not other.freq.is_anchored()
+        or (not self.is_monotonic or not other.is_monotonic)
+    ):
+        result = Index.intersection(self, other, sort=sort)
+
+        # Invalidate the freq of `result`, which may not be correct at
+        # this point, depending on the values.
+
+        result._set_freq(None)
+        result = self._shallow_copy(result._data, name=result.name)
+        if result.freq is None:
+            result._set_freq(""infer"")
+        return result
+
+    # to make our life easier, ""sort"" the two ranges
+    if self[0] <= other[0]:
+        left, right = self, other
+    else:
+        left, right = other, self
+
+    # after sorting, the intersection always starts with the right index
+    # and ends with the index of which the last elements is smallest
+    end = min(left[-1], right[-1])
+    start = right[0]
+
+    if end < start:
+        return type(self)(data=[], freq=self.freq)  # Ensure frequency is preserved
+    else:
+        lslice = slice(*left.slice_locs(start, end))
+        left_chunk = left.values[lslice]
+        result = self._shallow_copy(left_chunk)
+        result._set_freq(self.freq)  # Ensure frequency is preserved
+        return result
+```",
+pandas-23-v0_gpt-6,UNKNOWN,UNKNOWN,"```python
+def intersection(self, other, sort=False):
+    """"""
+    Specialized intersection for DatetimeIndex/TimedeltaIndex.
+    
+    May be much faster than Index.intersection
+    
+    Parameters
+    ----------
+    other : Same type as self or array-like
+    sort : False or None, default False
+        Sort the resulting index if possible.
+
+        .. versionadded:: 0.24.0
+
+        .. versionchanged:: 0.24.1
+
+           Changed the default to ``False`` to match the behaviour
+           from before 0.24.0.
+
+        .. versionchanged:: 0.25.0
+
+           The `sort` keyword is added
+
+    Returns
+    -------
+    y : Index or same type as self
+    """"""
+    self._validate_sort_keyword(sort)
+    self._assert_can_do_setop(other)
+
+    if self.equals(other):
+        return self._get_reconciled_name_object(other)
+
+    if len(self) == 0:
+        return self.copy()
+    if len(other) == 0:
+        return other.copy()
+
+    if not isinstance(other, type(self)):
+        result = Index.intersection(self, other, sort=sort)
+        if isinstance(result, type(self)):
+            if result.freq is None:
+                result._set_freq(""infer"")
+        return result
+
+    elif (
+        other.freq is None
+        or self.freq is None
+        or other.freq != self.freq
+        or not other.freq.is_anchored()
+        or (not self.is_monotonic or not other.is_monotonic)
+    ):
+        result = Index.intersection(self, other, sort=sort)
+
+        # Invalidate the freq of `result`, which may not be correct at
+        # this point, depending on the values.
+
+        result._set_freq(None)
+        result = self._shallow_copy(result._data, name=result.name)
+        if result.freq is None:
+            result._set_freq(self.freq)  # Set the frequency to match the original
+        return result
+
+    # to make our life easier, ""sort"" the two ranges
+    if self[0] <= other[0]:
+        left, right = self, other
+    else:
+        left, right = other, self
+
+    # after sorting, the intersection always starts with the right index
+    # and ends with the index of which the last elements is smallest
+    end = min(left[-1], right[-1])
+    start = right[0]
+
+    if end < start:
+        return type(self)(data=[], freq=self.freq)  # Preserve the frequency
+    else:
+        lslice = slice(*left.slice_locs(start, end))
+        left_chunk = left.values[lslice]
+        result = self._shallow_copy(left_chunk)
+        result._set_freq(self.freq)  # Ensure that the frequency is preserved
+        return result
+```",
+pandas-23-v0_gpt-7,UNKNOWN,UNKNOWN,"```python
+def intersection(self, other, sort=False):
+    """"""
+    Specialized intersection for DatetimeIndex/TimedeltaIndex.
+
+    May be much faster than Index.intersection
+
+    Parameters
+    ----------
+    other : Same type as self or array-like
+    sort : False or None, default False
+        Sort the resulting index if possible.
+
+        .. versionadded:: 0.24.0
+
+        .. versionchanged:: 0.24.1
+
+           Changed the default to ``False`` to match the behaviour
+           from before 0.24.0.
+
+        .. versionchanged:: 0.25.0
+
+           The `sort` keyword is added
+
+    Returns
+    -------
+    y : Index or same type as self
+    """"""
+    self._validate_sort_keyword(sort)
+    self._assert_can_do_setop(other)
+
+    if self.equals(other):
+        return self._get_reconciled_name_object(other)
+
+    if len(self) == 0:
+        result = self.copy()
+    elif len(other) == 0:
+        result = other.copy()
+    else:
+        # Ensure `other` is of the same type
+        if not isinstance(other, type(self)):
+            result = Index.intersection(self, other, sort=sort)
+            if isinstance(result, type(self)):
+                if result.freq is None:
+                    result._set_freq(""infer"")
+            return result
+
+        # Special conditions for frequency and monotonicity
+        if (self.freq is None or other.freq is None or 
+                self.freq != other.freq or 
+                not self.freq.is_anchored() or
+                not self.is_monotonic or 
+                not other.is_monotonic):
+            result = Index.intersection(self, other, sort=sort)
+            result._set_freq(None)  # Clear freq
+            
+            # Create a shallow copy with inferred frequency
+            result = self._shallow_copy(result._data, name=result.name)
+            if result.freq is None:
+                result._set_freq(""infer"")
+            return result
+
+        # Sort the two ranges for intersection
+        if self[0] <= other[0]:
+            left, right = self, other
+        else:
+            left, right = other, self
+
+        end = min(left[-1], right[-1])
+        start = right[0]
+
+        if end < start:
+            return type(self)(data=[])
+        else:
+            lslice = slice(*left.slice_locs(start, end))
+            left_chunk = left.values[lslice]
+            result = self._shallow_copy(left_chunk)
+            result._set_freq(self.freq)  # Preserve the frequency
+            return result
+```",
+pandas-23-v0_gpt-8,UNKNOWN,UNKNOWN,"```python
+def intersection(self, other, sort=False):
+    """"""
+    Specialized intersection for DatetimeIndex/TimedeltaIndex.
+
+    May be much faster than Index.intersection
+
+    Parameters
+    ----------
+    other : Same type as self or array-like
+    sort : False or None, default False
+        Sort the resulting index if possible.
+
+    Returns
+    -------
+    y : Index or same type as self
+    """"""
+    self._validate_sort_keyword(sort)
+    self._assert_can_do_setop(other)
+
+    if self.equals(other):
+        return self._get_reconciled_name_object(other)
+
+    if len(self) == 0:
+        result = self.copy()
+        result._set_freq(other.freq)
+        return result
+    if len(other) == 0:
+        result = other.copy()
+        result._set_freq(self.freq)
+        return result
+
+    if not isinstance(other, type(self)):
+        result = Index.intersection(self, other, sort=sort)
+        if isinstance(result, type(self)):
+            if result.freq is None:
+                result._set_freq(""infer"")
+        return result
+
+    elif (
+        other.freq is None
+        or self.freq is None
+        or other.freq != self.freq
+        or not other.freq.is_anchored()
+        or (not self.is_monotonic or not other.is_monotonic)
+    ):
+        result = Index.intersection(self, other, sort=sort)
+        result._set_freq(None)
+        result = self._shallow_copy(result._data, name=result.name)
+        if result.freq is None:
+            result._set_freq(""infer"")
+        return result
+
+    if self[0] <= other[0]:
+        left, right = self, other
+    else:
+        left, right = other, self
+
+    end = min(left[-1], right[-1])
+    start = right[0]
+
+    if end < start:
+        return type(self)(data=[], freq=self.freq)
+    else:
+        lslice = slice(*left.slice_locs(start, end))
+        left_chunk = left.values[lslice]
+        result = self._shallow_copy(left_chunk)
+        result._set_freq(self.freq)  # Ensure we set the freq correctly
+        return result
+```",
+pandas-23-v0_gpt-9,UNKNOWN,UNKNOWN,"```python
+def intersection(self, other, sort=False):
+    """"""
+    Specialized intersection for DatetimeIndex/TimedeltaIndex.
+
+    May be much faster than Index.intersection
+
+    Parameters
+    ----------
+    other : Same type as self or array-like
+    sort : False or None, default False
+        Sort the resulting index if possible.
+
+        .. versionadded:: 0.24.0
+
+        .. versionchanged:: 0.24.1
+
+           Changed the default to ``False`` to match the behaviour
+           from before 0.24.0.
+
+        .. versionchanged:: 0.25.0
+
+           The `sort` keyword is added
+
+    Returns
+    -------
+    y : Index or same type as self
+    """"""
+    self._validate_sort_keyword(sort)
+    self._assert_can_do_setop(other)
+
+    if self.equals(other):
+        return self._get_reconciled_name_object(other)
+
+    if len(self) == 0:
+        result = self.copy()
+        result._set_freq(self.freq)  # Ensure freq is preserved
+        return result
+    if len(other) == 0:
+        result = other.copy()
+        if result.freq is None and self.freq is not None:
+            result._set_freq(self.freq)  # Ensure freq is preserved
+        return result
+
+    if not isinstance(other, type(self)):
+        result = Index.intersection(self, other, sort=sort)
+        if isinstance(result, type(self)):
+            if result.freq is None:
+                result._set_freq(""infer"")
+        return result
+
+    elif (
+        other.freq is None
+        or self.freq is None
+        or other.freq != self.freq
+        or not other.freq.is_anchored()
+        or (not self.is_monotonic or not other.is_monotonic)
+    ):
+        result = Index.intersection(self, other, sort=sort)
+
+        result._set_freq(None)  # Invalidate the freq of `result`
+        result = self._shallow_copy(result._data, name=result.name)
+        if result.freq is None:
+            result._set_freq(self.freq)  # Ensure freq is preserved
+        return result
+
+    if self[0] <= other[0]:
+        left, right = self, other
+    else:
+        left, right = other, self
+
+    end = min(left[-1], right[-1])
+    start = right[0]
+
+    if end < start:
+        return type(self)(data=[], freq=self.freq)  # Preserve freq on empty result
+    else:
+        lslice = slice(*left.slice_locs(start, end))
+        left_chunk = left.values[lslice]
+        return self._shallow_copy(left_chunk, freq=self.freq)  # Ensure freq is preserved
+```",

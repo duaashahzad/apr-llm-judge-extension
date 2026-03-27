@@ -1,0 +1,711 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-114-v0_llama-0,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+
+    # if we have something that is Index-like, then 
+    # use this, e.g. DatetimeIndex
+    # Things like `Series._get_value` (via.at) pass the EA directly here.
+    s = getattr(series, ""_values"", series)
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        # GH 20882, 21257
+        # Unify Index and ExtensionArray treatment
+        # First try to convert the key to a location
+        # If that fails, raise a KeyError if an integer 
+        # index, otherwise, see if key is an integer, and 
+        # try that
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    if isinstance(series, Series) and isinstance(key, Series) and is_extension_array_dtype(series.dtype):
+        # Try to use the Series' indexer directly
+        return series[key]
+
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            # generator/iterator-like
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+        except Exception:
+            raise e1
+    except TypeError:
+        # e.g. ""[False] is an invalid key""
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",
+pandas-114-v0_llama-1,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+
+    # if we have something that is Index-like, then
+    # use this, e.g. DatetimeIndex
+    # Things like `Series._get_value` (via.at) pass the EA directly here.
+    s = getattr(series, ""_values"", series)
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        # GH 20882, 21257
+        # Unify Index and ExtensionArray treatment
+        # First try to convert the key to a location
+        # If that fails, raise a KeyError if an integer
+        # index, otherwise, see if key is an integer, and
+        # try that
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Avoid materializing the ExtensionArray by not calling values_from_object on series
+    if isinstance(series, Series) and isinstance(series._values, ExtensionArray):
+        k = com.values_from_object(key)
+        k = self._convert_scalar_indexer(k, kind=""getitem"")
+        try:
+            return series._values[k]
+        except KeyError as e1:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+
+            try:
+                return libindex.get_value_at(series._values, key)
+            except IndexError:
+                raise
+            except TypeError:
+                # generator/iterator-like
+                if is_iterator(key):
+                    raise InvalidIndexError(key)
+                else:
+                    raise e1
+            except Exception:
+                raise e1
+        except TypeError:
+            # e.g. ""[False] is an invalid key""
+            if is_scalar(key):
+                raise IndexError(key)
+            raise InvalidIndexError(key)
+
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            # generator/iterator-like
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+        except Exception:
+            raise e1
+    except TypeError:
+        # e.g. ""[False] is an invalid key""
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",
+pandas-114-v0_llama-2,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+
+1. **The bug is introduced by the line `s = com.values_from_object(series)` in the `get_value` function**. This line converts the `series` to a numpy array, which is not desirable when the series is of type `ExtensionArray` and should not be densified.
+2. **The issue arises because `values_from_object` is a generic function that does not handle `ExtensionArray` specially**. It treats `ExtensionArray` as any other object and tries to convert it to a numpy array, which is not the expected behavior.
+3. **We need to add a special case to handle `ExtensionArray` in the `get_value` function**. We should check if the `series` is of type `ExtensionArray` and if so, avoid converting it to a numpy array.
+
+### Fixed solution:
+```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+
+    # if we have something that is Index-like, then
+    # use this, e.g. DatetimeIndex
+    # Things like `Series._get_value` (via.at) pass the EA directly here.
+    s = getattr(series, ""_values"", series)
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        # GH 20882, 21257
+        # Unify Index and ExtensionArray treatment
+        # First try to convert the key to a location
+        # If that fails, raise a KeyError if an integer
+        # index, otherwise, see if key is an integer, and
+        # try that
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Check if series is of type ExtensionArray
+    if isinstance(series, ExtensionArray):
+        # If series is an ExtensionArray, do not convert it to a numpy array
+        s = series
+    else:
+        s = com.values_from_object(series)
+    k = com.values_from_object(key)
+
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            # generator/iterator-like
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+        except Exception:
+            raise e1
+    except TypeError:
+        # e.g. ""[False] is an invalid key""
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```
+
+### Explanation of changes:
+
+*   **Added a check for `ExtensionArray`**: Before converting `series` to a numpy array using `com.values_from_object`, we check if it is of type `ExtensionArray`. If it is, we do not convert it.
+*   **Handled `ExtensionArray` specially**: If `series` is an `ExtensionArray`, we assign it directly to `s` without converting it to a numpy array.
+
+### Tests and example uses:
+
+You can use the test function provided to test the corrected `get_value` function. The test function creates a `DecimalArray` and checks if indexing operations on it raise an error when trying to convert the `DecimalArray` to a numpy array. With the corrected `get_value` function, the test should pass without raising an error.",
+pandas-114-v0_llama-3,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. The issue arises from the `get_value` method in the `Index` class of pandas. This method is called when indexing a Series or DataFrame.
+2. Within `get_value`, the `values_from_object` function is used to convert the series to a numpy array.
+3. For ExtensionArrays, this conversion to a numpy array is what's causing the problem, as it ""densifies"" the array, potentially leading to performance issues.
+4. The error occurs because the test function `test_indexing_no_materialize` sets up a DecimalArray such that attempting to convert it to a numpy array raises an exception.
+
+### Fixed solution:
+```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+    # if we have something that is Index-like, then
+    # use this, e.g. DatetimeIndex
+    # Things like `Series._get_value` (via.at) pass the EA directly here.
+    s = getattr(series, ""_values"", series)
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        # GH 20882, 21257
+        # Unify Index and ExtensionArray treatment
+        # First try to convert the key to a location
+        # If that fails, raise a KeyError if an integer
+        # index, otherwise, see if key is an integer, and
+        # try that
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Check if series is an ExtensionArray before converting it
+    if isinstance(series, ExtensionArray):
+        k = com.values_from_object(key)
+        k = self._convert_scalar_indexer(k, kind=""getitem"")
+        try:
+            return series._getitem**************************************************(k)
+        except KeyError as e1:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+
+            try:
+                return libindex.get_value_at(series, key)
+            except IndexError:
+                raise
+            except TypeError:
+                # generator/iterator-like
+                if is_iterator(key):
+                    raise InvalidIndexError(key)
+                else:
+                    raise e1
+            except Exception:
+                raise e1
+        except TypeError:
+            # e.g. ""[False] is an invalid key""
+            if is_scalar(key):
+                raise IndexError(key)
+            raise InvalidIndexError(key)
+    else:
+        s = com.values_from_object(series)
+        k = com.values_from_object(key)
+
+        k = self._convert_scalar_indexer(k, kind=""getitem"")
+        try:
+            return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+        except KeyError as e1:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+
+            try:
+                return libindex.get_value_at(s, key)
+            except IndexError:
+                raise
+            except TypeError:
+                # generator/iterator-like
+                if is_iterator(key):
+                    raise InvalidIndexError(key)
+                else:
+                    raise e1
+            except Exception:
+                raise e1
+        except TypeError:
+            # e.g. ""[False] is an invalid key""
+            if is_scalar(key):
+                raise IndexError(key)
+            raise InvalidIndexError(key)
+
+```
+
+### Explanation of changes:
+* Added a check to see if the series is an ExtensionArray before attempting to convert it to a numpy array.
+* If the series is an ExtensionArray, directly use its `_getitem` method to get the value instead of converting it to a numpy array.
+* Added an `else` clause for non-ExtensionArray series to maintain the original functionality.
+
+### Tests and example uses:
+The provided test function `test_indexing_no_materialize` should pass with the updated `get_value` method, as it checks for the specific case where attempting to convert a DecimalArray to a numpy array raises an exception.",
+pandas-114-v0_llama-4,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Identifying the issue**: The problem lies in the way pandas handles indexing operations on Series or DataFrames containing ExtensionArrays. Specifically, when using the `__getitem__` method (e.g., `s[s > 0.5]`), pandas densifies the ExtensionArray, converting it to a materialized numpy array. This can be expensive for large datasets.
+
+2. **Locating the problematic code**: The issue arises from the `get_value` method in `pandas/core/indexes/base.py`. This method is called by `__getitem__` in `pandas/core/series.py`. The problematic line is `s = com.values_from_object(series)`, which materializes the ExtensionArray.
+
+3. **Understanding the densification**: The densification occurs because `values_from_object` does not handle ExtensionArrays correctly. Instead of returning the ExtensionArray as is, it materializes the array into a numpy array, triggering the `__array__` method of the ExtensionArray.
+
+4. **Strategy for fixing the bug**: To fix this bug, we need to modify the `get_value` method to handle ExtensionArrays without materializing them. We can achieve this by checking if the series is an ExtensionArray and, if so, bypassing the `values_from_object` call.
+
+### Fixed solution:
+```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+
+    # if we have something that is Index-like, then
+    # use this, e.g. DatetimeIndex
+    # Things like `Series._get_value` (via.at) pass the EA directly here.
+    s = getattr(series, ""_values"", series)
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        # GH 20882, 21257
+        # Unify Index and ExtensionArray treatment
+        # First try to convert the key to a location
+        # If that fails, raise a KeyError if an integer
+        # index, otherwise, see if key is an integer, and
+        # try that
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Check if series is an ExtensionArray
+    if isinstance(series, ExtensionArray):
+        # If it's an ExtensionArray, use it directly without materializing
+        s = series
+    else:
+        # Otherwise, proceed as before
+        s = com.values_from_object(series)
+
+    k = com.values_from_object(key)
+
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            # generator/iterator-like
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+        except Exception:
+            raise e1
+    except TypeError:
+        # e.g. ""[False] is an invalid key""
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```
+
+### Explanation of changes:
+*   **Added a check for ExtensionArray**: Before materializing the series, we now check if it's an ExtensionArray. If it is, we use it directly without calling `values_from_object`.
+*   **Bypassed materialization for ExtensionArrays**: By using the ExtensionArray directly, we avoid triggering its `__array__` method and prevent densification.
+
+### Tests and example uses:
+You can test the corrected function using the provided test case:
+```python
+def test_indexing_no_materialize(monkeypatch):
+    # See https://github.com/pandas-dev/pandas/issues/29708
+    # Ensure that indexing operations do not materialize (convert to a numpy
+    # array) the ExtensionArray unnecessary
+
+    def DecimalArray__array__(self, dtype=None):
+        raise Exception(""tried to convert a DecimalArray to a numpy array"")
+
+    monkeypatch.setattr(DecimalArray, ""__array__"", DecimalArray__array__, raising=False)
+
+    data = make_data()
+    s = pd.Series(DecimalArray(data))
+    df = pd.DataFrame({""a"": s, ""b"": range(len(s))})
+
+    # ensure the following operations do not raise an error
+    s[s > 0.5]
+    df[s > 0.5]
+    s.at[0]
+    df.at[0, ""a""]
+```",
+pandas-114-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+    # if we have something that is Index-like, then
+    # use this, e.g. DatetimeIndex
+    # Things like `Series._get_value` (via.at) pass the EA directly here.
+    s = getattr(series, ""_values"", series)
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        # GH 20882, 21257
+        # Unify Index and ExtensionArray treatment
+        # First try to convert the key to a location
+        # If that fails, raise a KeyError if an integer
+        # index, otherwise, see if key is an integer, and
+        # try that
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Check if series is an ExtensionArray before calling values_from_object
+    if isinstance(series, ExtensionArray):
+        s = series
+    else:
+        s = com.values_from_object(series)
+    
+    k = com.values_from_object(key)
+
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            # generator/iterator-like
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+        except Exception:
+            raise e1
+    except TypeError:
+        # e.g. ""[False] is an invalid key""
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",
+pandas-114-v0_llama-6,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the Issue**: The error message indicates that there's an attempt to convert a `DecimalArray` to a numpy array when trying to index a Series with a boolean mask. The issue stems from the `get_value` method in the `Index` class, which indirectly calls `values_from_object` on the Series, causing the materialization of the `DecimalArray` into a numpy array.
+
+2. **Identifying the Cause**: The root cause of the problem lies in the order of operations within the `get_value` method. When a boolean mask is used for indexing, it first tries to get a value from the index using `index.get_value`, which calls `values_from_object` on the Series. This results in the materialization of the `ExtensionArray`.
+
+3. **Finding a Solution**: To prevent the materialization of the `ExtensionArray`, we need to ensure that boolean indexing does not call `values_from_object` on the Series. Instead, we should directly use the boolean mask to filter the Series without converting the `ExtensionArray` to a numpy array.
+
+### Fixed solution:
+```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+    # Check if key is a boolean array
+    if com.is_bool_indexer(key):
+        # Directly filter the series using the boolean mask without materializing
+        return series[key]
+
+    s = getattr(series, ""_values"", series)
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            # generator/iterator-like
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+        except Exception:
+            raise e1
+    except TypeError:
+        # e.g. ""[False] is an invalid key""
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```
+
+### Explanation of changes:
+*   **Boolean Indexing Check**: Added a check at the beginning of the `get_value` method to see if the `key` is a boolean array. If it is, the method directly filters the `series` using the boolean mask without materializing the `ExtensionArray`.
+*   **Skipped Materialization**: By directly using the boolean mask for indexing when `key` is a boolean array, we avoid the call to `values_from_object` on the `series`, thus preventing the materialization of the `ExtensionArray`.
+
+### Tests and example uses:
+To test the fixed function, you can use the provided test function `test_indexing_no_materialize`. This test should now pass without raising an exception, indicating that the `DecimalArray` is not being converted to a numpy array during boolean indexing.",
+pandas-114-v0_llama-7,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+
+1. **Understanding the issue**: The problem arises when indexing a DataFrame/Series with an ExtensionArray using the `__getitem__` method. This operation densifies the ExtensionArray, converting it to a materialized numpy array, which can be expensive.
+2. **Locating the bug**: The issue is traced back to the `get_value` method of the Index class. Specifically, the line `s = com.values_from_object(series)` is where the densification occurs.
+3. **Identifying the cause**: The `values_from_object` function is used to extract the underlying values from the series. However, when the series is an ExtensionArray, this function returns a numpy array, causing the densification.
+
+### Fixed solution:
+```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+    # if we have something that is Index-like, then
+    # use this, e.g. DatetimeIndex
+    # Things like `Series._get_value` (via.at) pass the EA directly here.
+    s = getattr(series, ""_values"", series)
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        # GH 20882, 21257
+        # Unify Index and ExtensionArray treatment
+        # First try to convert the key to a location
+        # If that fails, raise a KeyError if an integer
+        # index, otherwise, see if key is an integer, and
+        # try that
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Check if series is an ExtensionArray before calling values_from_object
+    if isinstance(series, ExtensionArray):
+        s = series
+    else:
+        s = com.values_from_object(series)
+
+    k = com.values_from_object(key)
+
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            # generator/iterator-like
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+        except Exception:
+            raise e1
+    except TypeError:
+        # e.g. ""[False] is an invalid key""
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```
+
+### Explanation of changes:
+
+* **Added a check for ExtensionArray**: Before calling `values_from_object`, we check if the series is an ExtensionArray. If it is, we use the original series instead of converting it to a numpy array.
+* **Preserved existing behavior for non-ExtensionArray series**: If the series is not an ExtensionArray, we still call `values_from_object` to ensure the existing behavior is preserved.
+
+### Tests and example uses:
+
+The fixed solution should pass the provided test function `test_indexing_no_materialize`. Additionally, you can test the `get_value` method with different types of series and keys to ensure the correct behavior.",
+pandas-114-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+
+    # if we have something that is Index-like, then
+    # use this, e.g. DatetimeIndex
+    # Things like `Series._get_value` (via.at) pass the EA directly here.
+    s = getattr(series, ""_values"", series)
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        # GH 20882, 21257
+        # Unify Index and ExtensionArray treatment
+        # First try to convert the key to a location
+        # If that fails, raise a KeyError if an integer
+        # index, otherwise, see if key is an integer, and
+        # try that
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Check if key is a boolean array to avoid materializing the ExtensionArray
+    if isinstance(key, np.ndarray) and key.dtype == np.bool_:
+        return s[key]
+
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            # generator/iterator-like
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+        except Exception:
+            raise e1
+    except TypeError:
+        # e.g. ""[False] is an invalid key""
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",
+pandas-114-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+@Appender(_index_shared_docs[""get_value""] % _index_doc_kwargs)
+def get_value(self, series, key):
+
+    # if we have something that is Index-like, then 
+    # use this, e.g. DatetimeIndex
+    # Things like `Series._get_value` (via.at) pass the EA directly here.
+    s = getattr(series, ""_values"", series)
+    if isinstance(s, (ExtensionArray, Index)) and is_scalar(key):
+        # GH 20882, 21257
+        # Unify Index and ExtensionArray treatment
+        # First try to convert the key to a location
+        # If that fails, raise a KeyError if an integer 
+        # index, otherwise, see if key is an integer, and 
+        # try that
+        try:
+            iloc = self.get_loc(key)
+            return s[iloc]
+        except KeyError:
+            if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+                raise
+            elif is_integer(key):
+                return s[key]
+
+    # Do not densify the ExtensionArray
+    if isinstance(series, Series) and isinstance(series._values, ExtensionArray):
+        k = com.values_from_object(key)
+        k = self._convert_scalar_indexer(k, kind=""getitem"")
+        try:
+            return series._values[k]
+        except IndexError:
+            raise
+        except Exception as e:
+            raise e
+
+    s = com.values_from_object(series)
+    k = com.values_from_object(key)
+
+    k = self._convert_scalar_indexer(k, kind=""getitem"")
+    try:
+        return self._engine.get_value(s, k, tz=getattr(series.dtype, ""tz"", None))
+    except KeyError as e1:
+        if len(self) > 0 and (self.holds_integer() or self.is_boolean()):
+            raise
+
+        try:
+            return libindex.get_value_at(s, key)
+        except IndexError:
+            raise
+        except TypeError:
+            # generator/iterator-like
+            if is_iterator(key):
+                raise InvalidIndexError(key)
+            else:
+                raise e1
+        except Exception:
+            raise e1
+    except TypeError:
+        # e.g. ""[False] is an invalid key""
+        if is_scalar(key):
+            raise IndexError(key)
+        raise InvalidIndexError(key)
+```",

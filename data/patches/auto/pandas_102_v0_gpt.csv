@@ -1,0 +1,776 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-102-v0_gpt-0,UNKNOWN,UNKNOWN,"```python
+def init_ndarray(values, index, columns, dtype=None, copy=False):
+    # input must be a ndarray, list, Series, index
+
+    if isinstance(values, ABCSeries):
+        if columns is None:
+            if values.name is not None:
+                columns = [values.name]
+        if index is None:
+            index = values.index
+        else:
+            values = values.reindex(index)
+
+        # zero len case
+        if not len(values) and columns is not None and len(columns):
+            values = np.empty((0, 1), dtype=object)
+
+    if is_categorical_dtype(getattr(values, ""dtype"", None)) or is_categorical_dtype(dtype):
+        if not hasattr(values, ""dtype""):
+            values = prep_ndarray(values, copy=copy)
+            values = values.ravel()
+        elif copy:
+            values = values.copy()
+
+        index, columns = _get_axes(len(values), 1, index, columns)
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+    elif is_extension_array_dtype(values) or is_extension_array_dtype(dtype):
+        if columns is None:
+            columns = [0]
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+
+    # Ensure the values are set up for conversion
+    values = prep_ndarray(values, copy=copy)
+
+    if dtype is not None:
+        if not is_dtype_equal(values.dtype, dtype):
+            try:
+                # Convert to appropriate datetime type if a timezone-aware type is specified
+                if 'datetime64' in str(dtype):
+                    values = np.array([np.datetime64(val, tz='UTC') for val in values.flatten()]).reshape(values.shape)
+                else:
+                    values = values.astype(dtype)
+            except Exception as orig:
+                raise ValueError(
+                    f""failed to cast to '{dtype}' (Exception was: {orig})""
+                ) from orig
+
+    index, columns = _get_axes(*values.shape, index=index, columns=columns)
+    values = values.T
+
+    if dtype is None and is_object_dtype(values):
+        if values.ndim == 2 and values.shape[0] != 1:
+            dvals_list = [maybe_infer_to_datetimelike(row) for row in values]
+            for n in range(len(dvals_list)):
+                if isinstance(dvals_list[n], np.ndarray):
+                    dvals_list[n] = dvals_list[n].reshape(1, -1)
+
+            from pandas.core.internals.blocks import make_block
+
+            block_values = [
+                make_block(dvals_list[n], placement=[n]) for n in range(len(dvals_list))
+            ]
+        else:
+            datelike_vals = maybe_infer_to_datetimelike(values)
+            block_values = [datelike_vals]
+    else:
+        block_values = [values]
+
+    return create_block_manager_from_blocks(block_values, [columns, index])
+```",
+pandas-102-v0_gpt-1,UNKNOWN,UNKNOWN,"```python
+def init_ndarray(values, index, columns, dtype=None, copy=False):
+    # input must be a ndarray, list, Series, index
+
+    if isinstance(values, ABCSeries):
+        if columns is None:
+            if values.name is not None:
+                columns = [values.name]
+        if index is None:
+            index = values.index
+        else:
+            values = values.reindex(index)
+
+        # zero len case (GH #2234)
+        if not len(values) and columns is not None and len(columns):
+            values = np.empty((0, 1), dtype=object)
+
+    # we could have a categorical type passed or coerced to 'category'
+    if is_categorical_dtype(getattr(values, ""dtype"", None)) or is_categorical_dtype(dtype):
+        if not hasattr(values, ""dtype""):
+            values = prep_ndarray(values, copy=copy)
+            values = values.ravel()
+        elif copy:
+            values = values.copy()
+
+        index, columns = _get_axes(len(values), 1, index, columns)
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+
+    elif is_extension_array_dtype(values) or is_extension_array_dtype(dtype):
+        # GH#19157
+        if columns is None:
+            columns = [0]
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+
+    # Convert values to the correct shape needed for datetime
+    values = prep_ndarray(values, copy=copy)
+    
+    if dtype is not None:
+        if not is_dtype_equal(values.dtype, dtype):
+            try:
+                if dtype == 'datetime64[ns, UTC]':
+                    # Special case handling for datetime64[ns, UTC]
+                    epoch_values = (values.astype(np.int64) * 1e9).astype('datetime64[ns]')
+                    values = epoch_values.astype(dtype)
+                else:
+                    values = values.astype(dtype)
+            except Exception as orig:
+                # e.g. ValueError when trying to cast object dtype to float64
+                raise ValueError(
+                    f""failed to cast to '{dtype}' (Exception was: {orig})""
+                ) from orig
+
+    index, columns = _get_axes(*values.shape, index=index, columns=columns)
+    values = values.T
+
+    if dtype is None and is_object_dtype(values):
+        if values.ndim == 2 and values.shape[0] != 1:
+            dvals_list = [maybe_infer_to_datetimelike(row) for row in values]
+            for n in range(len(dvals_list)):
+                if isinstance(dvals_list[n], np.ndarray):
+                    dvals_list[n] = dvals_list[n].reshape(1, -1)
+
+            from pandas.core.internals.blocks import make_block
+
+            block_values = [
+                make_block(dvals_list[n], placement=[n]) for n in range(len(dvals_list))
+            ]
+
+        else:
+            datelike_vals = maybe_infer_to_datetimelike(values)
+            block_values = [datelike_vals]
+    else:
+        block_values = [values]
+
+    return create_block_manager_from_blocks(block_values, [columns, index])
+```",
+pandas-102-v0_gpt-2,UNKNOWN,UNKNOWN,"```python
+def init_ndarray(values, index, columns, dtype=None, copy=False):
+    # Ensure that values is a proper structured input for DataFrame
+    if isinstance(values, ABCSeries):
+        if columns is None:
+            if values.name is not None:
+                columns = [values.name]
+        if index is None:
+            index = values.index
+        else:
+            values = values.reindex(index)
+
+        # Handle zero-length case
+        if not len(values) and columns is not None and len(columns):
+            values = np.empty((0, 1), dtype=object)
+
+    # Handle categorical types
+    if is_categorical_dtype(getattr(values, ""dtype"", None)) or is_categorical_dtype(dtype):
+        if not hasattr(values, ""dtype""):
+            values = prep_ndarray(values, copy=copy)
+            values = values.ravel()
+        elif copy:
+            values = values.copy()
+
+        index, columns = _get_axes(len(values), 1, index, columns)
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+    elif is_extension_array_dtype(values) or is_extension_array_dtype(dtype):
+        if columns is None:
+            columns = [0]
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+
+    # Prepare ndarray
+    values = prep_ndarray(values, copy=copy)
+
+    if dtype is not None:
+        if isinstance(dtype, str) and 'datetime64' in dtype:
+            # Adjust the dtype conversion for datetime with timezone
+            try:
+                values = values.astype('datetime64[ns]')
+                values = values.astype(dtype)
+            except Exception as orig:
+                raise ValueError(
+                    f""failed to cast to '{dtype}' (Exception was: {orig})""
+                ) from orig
+        elif not is_dtype_equal(values.dtype, dtype):
+            try:
+                values = values.astype(dtype)
+            except Exception as orig:
+                raise ValueError(
+                    f""failed to cast to '{dtype}' (Exception was: {orig})""
+                ) from orig
+
+    index, columns = _get_axes(*values.shape, index=index, columns=columns)
+    values = values.T
+
+    # Handle the case where no dtype is specified
+    if dtype is None and is_object_dtype(values):
+        if values.ndim == 2 and values.shape[0] != 1:
+            dvals_list = [maybe_infer_to_datetimelike(row) for row in values]
+            for n in range(len(dvals_list)):
+                if isinstance(dvals_list[n], np.ndarray):
+                    dvals_list[n] = dvals_list[n].reshape(1, -1)
+
+            block_values = [
+                make_block(dvals_list[n], placement=[n]) for n in range(len(dvals_list))
+            ]
+        else:
+            datelike_vals = maybe_infer_to_datetimelike(values)
+            block_values = [datelike_vals]
+    else:
+        block_values = [values]
+
+    return create_block_manager_from_blocks(block_values, [columns, index])
+```",
+pandas-102-v0_gpt-3,UNKNOWN,UNKNOWN,"```python
+def init_ndarray(values, index, columns, dtype=None, copy=False):
+    # input must be a ndarray, list, Series, index
+
+    if isinstance(values, ABCSeries):
+        if columns is None:
+            if values.name is not None:
+                columns = [values.name]
+        if index is None:
+            index = values.index
+        else:
+            values = values.reindex(index)
+
+        # zero len case (GH #2234)
+        if not len(values) and columns is not None and len(columns):
+            values = np.empty((0, 1), dtype=object)
+
+    # we could have a categorical type passed or coerced to 'category'
+    # recast this to an arrays_to_mgr
+    if is_categorical_dtype(getattr(values, ""dtype"", None)) or is_categorical_dtype(
+        dtype
+    ):
+
+        if not hasattr(values, ""dtype""):
+            values = prep_ndarray(values, copy=copy)
+            values = values.ravel()
+        elif copy:
+            values = values.copy()
+
+        index, columns = _get_axes(len(values), 1, index, columns)
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+    elif is_extension_array_dtype(values) or is_extension_array_dtype(dtype):
+        # GH#19157
+        if columns is None:
+            columns = [0]
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+
+    # by definition an array here
+    # the dtypes will be coerced to a single dtype
+    values = prep_ndarray(values, copy=copy)
+
+    if dtype is not None:
+        if not is_dtype_equal(values.dtype, dtype):
+            try:
+                values = values.astype(dtype)
+            except Exception as orig:
+                # e.g. ValueError when trying to cast object dtype to float64
+                raise ValueError(
+                    f""failed to cast to '{dtype}' (Exception was: {orig})""
+                ) from orig
+
+    index, columns = _get_axes(*values.shape, index=index, columns=columns)
+    values = values.T
+
+    # if we don't have a dtype specified, then try to convert objects
+    # on the entire block; this is to convert if we have datetimelike's
+    # embedded in an object type
+    if dtype is None and is_object_dtype(values):
+
+        if values.ndim == 2 and values.shape[0] != 1:
+            # transpose and separate blocks
+
+            dvals_list = [maybe_infer_to_datetimelike(row) for row in values]
+            for n in range(len(dvals_list)):
+                if isinstance(dvals_list[n], np.ndarray):
+                    dvals_list[n] = dvals_list[n].reshape(1, -1)
+
+            from pandas.core.internals.blocks import make_block
+
+            block_values = [
+                make_block(dvals_list[n], placement=[n]) for n in range(len(dvals_list))
+            ]
+
+        else:
+            datelike_vals = maybe_infer_to_datetimelike(values)
+            block_values = [datelike_vals]
+    else:
+        block_values = [values]
+
+    return create_block_manager_from_blocks(block_values, [columns, index])
+```",
+pandas-102-v0_gpt-4,UNKNOWN,UNKNOWN,"```python
+def init_ndarray(values, index, columns, dtype=None, copy=False):
+    # input must be a ndarray, list, Series, index
+
+    if isinstance(values, ABCSeries):
+        if columns is None:
+            if values.name is not None:
+                columns = [values.name]
+        if index is None:
+            index = values.index
+        else:
+            values = values.reindex(index)
+
+        # zero len case (GH #2234)
+        if not len(values) and columns is not None and len(columns):
+            values = np.empty((0, 1), dtype=object)
+
+    # we could have a categorical type passed or coerced to 'category'
+    # recast this to an arrays_to_mgr
+    if is_categorical_dtype(getattr(values, ""dtype"", None)) or is_categorical_dtype(
+        dtype
+    ):
+
+        if not hasattr(values, ""dtype""):
+            values = prep_ndarray(values, copy=copy)
+            values = values.ravel()
+        elif copy:
+            values = values.copy()
+
+        index, columns = _get_axes(len(values), 1, index, columns)
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+    elif is_extension_array_dtype(values) or is_extension_array_dtype(dtype):
+        # GH#19157
+        if columns is None:
+            columns = [0]
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+
+    # by definition an array here
+    # the dtypes will be coerced to a single dtype
+    values = prep_ndarray(values, copy=copy)
+
+    if dtype is not None:
+        if not is_dtype_equal(values.dtype, dtype):
+            try:
+                values = values.astype(dtype)
+                # Handle timezone conversion for datetimes
+                if np.issubdtype(dtype, np.datetime64):
+                    tz_utc = np.datetime64('1970-01-01T00:00:00Z', 'm')
+                    values += tz_utc
+            except Exception as orig:
+                # e.g. ValueError when trying to cast object dtype to float64
+                raise ValueError(
+                    f""failed to cast to '{dtype}' (Exception was: {orig})""
+                ) from orig
+
+    index, columns = _get_axes(*values.shape, index=index, columns=columns)
+    values = values.T
+
+    # if we don't have a dtype specified, then try to convert objects
+    # on the entire block; this is to convert if we have datetimelike's
+    # embedded in an object type
+    if dtype is None and is_object_dtype(values):
+
+        if values.ndim == 2 and values.shape[0] != 1:
+            # transpose and separate blocks
+
+            dvals_list = [maybe_infer_to_datetimelike(row) for row in values]
+            for n in range(len(dvals_list)):
+                if isinstance(dvals_list[n], np.ndarray):
+                    dvals_list[n] = dvals_list[n].reshape(1, -1)
+
+            from pandas.core.internals.blocks import make_block
+
+            # TODO: What about re-joining object columns?
+            block_values = [
+                make_block(dvals_list[n], placement=[n]) for n in range(len(dvals_list))
+            ]
+
+        else:
+            datelike_vals = maybe_infer_to_datetimelike(values)
+            block_values = [datelike_vals]
+    else:
+        block_values = [values]
+
+    return create_block_manager_from_blocks(block_values, [columns, index])
+```",
+pandas-102-v0_gpt-5,UNKNOWN,UNKNOWN,"```python
+def init_ndarray(values, index, columns, dtype=None, copy=False):
+    # input must be a ndarray, list, Series, index
+
+    if isinstance(values, ABCSeries):
+        if columns is None:
+            if values.name is not None:
+                columns = [values.name]
+        if index is None:
+            index = values.index
+        else:
+            values = values.reindex(index)
+
+        # zero len case (GH #2234)
+        if not len(values) and columns is not None and len(columns):
+            values = np.empty((0, 1), dtype=object)
+
+    # we could have a categorical type passed or coerced to 'category'
+    # recast this to an arrays_to_mgr
+    if is_categorical_dtype(getattr(values, ""dtype"", None)) or is_categorical_dtype(
+        dtype
+    ):
+        if not hasattr(values, ""dtype""):
+            values = prep_ndarray(values, copy=copy)
+            values = values.ravel()
+        elif copy:
+            values = values.copy()
+
+        index, columns = _get_axes(len(values), 1, index, columns)
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+    elif is_extension_array_dtype(values) or is_extension_array_dtype(dtype):
+        # GH#19157
+        if columns is None:
+            columns = [0]
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+
+    # by definition an array here
+    # the dtypes will be coerced to a single dtype
+    values = prep_ndarray(values, copy=copy)
+
+    if dtype is not None:
+        if not is_dtype_equal(values.dtype, dtype):
+            try:
+                values = values.astype(dtype)
+            except Exception as orig:
+                # e.g. ValueError when trying to cast object dtype to float64
+                raise ValueError(
+                    f""failed to cast to '{dtype}' (Exception was: {orig})""
+                ) from orig
+
+    index, columns = _get_axes(*values.shape, index=index, columns=columns)
+    values = values.T
+
+    if dtype is None and is_object_dtype(values):
+        if values.ndim == 2 and values.shape[0] != 1:
+            # transpose and separate blocks
+            dvals_list = [maybe_infer_to_datetimelike(row) for row in values]
+            for n in range(len(dvals_list)):
+                if isinstance(dvals_list[n], np.ndarray):
+                    dvals_list[n] = dvals_list[n].reshape(1, -1)
+
+            from pandas.core.internals.blocks import make_block
+
+            block_values = [
+                make_block(dvals_list[n], placement=[n]) for n in range(len(dvals_list))
+            ]
+        else:
+            datelike_vals = maybe_infer_to_datetimelike(values)
+            block_values = [datelike_vals]
+    else:
+        block_values = [values]
+
+    # Add logic to correctly infer what dtype to set when dealing with datetime64 and index/columns
+    if dtype is not None and np.dtype(dtype).kind == 'M':
+        if not isinstance(values, np.ndarray):
+            raise ValueError(""Values must be an ndarray when using datetime dtype"")
+
+    return create_block_manager_from_blocks(block_values, [columns, index])
+```",
+pandas-102-v0_gpt-6,UNKNOWN,UNKNOWN,"```python
+def init_ndarray(values, index, columns, dtype=None, copy=False):
+    # input must be a ndarray, list, Series, index
+
+    if isinstance(values, ABCSeries):
+        if columns is None:
+            if values.name is not None:
+                columns = [values.name]
+        if index is None:
+            index = values.index
+        else:
+            values = values.reindex(index)
+
+        # zero len case (GH #2234)
+        if not len(values) and columns is not None and len(columns):
+            values = np.empty((0, 1), dtype=object)
+
+    # Handle categorical types
+    if is_categorical_dtype(getattr(values, ""dtype"", None)) or is_categorical_dtype(dtype):
+        if not hasattr(values, ""dtype""):
+            values = prep_ndarray(values, copy=copy)
+            values = values.ravel()
+        elif copy:
+            values = values.copy()
+
+        index, columns = _get_axes(len(values), 1, index, columns)
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+    elif is_extension_array_dtype(values) or is_extension_array_dtype(dtype):
+        # Handle extension array types
+        if columns is None:
+            columns = [0]
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+
+    # Ensure the values are an array
+    values = prep_ndarray(values, copy=copy)
+
+    # Check for matching dtypes and handle datetime types
+    if dtype is not None:
+        # Modified: Using np.dtype instead of is_dtype_equal to handle datetime correctly
+        if not np.dtype(values.dtype).type is np.dtype(dtype).type:
+            try:
+                values = values.astype(dtype)
+            except Exception as orig:
+                raise ValueError(
+                    f""failed to cast to '{dtype}' (Exception was: {orig})""
+                ) from orig
+
+    index, columns = _get_axes(*values.shape, index=index, columns=columns)
+    values = values.T
+
+    # If dtype is None and values are object types, infer datetimelike values
+    if dtype is None and is_object_dtype(values):
+        if values.ndim == 2 and values.shape[0] != 1:
+            dvals_list = [maybe_infer_to_datetimelike(row) for row in values]
+            for n in range(len(dvals_list)):
+                if isinstance(dvals_list[n], np.ndarray):
+                    dvals_list[n] = dvals_list[n].reshape(1, -1)
+
+            from pandas.core.internals.blocks import make_block
+
+            block_values = [
+                make_block(dvals_list[n], placement=[n]) for n in range(len(dvals_list))
+            ]
+        else:
+            datelike_vals = maybe_infer_to_datetimelike(values)
+            block_values = [datelike_vals]
+    else:
+        block_values = [values]
+
+    # Create and return the block manager
+    return create_block_manager_from_blocks(block_values, [columns, index])
+```",
+pandas-102-v0_gpt-7,UNKNOWN,UNKNOWN,"```python
+def init_ndarray(values, index, columns, dtype=None, copy=False):
+    # input must be a ndarray, list, Series, index
+
+    if isinstance(values, ABCSeries):
+        if columns is None:
+            if values.name is not None:
+                columns = [values.name]
+        if index is None:
+            index = values.index
+        else:
+            values = values.reindex(index)
+
+        # zero len case (GH #2234)
+        if not len(values) and columns is not None and len(columns):
+            values = np.empty((0, 1), dtype=object)
+
+    # we could have a categorical type passed or coerced to 'category'
+    # recast this to an arrays_to_mgr
+    if is_categorical_dtype(getattr(values, ""dtype"", None)) or is_categorical_dtype(
+        dtype
+    ):
+
+        if not hasattr(values, ""dtype""):
+            values = prep_ndarray(values, copy=copy)
+            values = values.ravel()
+        elif copy:
+            values = values.copy()
+
+        index, columns = _get_axes(len(values), 1, index, columns)
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+    elif is_extension_array_dtype(values) or is_extension_array_dtype(dtype):
+        # GH#19157
+        if columns is None:
+            columns = [0]
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+
+    # by definition an array here
+    # the dtypes will be coerced to a single dtype
+    values = prep_ndarray(values, copy=copy)
+
+    # Fix for creating a DataFrame with timezone-aware dtype
+    if dtype is not None and is_object_dtype(values):
+        # Convert to the specified dtype, and ensure it's handled correctly for datetime64 with tz
+        if 'datetime64' in str(dtype) and dtype != 'datetime64[ns]': 
+            # Create a date range based on the shape and the required dtype
+            base = np.arange(values.size).reshape(values.shape)  # Create base array
+            values = pd.to_datetime(base).tz_localize('UTC')
+
+    if dtype is not None:
+        if not is_dtype_equal(values.dtype, dtype):
+            try:
+                values = values.astype(dtype)
+            except Exception as orig:
+                # e.g. ValueError when trying to cast object dtype to float64
+                raise ValueError(
+                    f""failed to cast to '{dtype}' (Exception was: {orig})""
+                ) from orig
+
+    index, columns = _get_axes(*values.shape, index=index, columns=columns)
+    values = values.T
+
+    # if we don't have a dtype specified, then try to convert objects
+    # on the entire block; this is to convert if we have datetimelike's
+    # embedded in an object type
+    if dtype is None and is_object_dtype(values):
+
+        if values.ndim == 2 and values.shape[0] != 1:
+            # transpose and separate blocks
+
+            dvals_list = [maybe_infer_to_datetimelike(row) for row in values]
+            for n in range(len(dvals_list)):
+                if isinstance(dvals_list[n], np.ndarray):
+                    dvals_list[n] = dvals_list[n].reshape(1, -1)
+
+            from pandas.core.internals.blocks import make_block
+
+            # TODO: What about re-joining object columns?
+            block_values = [
+                make_block(dvals_list[n], placement=[n]) for n in range(len(dvals_list))
+            ]
+
+        else:
+            datelike_vals = maybe_infer_to_datetimelike(values)
+            block_values = [datelike_vals]
+    else:
+        block_values = [values]
+
+    return create_block_manager_from_blocks(block_values, [columns, index])
+```",
+pandas-102-v0_gpt-8,UNKNOWN,UNKNOWN,"```python
+def init_ndarray(values, index, columns, dtype=None, copy=False):
+    # input must be a ndarray, list, Series, index
+
+    if isinstance(values, ABCSeries):
+        if columns is None:
+            if values.name is not None:
+                columns = [values.name]
+        if index is None:
+            index = values.index
+        else:
+            values = values.reindex(index)
+
+        # zero len case (GH #2234)
+        if not len(values) and columns is not None and len(columns):
+            values = np.empty((0, 1), dtype=object)
+
+    # we could have a categorical type passed or coerced to 'category'
+    # recast this to an arrays_to_mgr
+    if is_categorical_dtype(getattr(values, ""dtype"", None)) or is_categorical_dtype(
+        dtype
+    ):
+
+        if not hasattr(values, ""dtype""):
+            values = prep_ndarray(values, copy=copy)
+            values = values.ravel()
+        elif copy:
+            values = values.copy()
+
+        index, columns = _get_axes(len(values), 1, index, columns)
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+    elif is_extension_array_dtype(values) or is_extension_array_dtype(dtype):
+        # GH#19157
+        if columns is None:
+            columns = [0]
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+
+    # by definition an array here
+    # the dtypes will be coerced to a single dtype
+    values = prep_ndarray(values, copy=copy)
+
+    if dtype is not None:
+        if not is_dtype_equal(values.dtype, dtype):
+            try:
+                # Directly convert to the expected dtype.
+                values = np.array(values, dtype=dtype)
+            except Exception as orig:
+                # e.g. ValueError when trying to cast object dtype to float64
+                raise ValueError(
+                    f""failed to cast to '{dtype}' (Exception was: {orig})""
+                ) from orig
+
+    index, columns = _get_axes(*values.shape, index=index, columns=columns)
+    values = values.T
+
+    # if we don't have a dtype specified, then try to convert objects
+    # on the entire block; this is to convert if we have datetimelike's
+    # embedded in an object type
+    if dtype is None and is_object_dtype(values):
+
+        if values.ndim == 2 and values.shape[0] != 1:
+            # transpose and separate blocks
+
+            dvals_list = [maybe_infer_to_datetimelike(row) for row in values]
+            for n in range(len(dvals_list)):
+                if isinstance(dvals_list[n], np.ndarray):
+                    dvals_list[n] = dvals_list[n].reshape(1, -1)
+
+            from pandas.core.internals.blocks import make_block
+
+            # TODO: What about re-joining object columns?
+            block_values = [
+                make_block(dvals_list[n], placement=[n]) for n in range(len(dvals_list))
+            ]
+
+        else:
+            datelike_vals = maybe_infer_to_datetimelike(values)
+            block_values = [datelike_vals]
+    else:
+        block_values = [values]
+
+    return create_block_manager_from_blocks(block_values, [columns, index])
+```",
+pandas-102-v0_gpt-9,UNKNOWN,UNKNOWN,"```python
+def init_ndarray(values, index, columns, dtype=None, copy=False):
+    if isinstance(values, ABCSeries):
+        if columns is None:
+            if values.name is not None:
+                columns = [values.name]
+        if index is None:
+            index = values.index
+        else:
+            values = values.reindex(index)
+
+        if not len(values) and columns is not None and len(columns):
+            values = np.empty((0, 1), dtype=object)
+
+    if is_categorical_dtype(getattr(values, ""dtype"", None)) or is_categorical_dtype(dtype):
+        if not hasattr(values, ""dtype""):
+            values = prep_ndarray(values, copy=copy)
+            values = values.ravel()
+        elif copy:
+            values = values.copy()
+
+        index, columns = _get_axes(len(values), 1, index, columns)
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+    elif is_extension_array_dtype(values) or is_extension_array_dtype(dtype):
+        if columns is None:
+            columns = [0]
+        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)
+
+    values = prep_ndarray(values, copy=copy)
+
+    if dtype is not None:
+        if not is_dtype_equal(values.dtype, dtype):
+            try:
+                if np.issubdtype(dtype, np.datetime64):
+                    # Convert integer to datetime if dtype is datetime
+                    epoch_time = pd.Timestamp('1970-01-01')
+                    values = epoch_time + pd.to_timedelta(values.flatten(), unit='ns')
+                    values = values.reshape(-1, values.shape[1]).astype(dtype)
+                else:
+                    values = values.astype(dtype)
+            except Exception as orig:
+                raise ValueError(f""failed to cast to '{dtype}' (Exception was: {orig})"") from orig
+
+    index, columns = _get_axes(*values.shape, index=index, columns=columns)
+    values = values.T
+
+    if dtype is None and is_object_dtype(values):
+        if values.ndim == 2 and values.shape[0] != 1:
+            dvals_list = [maybe_infer_to_datetimelike(row) for row in values]
+            for n in range(len(dvals_list)):
+                if isinstance(dvals_list[n], np.ndarray):
+                    dvals_list[n] = dvals_list[n].reshape(1, -1)
+
+            from pandas.core.internals.blocks import make_block
+            block_values = [make_block(dvals_list[n], placement=[n]) for n in range(len(dvals_list))]
+
+        else:
+            datelike_vals = maybe_infer_to_datetimelike(values)
+            block_values = [datelike_vals]
+    else:
+        block_values = [values]
+
+    return create_block_manager_from_blocks(block_values, [columns, index])
+```",

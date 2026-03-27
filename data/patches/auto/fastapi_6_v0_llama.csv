@@ -1,0 +1,835 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+fastapi-6-v0_llama-0,UNKNOWN,UNKNOWN,"```python
+async def request_body_to_args(
+    required_params: List[ModelField],
+    received_body: Optional[Union[Dict[str, Any], FormData]],
+) -> Tuple[Dict[str, Any], List[ErrorWrapper]]:
+    values = {}
+    errors = []
+    if required_params:
+        field = required_params[0]
+        field_info = get_field_info(field)
+        embed = getattr(field_info, ""embed"", None)
+        if len(required_params) == 1 and not embed:
+            received_body = {field.alias: received_body}
+        for field in required_params:
+            value: Any = None
+            if received_body is not None:
+                if isinstance(received_body, FormData):
+                    value = received_body.getlist(field.alias)
+                else:
+                    value = received_body.get(field.alias)
+            if (
+                value is None
+                or (isinstance(field_info, params.Form) and value == """")
+                or (
+                    isinstance(field_info, params.Form)
+                    and field.shape in sequence_shapes
+                    and len(value) == 0
+                )
+            ):
+                if field.required:
+                    if PYDANTIC_1:
+                        errors.append(
+                            ErrorWrapper(MissingError(), loc=(""body"", field.alias))
+                        )
+                    else:  # pragma: nocover
+                        errors.append(
+                            ErrorWrapper(  # type: ignore
+                                MissingError(),
+                                loc=(""body"", field.alias),
+                                config=BaseConfig,
+                            )
+                        )
+                else:
+                    values[field.name] = deepcopy(field.default)
+                continue
+            if (
+                isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, UploadFile)
+            ):
+                value = await value.read()
+            elif (
+                field.shape in sequence_shapes
+                and isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, sequence_types)
+            ):
+                awaitables = [sub_value.read() for sub_value in value]
+                contents = await asyncio.gather(*awaitables)
+                value = sequence_shape_to_type[field.shape](contents)
+            # Convert list to set or tuple if necessary
+            if field.type_ == set and isinstance(value, list):
+                value = set(value)
+            elif field.type_ == tuple and isinstance(value, list):
+                value = tuple(value)
+            v_, errors_ = field.validate(value, values, loc=(""body"", field.alias))
+            if isinstance(errors_, ErrorWrapper):
+                errors.append(errors_)
+            elif isinstance(errors_, list):
+                errors.extend(errors_)
+            else:
+                values[field.name] = v_
+    return values, errors
+```",
+fastapi-6-v0_llama-1,UNKNOWN,UNKNOWN,"```python
+async def request_body_to_args(
+    required_params: List[ModelField],
+    received_body: Optional[Union[Dict[str, Any], FormData]],
+) -> Tuple[Dict[str, Any], List[ErrorWrapper]]:
+    values = {}
+    errors = []
+    if required_params:
+        field = required_params[0]
+        field_info = get_field_info(field)
+        embed = getattr(field_info, ""embed"", None)
+        if len(required_params) == 1 and not embed:
+            received_body = {field.alias: received_body}
+        for field in required_params:
+            value: Any = None
+            if received_body is not None:
+                if field.shape in sequence_shapes and isinstance(
+                    received_body, FormData
+                ):
+                    value = received_body.getlist(field.alias)
+                else:
+                    value = received_body.get(field.alias)
+            if (
+                value is None
+                or (isinstance(field_info, params.Form) and value == """")
+                or (
+                    isinstance(field_info, params.Form)
+                    and field.shape in sequence_shapes
+                    and len(value) == 0
+                )
+            ):
+                if field.required:
+                    if PYDANTIC_1:
+                        errors.append(
+                            ErrorWrapper(MissingError(), loc=(""body"", field.alias))
+                        )
+                    else:  # pragma: nocover
+                        errors.append(
+                            ErrorWrapper(  # type: ignore
+                                MissingError(),
+                                loc=(""body"", field.alias),
+                                config=BaseConfig,
+                            )
+                        )
+                else:
+                    values[field.name] = deepcopy(field.default)
+                continue
+            if (
+                isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, UploadFile)
+            ):
+                value = await value.read()
+            elif (
+                field.shape in sequence_shapes
+                and isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, sequence_types)
+            ):
+                awaitables = [sub_value.read() for sub_value in value]
+                contents = await asyncio.gather(*awaitables)
+                value = sequence_shape_to_type[field.shape](contents)
+            # Changed here: directly passing the list value to the field validation
+            v_, errors_ = field.validate(value, values, loc=(""body"", field.alias))
+            if isinstance(errors_, ErrorWrapper):
+                errors.append(errors_)
+            elif isinstance(errors_, list):
+                errors.extend(errors_)
+            else:
+                values[field.name] = v_
+    return values, errors
+```",
+fastapi-6-v0_llama-2,UNKNOWN,UNKNOWN,"```python
+async def request_body_to_args(
+    required_params: List[ModelField],
+    received_body: Optional[Union[Dict[str, Any], FormData]],
+) -> Tuple[Dict[str, Any], List[ErrorWrapper]]:
+    values = {}
+    errors = []
+    if required_params:
+        field = required_params[0]
+        field_info = get_field_info(field)
+        embed = getattr(field_info, ""embed"", None)
+        if len(required_params) == 1 and not embed:
+            received_body = {field.alias: received_body}
+        for field in required_params:
+            value: Any = None
+            if received_body is not None:
+                if field.shape in sequence_shapes and isinstance(
+                    received_body, FormData
+                ):
+                    value = received_body.getlist(field.alias)
+                else:
+                    value = received_body.get(field.alias)
+            if (
+                value is None
+                or (isinstance(field_info, params.Form) and value == """")
+                or (
+                    isinstance(field_info, params.Form)
+                    and field.shape in sequence_shapes
+                    and len(value) == 0
+                )
+            ):
+                if field.required:
+                    if PYDANTIC_1:
+                        errors.append(
+                            ErrorWrapper(MissingError(), loc=(""body"", field.alias))
+                        )
+                    else:  # pragma: nocover
+                        errors.append(
+                            ErrorWrapper(  # type: ignore
+                                MissingError(),
+                                loc=(""body"", field.alias),
+                                config=BaseConfig,
+                            )
+                        )
+                else:
+                    values[field.name] = deepcopy(field.default)
+                continue
+            if (
+                isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, UploadFile)
+            ):
+                value = await value.read()
+            elif (
+                field.shape in sequence_shapes
+                and isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, sequence_types)
+            ):
+                awaitables = [sub_value.read() for sub_value in value]
+                contents = await asyncio.gather(*awaitables)
+                value = sequence_shape_to_type[field.shape](contents)
+            # If the value is a list, it means we have a form with repeated keys
+            if isinstance(value, list):
+                if field.type_ == list:
+                    v_ = value
+                elif field.type_ == set:
+                    v_ = set(value)
+                elif field.type_ == tuple:
+                    v_ = tuple(value)
+                else:
+                    v_ = value[0]  # Default to the first value for other types
+            else:
+                v_ = value
+            errors_ = field.validate(v_, values, loc=(""body"", field.alias))
+            if isinstance(errors_, ErrorWrapper):
+                errors.append(errors_)
+            elif isinstance(errors_, list):
+                errors.extend(errors_)
+            else:
+                values[field.name] = v_
+    return values, errors
+```",
+fastapi-6-v0_llama-3,UNKNOWN,UNKNOWN,"```python
+async def request_body_to_args(
+    required_params: List[ModelField],
+    received_body: Optional[Union[Dict[str, Any], FormData]],
+) -> Tuple[Dict[str, Any], List[ErrorWrapper]]:
+    values = {}
+    errors = []
+    if required_params:
+        field = required_params[0]
+        field_info = get_field_info(field)
+        embed = getattr(field_info, ""embed"", None)
+        if len(required_params) == 1 and not embed:
+            received_body = {field.alias: received_body}
+        for field in required_params:
+            value: Any = None
+            if received_body is not None:
+                if field.shape in sequence_shapes and isinstance(
+                    received_body, FormData
+                ):
+                    value = received_body.getlist(field.alias)
+                else:
+                    value = received_body.get(field.alias)
+            if (
+                value is None
+                or (isinstance(field_info, params.Form) and value == """")
+                or (
+                    isinstance(field_info, params.Form)
+                    and field.shape in sequence_shapes
+                    and len(value) == 0
+                )
+            ):
+                if field.required:
+                    if PYDANTIC_1:
+                        errors.append(
+                            ErrorWrapper(MissingError(), loc=(""body"", field.alias))
+                        )
+                    else:  # pragma: nocover
+                        errors.append(
+                            ErrorWrapper(  # type: ignore
+                                MissingError(),
+                                loc=(""body"", field.alias),
+                                config=BaseConfig,
+                            )
+                        )
+                else:
+                    values[field.name] = deepcopy(field.default)
+                continue
+            if (
+                isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, UploadFile)
+            ):
+                value = await value.read()
+            elif (
+                field.shape in sequence_shapes
+                and isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, sequence_types)
+            ):
+                awaitables = [sub_value.read() for sub_value in value]
+                contents = await asyncio.gather(*awaitables)
+                value = sequence_shape_to_type[field.shape](contents)
+            # Check if the field type is a sequence type (like list, set, tuple)
+            if field.shape in sequence_shapes:
+                # If the value is not already a sequence, convert it to a sequence
+                if not isinstance(value, sequence_types):
+                    value = [value]
+                # If the field type is a set, convert the sequence to a set
+                if lenient_issubclass(field.type_, set):
+                    value = set(value)
+                # If the field type is a tuple, convert the sequence to a tuple
+                elif lenient_issubclass(field.type_, tuple):
+                    value = tuple(value)
+            v_, errors_ = field.validate(value, values, loc=(""body"", field.alias))
+            if isinstance(errors_, ErrorWrapper):
+                errors.append(errors_)
+            elif isinstance(errors_, list):
+                errors.extend(errors_)
+            else:
+                values[field.name] = v_
+    return values, errors
+```",
+fastapi-6-v0_llama-4,UNKNOWN,UNKNOWN,"```python
+async def request_body_to_args(
+    required_params: List[ModelField],
+    received_body: Optional[Union[Dict[str, Any], FormData]],
+) -> Tuple[Dict[str, Any], List[ErrorWrapper]]:
+    values = {}
+    errors = []
+    if required_params:
+        field = required_params[0]
+        field_info = get_field_info(field)
+        embed = getattr(field_info, ""embed"", None)
+        if len(required_params) == 1 and not embed:
+            received_body = {field.alias: received_body}
+        for field in required_params:
+            value: Any = None
+            if received_body is not None:
+                if field.shape in sequence_shapes and isinstance(
+                    received_body, FormData
+                ):
+                    value = received_body.getlist(field.alias)
+                elif isinstance(received_body, FormData):
+                    value = received_body.get(field.alias)
+                elif isinstance(received_body, dict):
+                    value = received_body.get(field.alias)
+            if (
+                value is None
+                or (isinstance(field_info, params.Form) and value == """")
+                or (
+                    isinstance(field_info, params.Form)
+                    and field.shape in sequence_shapes
+                    and len(value) == 0
+                )
+            ):
+                if field.required:
+                    if PYDANTIC_1:
+                        errors.append(
+                            ErrorWrapper(MissingError(), loc=(""body"", field.alias))
+                        )
+                    else:  # pragma: nocover
+                        errors.append(
+                            ErrorWrapper(  # type: ignore
+                                MissingError(),
+                                loc=(""body"", field.alias),
+                                config=BaseConfig,
+                            )
+                        )
+                else:
+                    values[field.name] = deepcopy(field.default)
+                continue
+            if (
+                isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, UploadFile)
+            ):
+                value = await value.read()
+            elif (
+                field.shape in sequence_shapes
+                and isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, sequence_types)
+            ):
+                awaitables = [sub_value.read() for sub_value in value]
+                contents = await asyncio.gather(*awaitables)
+                value = sequence_shape_to_type[field.shape](contents)
+            v_, errors_ = field.validate(value, values, loc=(""body"", field.alias))
+            if isinstance(errors_, ErrorWrapper):
+                errors.append(errors_)
+            elif isinstance(errors_, list):
+                errors.extend(errors_)
+            else:
+                values[field.name] = v_
+    return values, errors
+```",
+fastapi-6-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+async def request_body_to_args(
+    required_params: List[ModelField],
+    received_body: Optional[Union[Dict[str, Any], FormData]],
+) -> Tuple[Dict[str, Any], List[ErrorWrapper]]:
+    values = {}
+    errors = []
+    if required_params:
+        field = required_params[0]
+        field_info = get_field_info(field)
+        embed = getattr(field_info, ""embed"", None)
+        if len(required_params) == 1 and not embed:
+            received_body = {field.alias: received_body}
+        for field in required_params:
+            value: Any = None
+            if received_body is not None:
+                if field.shape in sequence_shapes and isinstance(
+                    received_body, FormData
+                ):
+                    value = received_body.getlist(field.alias)
+                else:
+                    value = received_body.get(field.alias)
+            if (
+                value is None
+                or (isinstance(field_info, params.Form) and value == """")
+                or (
+                    isinstance(field_info, params.Form)
+                    and field.shape in sequence_shapes
+                    and len(value) == 0
+                )
+            ):
+                if field.required:
+                    if PYDANTIC_1:
+                        errors.append(
+                            ErrorWrapper(MissingError(), loc=(""body"", field.alias))
+                        )
+                    else:  # pragma: nocover
+                        errors.append(
+                            ErrorWrapper(  # type: ignore
+                                MissingError(),
+                                loc=(""body"", field.alias),
+                                config=BaseConfig,
+                            )
+                        )
+                else:
+                    values[field.name] = deepcopy(field.default)
+                continue
+            if (
+                isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, UploadFile)
+            ):
+                value = await value.read()
+            elif (
+                field.shape in sequence_shapes
+                and isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, sequence_types)
+            ):
+                awaitables = [sub_value.read() for sub_value in value]
+                contents = await asyncio.gather(*awaitables)
+                value = sequence_shape_to_type[field.shape](contents)
+            # Convert the value to the correct sequence type
+            if field.shape in sequence_shapes:
+                if field.type_ == list:
+                    pass
+                elif field.type_ == set:
+                    value = list(set(value))
+                elif field.type_ == tuple:
+                    value = list(value)
+            v_, errors_ = field.validate(value, values, loc=(""body"", field.alias))
+            if isinstance(errors_, ErrorWrapper):
+                errors.append(errors_)
+            elif isinstance(errors_, list):
+                errors.extend(errors_)
+            else:
+                values[field.name] = v_
+    return values, errors
+```",
+fastapi-6-v0_llama-6,UNKNOWN,UNKNOWN,"### Fixed Solution
+```python
+async def request_body_to_args(
+    required_params: List[ModelField],
+    received_body: Optional[Union[Dict[str, Any], FormData]],
+) -> Tuple[Dict[str, Any], List[ErrorWrapper]]:
+    values = {}
+    errors = []
+    if required_params:
+        field = required_params[0]
+        field_info = get_field_info(field)
+        embed = getattr(field_info, ""embed"", None)
+        if len(required_params) == 1 and not embed:
+            received_body = {field.alias: received_body}
+        for field in required_params:
+            value: Any = None
+            if received_body is not None:
+                if field.shape in sequence_shapes and isinstance(
+                    received_body, FormData
+                ):
+                    # Collect all values for the field from the form data
+                    value = received_body.getlist(field.alias)
+                elif isinstance(received_body, FormData):
+                    # Get the first value for the field from the form data
+                    value = received_body.get(field.alias)
+                else:
+                    value = received_body.get(field.alias)
+            if (
+                value is None
+                or (isinstance(field_info, params.Form) and value == """")
+                or (
+                    isinstance(field_info, params.Form)
+                    and field.shape in sequence_shapes
+                    and len(value) == 0
+                )
+            ):
+                if field.required:
+                    if PYDANTIC_1:
+                        errors.append(
+                            ErrorWrapper(MissingError(), loc=(""body"", field.alias))
+                        )
+                    else:  # pragma: nocover
+                        errors.append(
+                            ErrorWrapper(  # type: ignore
+                                MissingError(),
+                                loc=(""body"", field.alias),
+                                config=BaseConfig,
+                            )
+                        )
+                else:
+                    values[field.name] = deepcopy(field.default)
+                continue
+            if (
+                isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, UploadFile)
+            ):
+                value = await value.read()
+            elif (
+                field.shape in sequence_shapes
+                and isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, sequence_types)
+            ):
+                awaitables = [sub_value.read() for sub_value in value]
+                contents = await asyncio.gather(*awaitables)
+                value = sequence_shape_to_type[field.shape](contents)
+            v_, errors_ = field.validate(value, values, loc=(""body"", field.alias))
+            if isinstance(errors_, ErrorWrapper):
+                errors.append(errors_)
+            elif isinstance(errors_, list):
+                errors.extend(errors_)
+            else:
+                values[field.name] = v_
+    return values, errors
+```
+### Explanation of Changes
+*   In the original code, when `received_body` is an instance of `FormData`, the code gets the value for the field using `received_body.get(field.alias)`. However, this only returns the last value for the field, because `get()` returns the last value for a key in a `MultiDict`.
+*   The bug is that `received_body.getlist(field.alias)` is only called when `field.shape` is in `sequence_shapes` and `received_body` is a `FormData` instance.
+*   To fix this bug, you should call `received_body.getlist(field.alias)` whenever `received_body` is a `FormData` instance and `field.shape` is in `sequence_shapes`. If the field shape is not in `sequence_shapes` but `received_body` is a `FormData` instance, the original code that retrieves the value should be applied instead.
+
+### Tests and Example Uses
+Here are some example tests for this function:
+
+```python
+import pytest
+from fastapi import FastAPI, Form
+from fastapi.testclient import TestClient
+from pydantic import BaseModel
+
+app = FastAPI()
+
+class Item(BaseModel):
+    items: list
+
+@app.post(""/items/"")
+async def create_item(item: Item):
+    return item
+
+client = TestClient(app)
+
+def test_list_param_as_form():
+    response = client.post(
+        ""/items/"", data={""items"": [""first"", ""second"", ""third""]}
+    )
+    assert response.status_code == 200
+    assert response.json() == {""items"": [""first"", ""second"", ""third""]}
+
+def test_set_param_as_form():
+    class Item(BaseModel):
+        items: set
+
+    @app.post(""/items-set/"")
+    async def create_item_set(item: Item):
+        return item
+
+    response = client.post(
+        ""/items-set/"", data={""items"": [""first"", ""second"", ""third""]}
+    )
+    assert response.status_code == 200
+    assert set(response.json()[""items""]) == {""first"", ""second"", ""third""}
+
+def test_tuple_param_as_form():
+    class Item(BaseModel):
+        items: tuple
+
+    @app.post(""/items-tuple/"")
+    async def create_item_tuple(item: Item):
+        return item
+
+    response = client.post(
+        ""/items-tuple/"", data={""items"": [""first"", ""second"", ""third""]}
+    )
+    assert response.status_code == 200
+    assert response.json() == {""items"": [""first"", ""second"", ""third""]}
+```",
+fastapi-6-v0_llama-7,UNKNOWN,UNKNOWN,"```python
+async def request_body_to_args(
+    required_params: List[ModelField],
+    received_body: Optional[Union[Dict[str, Any], FormData]],
+) -> Tuple[Dict[str, Any], List[ErrorWrapper]]:
+    values = {}
+    errors = []
+    if required_params:
+        field = required_params[0]
+        field_info = get_field_info(field)
+        embed = getattr(field_info, ""embed"", None)
+        if len(required_params) == 1 and not embed:
+            received_body = {field.alias: received_body}
+        for field in required_params:
+            value: Any = None
+            if received_body is not None:
+                if field.shape in sequence_shapes and isinstance(
+                    received_body, FormData
+                ):
+                    value = received_body.getlist(field.alias)
+                elif isinstance(received_body, FormData):
+                    value = received_body.get(field.alias)
+                else:
+                    value = received_body.get(field.alias)
+            if (
+                value is None
+                or (isinstance(field_info, params.Form) and value == """")
+                or (
+                    isinstance(field_info, params.Form)
+                    and field.shape in sequence_shapes
+                    and len(value) == 0
+                )
+            ):
+                if field.required:
+                    if PYDANTIC_1:
+                        errors.append(
+                            ErrorWrapper(MissingError(), loc=(""body"", field.alias))
+                        )
+                    else:  # pragma: nocover
+                        errors.append(
+                            ErrorWrapper(  # type: ignore
+                                MissingError(),
+                                loc=(""body"", field.alias),
+                                config=BaseConfig,
+                            )
+                        )
+                else:
+                    values[field.name] = deepcopy(field.default)
+                continue
+            if (
+                isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, UploadFile)
+            ):
+                value = await value.read()
+            elif (
+                field.shape in sequence_shapes
+                and isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, sequence_types)
+            ):
+                awaitables = [sub_value.read() for sub_value in value]
+                contents = await asyncio.gather(*awaitables)
+                value = sequence_shape_to_type[field.shape](contents)
+            # Use field.validate with the list of values
+            v_, errors_ = field.validate(value, values, loc=(""body"", field.alias))
+            if isinstance(errors_, ErrorWrapper):
+                errors.append(errors_)
+            elif isinstance(errors_, list):
+                errors.extend(errors_)
+            else:
+                # Only append v_ if it is not empty to avoid overwriting previous values
+                if v_:
+                    values[field.name] = v_
+    return values, errors
+```",
+fastapi-6-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+async def request_body_to_args(
+    required_params: List[ModelField],
+    received_body: Optional[Union[Dict[str, Any], FormData]],
+) -> Tuple[Dict[str, Any], List[ErrorWrapper]]:
+    values = {}
+    errors = []
+    if required_params:
+        field = required_params[0]
+        field_info = get_field_info(field)
+        embed = getattr(field_info, ""embed"", None)
+        if len(required_params) == 1 and not embed:
+            received_body = {field.alias: received_body}
+        for field in required_params:
+            value: Any = None
+            if received_body is not None:
+                if field.shape in sequence_shapes and isinstance(
+                    received_body, FormData
+                ):
+                    value = received_body.getlist(field.alias)
+                elif isinstance(received_body, FormData):
+                    value = received_body.get(field.alias)
+                else:
+                    value = received_body.get(field.alias)
+            if (
+                value is None
+                or (isinstance(field_info, params.Form) and value == """")
+                or (
+                    isinstance(field_info, params.Form)
+                    and field.shape in sequence_shapes
+                    and len(value) == 0
+                )
+            ):
+                if field.required:
+                    if PYDANTIC_1:
+                        errors.append(
+                            ErrorWrapper(MissingError(), loc=(""body"", field.alias))
+                        )
+                    else:  # pragma: nocover
+                        errors.append(
+                            ErrorWrapper(  # type: ignore
+                                MissingError(),
+                                loc=(""body"", field.alias),
+                                config=BaseConfig,
+                            )
+                        )
+                else:
+                    values[field.name] = deepcopy(field.default)
+                continue
+            if (
+                isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, UploadFile)
+            ):
+                value = await value.read()
+            elif (
+                field.shape in sequence_shapes
+                and isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, sequence_types)
+            ):
+                awaitables = [sub_value.read() for sub_value in value]
+                contents = await asyncio.gather(*awaitables)
+                value = sequence_shape_to_type[field.shape](contents)
+            elif field.shape in sequence_shapes and isinstance(value, list):
+                if field.type_ == set:
+                    value = set(value)
+                elif field.type_ == tuple:
+                    value = tuple(value)
+            v_, errors_ = field.validate(value, values, loc=(""body"", field.alias))
+            if isinstance(errors_, ErrorWrapper):
+                errors.append(errors_)
+            elif isinstance(errors_, list):
+                errors.extend(errors_)
+            else:
+                values[field.name] = v_
+    return values, errors
+```",
+fastapi-6-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+async def request_body_to_args(
+    required_params: List[ModelField],
+    received_body: Optional[Union[Dict[str, Any], FormData]],
+) -> Tuple[Dict[str, Any], List[ErrorWrapper]]:
+    values = {}
+    errors = []
+    if required_params:
+        field = required_params[0]
+        field_info = get_field_info(field)
+        embed = getattr(field_info, ""embed"", None)
+        if len(required_params) == 1 and not embed:
+            received_body = {field.alias: received_body}
+        for field in required_params:
+            value: Any = None
+            if received_body is not None:
+                if field.shape in sequence_shapes and isinstance(
+                    received_body, FormData
+                ):
+                    value = received_body.getlist(field.alias)
+                else:
+                    value = received_body.get(field.alias)
+            if (
+                value is None
+                or (isinstance(field_info, params.Form) and value == """")
+                or (
+                    isinstance(field_info, params.Form)
+                    and field.shape in sequence_shapes
+                    and len(value) == 0
+                )
+            ):
+                if field.required:
+                    if PYDANTIC_1:
+                        errors.append(
+                            ErrorWrapper(MissingError(), loc=(""body"", field.alias))
+                        )
+                    else:  # pragma: nocover
+                        errors.append(
+                            ErrorWrapper(  # type: ignore
+                                MissingError(),
+                                loc=(""body"", field.alias),
+                                config=BaseConfig,
+                            )
+                        )
+                else:
+                    values[field.name] = deepcopy(field.default)
+                continue
+            if (
+                isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, UploadFile)
+            ):
+                value = await value.read()
+            elif (
+                field.shape in sequence_shapes
+                and isinstance(field_info, params.File)
+                and lenient_issubclass(field.type_, bytes)
+                and isinstance(value, sequence_types)
+            ):
+                awaitables = [sub_value.read() for sub_value in value]
+                contents = await asyncio.gather(*awaitables)
+                value = sequence_shape_to_type[field.shape](contents)
+            # Special handling for repeated keys in form data
+            if isinstance(value, list) and isinstance(field.type_, (list, set, tuple)):
+                if isinstance(field.type_, list):
+                    v_ = value
+                elif isinstance(field.type_, set):
+                    v_ = set(value)
+                elif isinstance(field.type_, tuple):
+                    v_ = tuple(value)
+                errors_ = []
+            else:
+                v_, errors_ = field.validate(value, values, loc=(""body"", field.alias))
+            if isinstance(errors_, ErrorWrapper):
+                errors.append(errors_)
+            elif isinstance(errors_, list):
+                errors.extend(errors_)
+            else:
+                values[field.name] = v_
+    return values, errors
+```",

@@ -1,0 +1,104 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+keras-14-vall_llama-0,UNKNOWN,UNKNOWN,"```python
+def sparse_top_k_categorical_accuracy(y_true, y_pred, k=5):
+    return K.mean(K.in_top_k(y_pred, K.cast(y_true, 'int32'), k))
+```",
+keras-14-vall_llama-1,UNKNOWN,UNKNOWN,"```python
+def sparse_top_k_categorical_accuracy(y_true, y_pred, k=5):
+    return K.mean(K.in_top_k(y_pred, K.cast(y_true, 'int32'), k))
+```",
+keras-14-vall_llama-2,UNKNOWN,UNKNOWN,"```python
+def sparse_top_k_categorical_accuracy(y_true, y_pred, k=5):
+    return K.mean(K.in_top_k(y_pred, K.cast(y_true, 'int32'), k))
+```",
+keras-14-vall_llama-3,UNKNOWN,UNKNOWN,"### Fixed Solution
+```python
+def sparse_top_k_categorical_accuracy(y_true, y_pred, k=5):
+    return K.mean(K.in_top_k(y_pred, K.cast(y_true, 'int32'), k))
+```
+### Explanation of Changes
+*   **Remove `K.max`**: Removed the `K.max` operation because `y_true` should directly provide the class index for sparse categorical accuracy.
+*   **Direct Cast**: Directly cast `y_true` to 'int32' as it represents class indices and should match the type expected by `K.in_top_k`.
+*   **Simplified Axis Handling**: Removed manual axis specification since `K.in_top_k` will handle the comparison based on the last dimension of `y_pred` by default, aligning with the shape of `y_true` when it's a simple index vector.
+
+### Tests and Example Uses
+To verify the correctness of the function, we can use the provided test cases. Additionally, we can include example use cases to demonstrate how to utilize the `sparse_top_k_categorical_accuracy` function with sample data.
+
+```python
+y_true = np.array([1, 0])
+y_pred = np.array([[0.7, 0.2, 0.1], [0.1, 0.8, 0.1]])
+
+# Convert to Keras variables
+y_true_var = K.variable(y_true)
+y_pred_var = K.variable(y_pred)
+
+# Calculate accuracy
+accuracy = sparse_top_k_categorical_accuracy(y_true_var, y_pred_var, k=2)
+
+# Evaluate the accuracy
+print(K.eval(accuracy))
+```
+This approach simplifies the original function by removing the unnecessary use of `K.max` and directly utilizing `y_true` as the class index, ensuring the sparse categorical accuracy calculation matches the expected behavior.",
+keras-14-vall_llama-4,UNKNOWN,UNKNOWN,"```python
+def sparse_top_k_categorical_accuracy(y_true, y_pred, k=5):
+    return K.mean(K.in_top_k(y_pred, y_true, k))
+```",
+keras-14-vall_llama-5,UNKNOWN,UNKNOWN,"```python
+def sparse_top_k_categorical_accuracy(y_true, y_pred, k=5):
+    return K.mean(K.in_top_k(y_pred, K.cast(y_true, 'int32'), k))
+```",
+keras-14-vall_llama-6,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the bug**: The bug arises from the fact that `K.max(y_true, axis=-1)` is used to determine the class index from `y_true`, which is sparse. This could potentially lead to incorrect indices if `y_true` is not properly formatted.
+
+2. **Incompatible input shape**: The `K.in_top_k` function expects targets to be of shape `(batch_size,)`, but in the current implementation, `K.max(y_true, axis=-1)` reduces the dimensionality of `y_true` incorrectly because `y_true` is already of shape `(batch_size,)` (sparse labels).
+
+3. **Need to adjust `y_true` processing**: Since `y_true` is already sparse (integer labels), there is no need to find the max along any axis. The integer labels themselves represent the class indices.
+
+4. **Correct implementation of `sparse_top_k_categorical_accuracy`**: The correct implementation should directly use `y_true` as the targets without applying `K.max`. This ensures that the comparison with `y_pred` is done correctly.
+
+5. **Ensuring correct data types**: The function should also ensure that `y_true` is of an appropriate integer type to be used as indices.
+
+### Fixed solution:
+```python
+def sparse_top_k_categorical_accuracy(y_true, y_pred, k=5):
+    # y_true is already sparse, so no need for K.max
+    # Ensure y_true is of int32 type for indexing
+    y_true = K.cast(y_true, 'int32')
+    
+    # Directly use y_true as targets
+    return K.mean(K.in_top_k(y_pred, y_true, k))
+```
+
+### Explanation of changes:
+- **Removed `K.max(y_true, axis=-1)`**: Since `y_true` is already sparse (integer labels), there's no need to find the max value.
+- **Casted `y_true` to `int32`**: Ensures that `y_true` can be used as indices.
+- **Passed `y_true` directly to `K.in_top_k`**: Uses `y_true` as the targets for the top-k comparison without unnecessary operations.
+
+### Tests and example uses:
+Given the nature of the fix, testing should cover various cases including different values of `k`, different shapes and values of `y_true` and `y_pred`, and ensuring that the function behaves correctly with sparse labels. Example tests have been provided in the problem description, which should be used to validate the corrected function.",
+keras-14-vall_llama-7,UNKNOWN,UNKNOWN,"```python
+def sparse_top_k_categorical_accuracy(y_true, y_pred, k=5):
+    return K.mean(K.in_top_k(y_pred, K.cast(y_true, 'int32'), k))
+```",
+keras-14-vall_llama-8,UNKNOWN,UNKNOWN,"```python
+def sparse_top_k_categorical_accuracy(y_true, y_pred, k=5):
+    return K.mean(K.in_top_k(y_pred, K.cast(y_true, 'int32'), k))
+```",
+keras-14-vall_llama-9,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the error message**: The error indicates a shape mismatch for the operation 'in_top_k/InTopKV2'. This operation requires specific shapes for its inputs, particularly the targets should be of rank 1, but the code is providing a rank 0 tensor.
+2. **Identifying the source of the error**: The issue stems from how `y_true` is being processed before being passed to `K.in_top_k`. The use of `K.max(y_true, axis=-1)` and then casting to 'int32' is likely the culprit, as it's reducing `y_true` to a scalar value (rank 0 tensor) when it should be a vector (rank 1 tensor) for the operation.
+3. **Understanding the intent of `sparse_top_k_categorical_accuracy`**: This function is meant to calculate the accuracy of a model's predictions, specifically for sparse categorical labels. The `K.in_top_k` function checks if the true labels are among the top k predictions.
+4. **Realizing the issue with `K.max(y_true, axis=-1)`**: Since `y_true` is already supposed to be sparse (integer labels), using `K.max(y_true, axis=-1)` is incorrect because it assumes a different format for `y_true`. This operation is typically used when `y_true` is one-hot encoded.
+
+### Fixed solution:
+```python
+def sparse_top_k_categorical_accuracy(y_true, y_pred, k=5):
+    return K.mean(K.in_top_k(y_pred, K.cast(y_true, 'int32'), k), axis=0)
+```
+### Explanation of changes:
+- **Removed `K.max(y_true, axis=-1)`**: This operation is unnecessary and incorrect for sparse labels. The true labels (`y_true`) are directly used.
+- **Casting `y_true` to 'int32'**: Ensures that `y_true` is of an integer type, which is what `K.in_top_k` expects for the targets.
+- **Adjusted axis in `K.mean`**: Changed from `-1` to `0` to correctly calculate the mean accuracy across all samples.
+
+### Tests and example uses:
+You can use the test cases provided in the problem statement to verify the correctness of the fixed function. Ensure that `y_true` is correctly formatted as sparse labels (integer values representing class indices) and that `y_pred` contains the predicted probabilities or logits for each class.",

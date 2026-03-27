@@ -1,0 +1,265 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+httpie-3-v0_llama-0,UNKNOWN,UNKNOWN,"```python
+def update_headers(self, request_headers):
+    """"""
+    Update the session headers with the request ones while ignoring
+    certain name prefixes.
+
+    :type request_headers: dict
+
+    """"""
+    for name, value in request_headers.items():
+        if value is not None:
+            value = value.decode('utf8')
+        if name == 'User-Agent' and value and value.startswith('HTTPie/'):
+            continue
+
+        for prefix in SESSION_IGNORED_HEADER_PREFIXES:
+            if name.lower().startswith(prefix.lower()):
+                break
+        else:
+            self['headers'][name] = value
+```",
+httpie-3-v0_llama-1,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Analyzing the stacktrace**: The error occurs in the `update_headers` method of the `Session` class, specifically when trying to decode the value of a header using `value.decode('utf8')`. The error message indicates that `value` is `None`, which does not have a `decode` method.
+2. **Identifying the cause**: The issue arises because the `Accept-Encoding` header in the `request_headers` dictionary has a value of `None`. When the code attempts to decode this value using `value.decode('utf8')`, it throws an `AttributeError` because `None` does not have a `decode` method.
+3. **Understanding the context**: The `update_headers` method is designed to update the session headers with the request headers, ignoring certain header prefixes. The method iterates over the `request_headers` dictionary, decodes the value of each header, and then checks if the header name starts with any of the ignored prefixes.
+
+### Fixed solution:
+```python
+def update_headers(self, request_headers):
+    """"""
+    Update the session headers with the request ones while ignoring
+    certain name prefixes.
+
+    :type request_headers: dict
+
+    """"""
+    for name, value in request_headers.items():
+        # Check if value is not None before attempting to decode it
+        if value is not None:
+            value = value.decode('utf8')
+        
+        if name == 'User-Agent' and value.startswith('HTTPie/'):
+            continue
+
+        for prefix in SESSION_IGNORED_HEADER_PREFIXES:
+            if name.lower().startswith(prefix.lower()):
+                break
+        else:
+            self['headers'][name] = value
+```
+
+### Explanation of changes:
+* Added a conditional check `if value is not None` before attempting to decode the `value` using `value.decode('utf8')`. This prevents the `AttributeError` from occurring when `value` is `None`.
+
+### Tests and example uses:
+You can test the corrected `update_headers` method by creating a `Session` object and calling the method with a dictionary containing headers, including one with a `None` value. For example:
+```python
+session = Session()
+request_headers = {'User-Agent': b'HTTPie/1.0.0-dev', 'Accept-Encoding': None}
+session.update_headers(request_headers)
+print(session['headers'])
+```
+This should output `{'User-Agent': 'HTTPie/1.0.0-dev'}`, demonstrating that the `update_headers` method correctly handles headers with `None` values.",
+httpie-3-v0_llama-2,UNKNOWN,UNKNOWN,"```python
+def update_headers(self, request_headers):
+    """"""
+    Update the session headers with the request ones while ignoring
+    certain name prefixes.
+
+    :type request_headers: dict
+
+    """"""
+    for name, value in request_headers.items():
+        if value is not None:
+            value = value.decode('utf8')
+        if name == 'User-Agent' and value and value.startswith('HTTPie/'):
+            continue
+
+        for prefix in SESSION_IGNORED_HEADER_PREFIXES:
+            if name.lower().startswith(prefix.lower()):
+                break
+        else:
+            self['headers'][name] = value
+```",
+httpie-3-v0_llama-3,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Error analysis**: The error occurs when attempting to decode a `None` value using the `decode('utf8')` method, which is called on the `value` variable within the `update_headers` function. This implies that one of the values in the `request_headers` dictionary is `None`.
+2. **Identifying the problematic value**: Looking at the provided expected case, the value for the `'Accept-Encoding'` key in the `request_headers` dictionary is `None`. This is the value causing the error because `None` does not have a `decode` method.
+3. **Understanding the requirement**: The `update_headers` function seems to be designed to update session headers with request headers while ignoring certain header name prefixes. It also attempts to decode the header values to UTF-8, which is necessary for header values that are bytes (to ensure they can be properly interpreted as text).
+4. **Identifying the fix strategy**: To fix this bug, we need to ensure that the function can handle `None` values without attempting to decode them. One approach is to check if the `value` is not `None` before trying to decode it.
+
+### Fixed solution:
+```python
+def update_headers(self, request_headers):
+    """"""
+    Update the session headers with the request ones while ignoring
+    certain name prefixes.
+
+    :type request_headers: dict
+
+    """"""
+    for name, value in request_headers.items():
+        if value is not None:  # Check if value is not None before decoding
+            value = value.decode('utf8')
+        if name == 'User-Agent' and value.startswith('HTTPie/'):
+            continue
+
+        for prefix in SESSION_IGNORED_HEADER_PREFIXES:
+            if name.lower().startswith(prefix.lower()):
+                break
+        else:
+            self['headers'][name] = value
+```
+
+### Explanation of changes:
+- **Added a `None` check**: Before attempting to decode the `value`, the function now checks if `value` is not `None`. This prevents the `AttributeError` because `None` does not have a `decode` method.
+
+### Tests and example uses:
+To test the corrected function, you can use the provided test case `test_download_in_session`. Additionally, you can create test cases that specifically target the decoding of header values to ensure that both string and bytes values are handled correctly, and that `None` values do not cause errors. For example:
+```python
+def test_update_headers_with_none_value(self):
+    session = Session()
+    request_headers = {'Test-Header': None}
+    session.update_headers(request_headers)
+    assert session['headers'] == {}  # No headers should be added for None values
+
+def test_update_headers_with_byte_value(self):
+    session = Session()
+    request_headers = {'Test-Header': b'test'}
+    session.update_headers(request_headers)
+    assert session['headers'] == {'Test-Header': 'test'}  # Byte value should be decoded
+
+def test_update_headers_with_string_value(self):
+    session = Session()
+    request_headers = {'Test-Header': 'test'}
+    session.update_headers(request_headers)
+    assert session['headers'] == {'Test-Header': 'test'}  # String value should be added as is
+```",
+httpie-3-v0_llama-4,UNKNOWN,UNKNOWN,"```python
+def update_headers(self, request_headers):
+    """"""
+    Update the session headers with the request ones while ignoring
+    certain name prefixes.
+
+    :type request_headers: dict
+
+    """"""
+    for name, value in request_headers.items():
+        if value is not None:
+            value = value.decode('utf8')
+        if name == 'User-Agent' and value and value.startswith('HTTPie/'):
+            continue
+
+        for prefix in SESSION_IGNORED_HEADER_PREFIXES:
+            if name.lower().startswith(prefix.lower()):
+                break
+        else:
+            self['headers'][name] = value
+```",
+httpie-3-v0_llama-5,UNKNOWN,UNKNOWN,"### Corrected Function
+```python
+def update_headers(self, request_headers):
+    """"""
+    Update the session headers with the request ones while ignoring
+    certain name prefixes.
+
+    :type request_headers: dict
+
+    """"""
+    for name, value in request_headers.items():
+        if value is not None:
+            value = value.decode('utf8')
+        if name == 'User-Agent' and value and value.startswith('HTTPie/'):
+            continue
+
+        for prefix in SESSION_IGNORED_HEADER_PREFIXES:
+            if name.lower().startswith(prefix.lower()):
+                break
+        else:
+            self['headers'][name] = value
+```",
+httpie-3-v0_llama-6,UNKNOWN,UNKNOWN,"```python
+def update_headers(self, request_headers):
+    """"""
+    Update the session headers with the request ones while ignoring
+    certain name prefixes.
+
+    :type request_headers: dict
+
+    """"""
+    for name, value in request_headers.items():
+        if value is not None:
+            value = value.decode('utf8')
+        if name == 'User-Agent' and value and value.startswith('HTTPie/'):
+            continue
+
+        for prefix in SESSION_IGNORED_HEADER_PREFIXES:
+            if name.lower().startswith(prefix.lower()):
+                break
+        else:
+            self['headers'][name] = value
+```",
+httpie-3-v0_llama-7,UNKNOWN,UNKNOWN,"```python
+def update_headers(self, request_headers):
+    """"""
+    Update the session headers with the request ones while ignoring
+    certain name prefixes.
+
+    :type request_headers: dict
+
+    """"""
+    for name, value in request_headers.items():
+        if value is not None:
+            value = value.decode('utf8')
+        if name == 'User-Agent' and value and value.startswith('HTTPie/'):
+            continue
+
+        for prefix in SESSION_IGNORED_HEADER_PREFIXES:
+            if name.lower().startswith(prefix.lower()):
+                break
+        else:
+            self['headers'][name] = value
+```",
+httpie-3-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+def update_headers(self, request_headers):
+    """"""
+    Update the session headers with the request ones while ignoring
+    certain name prefixes.
+
+    :type request_headers: dict
+
+    """"""
+    for name, value in request_headers.items():
+        if value is not None:
+            value = value.decode('utf8')
+        if name == 'User-Agent' and value and value.startswith('HTTPie/'):
+            continue
+
+        for prefix in SESSION_IGNORED_HEADER_PREFIXES:
+            if name.lower().startswith(prefix.lower()):
+                break
+        else:
+            self['headers'][name] = value
+```",
+httpie-3-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+def update_headers(self, request_headers):
+    """"""
+    Update the session headers with the request ones while ignoring
+    certain name prefixes.
+
+    :type request_headers: dict
+
+    """"""
+    for name, value in request_headers.items():
+        if value is not None:  # Check if value is not None before decoding
+            value = value.decode('utf8')
+        if name == 'User-Agent' and value and value.startswith('HTTPie/'):
+            continue
+
+        for prefix in SESSION_IGNORED_HEADER_PREFIXES:
+            if name.lower().startswith(prefix.lower()):
+                break
+        else:
+            self['headers'][name] = value
+```",

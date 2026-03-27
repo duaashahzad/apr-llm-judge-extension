@@ -1,0 +1,895 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+pandas-118-vall_gpt-0,UNKNOWN,UNKNOWN,"```python
+@Appender(
+    _shared_docs[""melt""]
+    % dict(caller=""pd.melt(df, "", versionadded="""", other=""DataFrame.melt"")
+)
+def melt(
+    frame: DataFrame,
+    id_vars=None,
+    value_vars=None,
+    var_name=None,
+    value_name=""value"",
+    col_level=None,
+) -> DataFrame:
+    # If multi-index, gather names of columns on all levels for checking presence
+    if isinstance(frame.columns, ABCMultiIndex):
+        cols = [x for c in frame.columns for x in c]
+    else:
+        cols = list(frame.columns)
+
+    if id_vars is not None:
+        if not is_list_like(id_vars):
+            id_vars = [id_vars]
+        elif isinstance(frame.columns, ABCMultiIndex) and not isinstance(id_vars, list):
+            raise ValueError(
+                ""id_vars must be a list of tuples when columns are a MultiIndex""
+            )
+        else:
+            id_vars = list(id_vars)
+            # Check that `id_vars` are in frame
+            missing = Index(id_vars).difference(cols)
+            if not missing.empty:
+                raise KeyError(
+                    ""The following 'id_vars' are not present""
+                    "" in the DataFrame: {missing}""
+                    """".format(missing=list(missing))
+                )
+    else:
+        id_vars = []
+
+    if value_vars is not None:
+        if not is_list_like(value_vars):
+            value_vars = [value_vars]
+        elif isinstance(frame.columns, ABCMultiIndex) and not isinstance(value_vars, list):
+            raise ValueError(
+                ""value_vars must be a list of tuples when columns are a MultiIndex""
+            )
+        else:
+            value_vars = list(value_vars)
+            # Check that `value_vars` are in frame
+            missing = Index(value_vars).difference(cols)
+            if not missing.empty:
+                raise KeyError(
+                    ""The following 'value_vars' are not present in""
+                    "" the DataFrame: {missing}""
+                    """".format(missing=list(missing))
+                )
+    else:
+        value_vars = []
+
+    # Prepare DataFrame slice
+    frame = frame.loc[:, id_vars + value_vars] if value_vars else frame.copy()
+
+    if col_level is not None:
+        frame.columns = frame.columns.get_level_values(col_level)
+
+    if var_name is None:
+        if isinstance(frame.columns, ABCMultiIndex):
+            if len(frame.columns.names) == len(set(frame.columns.names)):
+                var_name = frame.columns.names
+            else:
+                var_name = [""variable_{i}"".format(i=i) for i in range(len(frame.columns.names))]
+        else:
+            var_name = [frame.columns.name if frame.columns.name is not None else ""variable""]
+    
+    if isinstance(var_name, str):
+        var_name = [var_name]
+
+    N, K = frame.shape
+    K -= len(id_vars)
+
+    mdata = {}
+    for col in id_vars:
+        id_data = frame.pop(col)
+        if is_extension_array_dtype(id_data):
+            id_data = concat([id_data] * K, ignore_index=True)
+        else:
+            id_data = np.tile(id_data.values, K)
+        mdata[col] = id_data
+
+    mdata[value_name] = frame.values.ravel('F')
+    for i, col in enumerate(var_name):
+        mdata[col] = np.asanyarray(frame.columns._get_level_values(i)).repeat(N)
+        
+    mcolumns = id_vars + var_name + [value_name]
+
+    return frame._constructor(mdata, columns=mcolumns)
+```",
+pandas-118-vall_gpt-1,UNKNOWN,UNKNOWN,"```python
+@Appender(
+    _shared_docs[""melt""]
+    % dict(caller=""pd.melt(df, "", versionadded="""", other=""DataFrame.melt"")
+)
+def melt(
+    frame: DataFrame,
+    id_vars=None,
+    value_vars=None,
+    var_name=None,
+    value_name=""value"",
+    col_level=None,
+) -> DataFrame:
+    # Handle MultiIndex columns
+    if isinstance(frame.columns, ABCMultiIndex):
+        cols = [x for c in frame.columns for x in c]
+    else:
+        cols = list(frame.columns)
+
+    if id_vars is not None:
+        if not is_list_like(id_vars):
+            id_vars = [id_vars]
+        elif isinstance(frame.columns, ABCMultiIndex) and not isinstance(id_vars, list):
+            raise ValueError(
+                ""id_vars must be a list of tuples when columns are a MultiIndex""
+            )
+        else:
+            # Check presence of id_vars in frame
+            missing = Index(np.ravel(id_vars)).difference(cols)
+            if not missing.empty:
+                raise KeyError(
+                    ""The following 'id_vars' are not present""
+                    "" in the DataFrame: {missing}""
+                    """".format(missing=list(missing))
+                )
+    else:
+        id_vars = []
+
+    if value_vars is not None:
+        if not is_list_like(value_vars):
+            value_vars = [value_vars]
+        elif isinstance(frame.columns, ABCMultiIndex) and not isinstance(value_vars, list):
+            raise ValueError(
+                ""value_vars must be a list of tuples when columns are a MultiIndex""
+            )
+        else:
+            # Check presence of value_vars in frame
+            missing = Index(np.ravel(value_vars)).difference(cols)
+            if not missing.empty:
+                raise KeyError(
+                    ""The following 'value_vars' are not present in""
+                    "" the DataFrame: {missing}""
+                    """".format(missing=list(missing))
+                )
+        frame = frame.loc[:, id_vars + value_vars]
+    else:
+        frame = frame.copy()
+
+    if col_level is not None:
+        frame.columns = frame.columns.get_level_values(col_level)
+
+    if var_name is None:
+        if isinstance(frame.columns, ABCMultiIndex):
+            if len(frame.columns.names) == len(set(frame.columns.names)):
+                var_name = frame.columns.names
+            else:
+                var_name = [
+                    ""variable_{i}"".format(i=i) for i in range(len(frame.columns.names))
+                ]
+        else:
+            var_name = [frame.columns.name if frame.columns.name is not None else ""variable""]
+
+    if isinstance(var_name, str):
+        var_name = [var_name]
+
+    N, K = frame.shape
+    K -= len(id_vars)
+
+    mdata = {}
+    for col in id_vars:
+        id_data = frame.pop(col)
+        mdata[col] = np.tile(id_data.values, K)
+
+    mdata[value_name] = frame.values.ravel(""F"")
+    for i, col in enumerate(var_name):
+        mdata[col] = np.asanyarray(frame.columns._get_level_values(i)).repeat(N)
+
+    mcolumns = id_vars + var_name + [value_name]
+
+    return frame._constructor(mdata, columns=mcolumns)
+```",
+pandas-118-vall_gpt-2,UNKNOWN,UNKNOWN,"```python
+@Appender(
+    _shared_docs[""melt""]
+    % dict(caller=""pd.melt(df, "", versionadded="""", other=""DataFrame.melt"")
+)
+def melt(
+    frame: DataFrame,
+    id_vars=None,
+    value_vars=None,
+    var_name=None,
+    value_name=""value"",
+    col_level=None,
+) -> DataFrame:
+    if isinstance(frame.columns, ABCMultiIndex):
+        cols = [x for c in frame.columns for x in c]
+    else:
+        cols = list(frame.columns)
+
+    if id_vars is not None:
+        if not is_list_like(id_vars):
+            id_vars = [id_vars]
+        elif isinstance(frame.columns, ABCMultiIndex) and not isinstance(id_vars, list):
+            raise ValueError(
+                ""id_vars must be a list of tuples when columns are a MultiIndex""
+            )
+        else:
+            id_vars = list(id_vars)
+            missing = Index(np.ravel(id_vars)).difference(cols)
+            if not missing.empty:
+                raise KeyError(
+                    ""The following 'id_vars' are not present""
+                    "" in the DataFrame: {missing}"".format(missing=list(missing))
+                )
+    else:
+        id_vars = []
+
+    if value_vars is not None:
+        if not is_list_like(value_vars):
+            value_vars = [value_vars]
+        elif isinstance(frame.columns, ABCMultiIndex) and not isinstance(value_vars, list):
+            raise ValueError(
+                ""value_vars must be a list of tuples when columns are a MultiIndex""
+            )
+        else:
+            value_vars = list(value_vars)
+            missing = Index(np.ravel(value_vars)).difference(cols)
+            if not missing.empty:
+                raise KeyError(
+                    ""The following 'value_vars' are not present in""
+                    "" the DataFrame: {missing}"".format(missing=list(missing))
+                )
+    
+    frame = frame.copy()
+
+    if col_level is not None:  # allow list or other?
+        frame.columns = frame.columns.get_level_values(col_level)
+
+    if var_name is None:
+        if isinstance(frame.columns, ABCMultiIndex):
+            if len(frame.columns.names) == len(set(frame.columns.names)):
+                var_name = frame.columns.names
+            else:
+                var_name = [
+                    ""variable_{i}"".format(i=i) for i in range(len(frame.columns.names))
+                ]
+        else:
+            var_name = [
+                frame.columns.name if frame.columns.name is not None else ""variable""
+            ]
+    
+    if isinstance(var_name, str):
+        var_name = [var_name]
+
+    N, K = frame.shape
+    K -= len(id_vars)
+
+    mdata = {}
+    for col in id_vars:
+        id_data = frame.pop(col)
+        
+        if is_extension_array_dtype(id_data):
+            id_data = concat([id_data] * K, ignore_index=True)
+        else:
+            id_data = np.tile(id_data.values, K)
+        mdata[col] = id_data
+
+    mcolumns = id_vars + var_name + [value_name]
+
+    mdata[value_name] = frame.values.ravel(""F"")
+    for i, col in enumerate(var_name):
+        mdata[col] = np.asanyarray(frame.columns._get_level_values(i)).repeat(N)
+
+    return frame._constructor(mdata, columns=mcolumns)
+```",
+pandas-118-vall_gpt-3,UNKNOWN,UNKNOWN,"```python
+@Appender(
+    _shared_docs[""melt""]
+    % dict(caller=""pd.melt(df, "", versionadded="""", other=""DataFrame.melt"")
+)
+def melt(
+    frame: DataFrame,
+    id_vars=None,
+    value_vars=None,
+    var_name=None,
+    value_name=""value"",
+    col_level=None,
+) -> DataFrame:
+    # If multiindex, gather names of columns on all level for checking presence
+    if isinstance(frame.columns, ABCMultiIndex):
+        cols = [x for c in frame.columns for x in c]
+    else:
+        cols = list(frame.columns)
+
+    if id_vars is not None:
+        if not is_list_like(id_vars):
+            id_vars = [id_vars]
+        elif isinstance(frame.columns, ABCMultiIndex) and not isinstance(id_vars, list):
+            raise ValueError(
+                ""id_vars must be a list of tuples when columns are a MultiIndex""
+            )
+        else:
+            # Check that `id_vars` are in frame
+            id_vars = list(id_vars)
+            missing = Index(np.ravel(id_vars)).difference(cols)
+            if not missing.empty:
+                raise KeyError(
+                    ""The following 'id_vars' are not present""
+                    "" in the DataFrame: {missing}""
+                    """".format(missing=list(missing))
+                )
+    else:
+        id_vars = []
+
+    if value_vars is not None:
+        if not is_list_like(value_vars):
+            value_vars = [value_vars]
+        elif isinstance(frame.columns, ABCMultiIndex) and not isinstance(value_vars, list):
+            raise ValueError(
+                ""value_vars must be a list of tuples when columns are a MultiIndex""
+            )
+        else:
+            value_vars = list(value_vars)
+            # Check that `value_vars` are in frame
+            missing = Index(np.ravel(value_vars)).difference(cols)
+            if not missing.empty:
+                raise KeyError(
+                    ""The following 'value_vars' are not present in""
+                    "" the DataFrame: {missing}""
+                    """".format(missing=list(missing))
+                )
+        frame = frame.loc[:, id_vars + value_vars]
+    else:
+        frame = frame.copy()
+
+    if col_level is not None:  # allow list or other?
+        frame.columns = frame.columns.get_level_values(col_level)
+
+    if var_name is None:
+        if isinstance(frame.columns, ABCMultiIndex):
+            if len(frame.columns.names) == len(set(frame.columns.names)):
+                var_name = frame.columns.names
+            else:
+                var_name = [
+                    ""variable_{i}"".format(i=i) for i in range(len(frame.columns.names))
+                ]
+        else:
+            var_name = [
+                frame.columns.name if frame.columns.name is not None else ""variable""
+            ]
+    if isinstance(var_name, str):
+        var_name = [var_name]
+
+    N, K = frame.shape
+    K -= len(id_vars)
+
+    mdata = {}
+    for col in id_vars:
+        id_data = frame.pop(col)
+        if is_extension_array_dtype(id_data):
+            id_data = concat([id_data] * K, ignore_index=True)
+        else:
+            id_data = np.tile(id_data.values, K)
+        mdata[col] = id_data
+
+    mcolumns = id_vars + var_name + [value_name]
+
+    mdata[value_name] = frame.values.ravel(""F"")
+    for i, col in enumerate(var_name):
+        mdata[col] = np.asanyarray(frame.columns._get_level_values(i)).repeat(N)
+
+    return frame._constructor(mdata, columns=mcolumns)
+```",
+pandas-118-vall_gpt-4,UNKNOWN,UNKNOWN,"```python
+@Appender(
+    _shared_docs[""melt""]
+    % dict(caller=""pd.melt(df, "", versionadded="""", other=""DataFrame.melt"")
+)
+def melt(
+    frame: DataFrame,
+    id_vars=None,
+    value_vars=None,
+    var_name=None,
+    value_name=""value"",
+    col_level=None,
+) -> DataFrame:
+    if isinstance(frame.columns, ABCMultiIndex):
+        cols = [x for c in frame.columns for x in c]
+    else:
+        cols = list(frame.columns)
+
+    if id_vars is not None:
+        if not is_list_like(id_vars):
+            id_vars = [id_vars]
+        if isinstance(frame.columns, ABCMultiIndex) and not isinstance(id_vars, list):
+            raise ValueError(
+                ""id_vars must be a list of tuples when columns are a MultiIndex""
+            )
+        else:
+            id_vars = list(id_vars)
+            missing = Index(np.ravel(id_vars)).difference(cols)
+            if not missing.empty:
+                raise KeyError(
+                    ""The following 'id_vars' are not present""
+                    "" in the DataFrame: {missing}""
+                    """".format(missing=list(missing))
+                )
+    else:
+        id_vars = []
+
+    if value_vars is not None:
+        if not is_list_like(value_vars):
+            value_vars = [value_vars]
+        if isinstance(frame.columns, ABCMultiIndex) and not isinstance(value_vars, list):
+            raise ValueError(
+                ""value_vars must be a list of tuples when columns are a MultiIndex""
+            )
+        else:
+            value_vars = list(value_vars)
+            missing = Index(np.ravel(value_vars)).difference(cols)
+            if not missing.empty:
+                raise KeyError(
+                    ""The following 'value_vars' are not present in""
+                    "" the DataFrame: {missing}""
+                    """".format(missing=list(missing))
+                )
+        frame = frame.loc[:, id_vars + value_vars]
+    else:
+        frame = frame.copy()
+
+    if col_level is not None:
+        frame.columns = frame.columns.get_level_values(col_level)
+
+    if var_name is None:
+        if isinstance(frame.columns, ABCMultiIndex):
+            if len(frame.columns.names) == len(set(frame.columns.names)):
+                var_name = frame.columns.names
+            else:
+                var_name = [
+                    ""variable_{i}"".format(i=i) for i in range(len(frame.columns.names))
+                ]
+        else:
+            var_name = [frame.columns.name if frame.columns.name is not None else ""variable""]
+    
+    if isinstance(var_name, str):
+        var_name = [var_name]
+
+    N, K = frame.shape
+    K -= len(id_vars)
+
+    mdata = {}
+    for col in id_vars:
+        id_data = frame.pop(col)
+        if is_extension_array_dtype(id_data):
+            id_data = concat([id_data] * K, ignore_index=True)
+        else:
+            id_data = np.tile(id_data.values, K)
+        mdata[col] = id_data
+
+    mcolumns = id_vars + var_name + [value_name]
+
+    mdata[value_name] = frame.values.ravel(""F"")
+    for i, col in enumerate(var_name):
+        mdata[col] = np.asanyarray(frame.columns._get_level_values(i)).repeat(N)
+
+    return frame._constructor(mdata, columns=mcolumns)
+```",
+pandas-118-vall_gpt-5,UNKNOWN,UNKNOWN,"```python
+@Appender(
+    _shared_docs[""melt""]
+    % dict(caller=""pd.melt(df, "", versionadded="""", other=""DataFrame.melt"")
+)
+def melt(
+    frame: DataFrame,
+    id_vars=None,
+    value_vars=None,
+    var_name=None,
+    value_name=""value"",
+    col_level=None,
+) -> DataFrame:
+    # Handle MultiIndex columns
+    if isinstance(frame.columns, ABCMultiIndex):
+        cols = [x for c in frame.columns for x in c]
+    else:
+        cols = list(frame.columns)
+
+    # Initialize id_vars if none provided
+    if id_vars is None:
+        id_vars = []
+    else:
+        if not is_list_like(id_vars):
+            id_vars = [id_vars]
+
+        # Check that `id_vars` are in frame
+        missing = Index(np.ravel(id_vars)).difference(cols)
+        if not missing.empty:
+            raise KeyError(
+                ""The following 'id_vars' are not present""
+                "" in the DataFrame: {missing}"".format(missing=list(missing))
+            )
+
+    # Initialize value_vars if none provided
+    if value_vars is None:
+        value_vars = [c for c in cols if c not in id_vars]
+
+    # Check that `value_vars` are in frame
+    missing = Index(np.ravel(value_vars)).difference(cols)
+    if not missing.empty:
+        raise KeyError(
+            ""The following 'value_vars' are not present in""
+            "" the DataFrame: {missing}"".format(missing=list(missing))
+        )
+
+    # Select relevant columns
+    frame = frame.loc[:, id_vars + value_vars]
+
+    if col_level is not None:
+        frame.columns = frame.columns.get_level_values(col_level)
+
+    # Set var_name defaults
+    if var_name is None:
+        if isinstance(frame.columns, ABCMultiIndex):
+            if len(frame.columns.names) == len(set(frame.columns.names)):
+                var_name = frame.columns.names
+            else:
+                var_name = [""variable_{i}"".format(i=i) for i in range(len(frame.columns.names))]
+        else:
+            var_name = [frame.columns.name if frame.columns.name is not None else ""variable""]
+
+    if isinstance(var_name, str):
+        var_name = [var_name]
+
+    N, K = frame.shape
+    K -= len(id_vars)
+
+    mdata = {}
+    for col in id_vars:
+        id_data = frame.pop(col)
+        if is_extension_array_dtype(id_data):
+            id_data = concat([id_data] * K, ignore_index=True)
+        else:
+            id_data = np.tile(id_data.values, K)
+        mdata[col] = id_data
+
+    mdata[value_name] = frame.values.ravel(""F"")
+    for i, col in enumerate(var_name):
+        mdata[col] = np.asanyarray(frame.columns._get_level_values(i)).repeat(N)
+
+    mcolumns = id_vars + var_name + [value_name]
+
+    return frame._constructor(mdata, columns=mcolumns)
+```",
+pandas-118-vall_gpt-6,UNKNOWN,UNKNOWN,"```python
+@Appender(
+    _shared_docs[""melt""]
+    % dict(caller=""pd.melt(df, "", versionadded="""", other=""DataFrame.melt"")
+)
+def melt(
+    frame: DataFrame,
+    id_vars=None,
+    value_vars=None,
+    var_name='variable',
+    value_name=""value"",
+    col_level=None,
+) -> DataFrame:
+    if isinstance(frame.columns, ABCMultiIndex):
+        cols = [x for c in frame.columns for x in c]
+    else:
+        cols = list(frame.columns)
+
+    # Validate and prepare id_vars
+    if id_vars is not None:
+        if not is_list_like(id_vars):
+            id_vars = [id_vars]
+        # Check presence of each id_var in frame
+        missing = Index(np.ravel(id_vars)).difference(cols)
+        if not missing.empty:
+            raise KeyError(
+                ""The following 'id_vars' are not present in the DataFrame: {missing}""
+                .format(missing=list(missing))
+            )
+    else:
+        id_vars = []
+
+    # Validate and prepare value_vars
+    if value_vars is not None:
+        if not is_list_like(value_vars):
+            value_vars = [value_vars]
+        # Check presence of each value_var in frame
+        missing = Index(np.ravel(value_vars)).difference(cols)
+        if not missing.empty:
+            raise KeyError(
+                ""The following 'value_vars' are not present in the DataFrame: {missing}""
+                .format(missing=list(missing))
+            )
+        frame = frame.loc[:, id_vars + value_vars]
+    else:
+        frame = frame.copy()
+
+    if col_level is not None:  # Allow for MultiIndex levels
+        frame.columns = frame.columns.get_level_values(col_level)
+
+    # Handling var_name logic
+    if var_name is None:
+        var_name = ['variable'] if not isinstance(frame.columns, ABCMultiIndex) else frame.columns.names
+
+    if isinstance(var_name, str):
+        var_name = [var_name]
+
+    N, K = frame.shape
+    K -= len(id_vars)
+
+    # Prepare melt data
+    mdata = {}
+    for col in id_vars:
+        id_data = frame.pop(col)
+        if is_extension_array_dtype(id_data):
+            id_data = concat([id_data] * K, ignore_index=True)
+        else:
+            id_data = np.tile(id_data.values, K)
+        mdata[col] = id_data
+
+    mdata[value_name] = frame.values.ravel(""F"")
+    for i, col in enumerate(var_name):
+        mdata[col] = np.asanyarray(frame.columns._get_level_values(i)).repeat(N)
+
+    mcolumns = id_vars + var_name + [value_name]
+
+    return frame._constructor(mdata, columns=mcolumns)
+```",
+pandas-118-vall_gpt-7,UNKNOWN,UNKNOWN,"```python
+@Appender(
+    _shared_docs[""melt""]
+    % dict(caller=""pd.melt(df, "", versionadded="""", other=""DataFrame.melt"")
+)
+def melt(
+    frame: DataFrame,
+    id_vars=None,
+    value_vars=None,
+    var_name=None,
+    value_name=""value"",
+    col_level=None,
+) -> DataFrame:
+    if isinstance(frame.columns, ABCMultiIndex):
+        cols = [x for c in frame.columns for x in c]
+    else:
+        cols = list(frame.columns)
+
+    if id_vars is not None:
+        if not is_list_like(id_vars):
+            id_vars = [id_vars]
+        elif isinstance(frame.columns, ABCMultiIndex) and not isinstance(id_vars, list):
+            raise ValueError(
+                ""id_vars must be a list of tuples when columns are a MultiIndex""
+            )
+        else:
+            # Check that `id_vars` are in frame
+            id_vars = list(id_vars)
+            missing = Index(np.ravel(id_vars)).difference(cols)
+            if not missing.empty:
+                missing_list = [str(i) if not isinstance(i, str) else i for i in missing]
+                raise KeyError(
+                    ""The following 'id_vars' are not present""
+                    "" in the DataFrame: {missing}""
+                    """".format(missing=missing_list)
+                )
+    else:
+        id_vars = []
+
+    if value_vars is not None:
+        if not is_list_like(value_vars):
+            value_vars = [value_vars]
+        elif isinstance(frame.columns, ABCMultiIndex) and not isinstance(value_vars, list):
+            raise ValueError(
+                ""value_vars must be a list of tuples when columns are a MultiIndex""
+            )
+        else:
+            value_vars = list(value_vars)
+            # Check that `value_vars` are in frame
+            missing = Index(np.ravel(value_vars)).difference(cols)
+            if not missing.empty:
+                missing_list = [str(i) if not isinstance(i, str) else i for i in missing]
+                raise KeyError(
+                    ""The following 'value_vars' are not present in""
+                    "" the DataFrame: {missing}""
+                    """".format(missing=missing_list)
+                )
+        frame = frame.loc[:, id_vars + value_vars]
+    else:
+        frame = frame.copy()
+
+    if col_level is not None:  # allow list or other?
+        frame.columns = frame.columns.get_level_values(col_level)
+
+    if var_name is None:
+        if isinstance(frame.columns, ABCMultiIndex):
+            if len(frame.columns.names) == len(set(frame.columns.names)):
+                var_name = frame.columns.names
+            else:
+                var_name = [
+                    ""variable_{i}"".format(i=i) for i in range(len(frame.columns.names))
+                ]
+        else:
+            var_name = [
+                frame.columns.name if frame.columns.name is not None else ""variable""
+            ]
+    if isinstance(var_name, str):
+        var_name = [var_name]
+
+    N, K = frame.shape
+    K -= len(id_vars)
+
+    mdata = {}
+    for col in id_vars:
+        id_data = frame.pop(col)
+        if is_extension_array_dtype(id_data):
+            id_data = concat([id_data] * K, ignore_index=True)
+        else:
+            id_data = np.tile(id_data.values, K)
+        mdata[col] = id_data
+
+    mcolumns = id_vars + var_name + [value_name]
+
+    mdata[value_name] = frame.values.ravel(""F"")
+    for i, col in enumerate(var_name):
+        mdata[col] = np.asanyarray(frame.columns._get_level_values(i)).repeat(N)
+
+    return frame._constructor(mdata, columns=mcolumns)
+```",
+pandas-118-vall_gpt-8,UNKNOWN,UNKNOWN,"```python
+@Appender(
+    _shared_docs[""melt""]
+    % dict(caller=""pd.melt(df, "", versionadded="""", other=""DataFrame.melt"")
+)
+def melt(
+    frame: DataFrame,
+    id_vars=None,
+    value_vars=None,
+    var_name=None,
+    value_name=""value"",
+    col_level=None,
+) -> DataFrame:
+    # Gather names of columns for checking presence of `id_vars` and `value_vars`
+    cols = frame.columns.tolist() if not isinstance(frame.columns, ABCMultiIndex) else [x for c in frame.columns for x in c]
+
+    # Handle id_vars
+    if id_vars is not None:
+        id_vars = [id_vars] if not is_list_like(id_vars) else list(id_vars)
+        if isinstance(frame.columns, ABCMultiIndex) and not isinstance(id_vars, list):
+            raise ValueError(""id_vars must be a list of tuples when columns are a MultiIndex"")
+        
+        # Validate presence of id_vars
+        missing = Index(np.ravel(id_vars)).difference(cols)
+        if not missing.empty:
+            raise KeyError(""The following 'id_vars' are not present in the DataFrame: {missing}"".format(missing=list(missing)))
+    else:
+        id_vars = []
+
+    # Handle value_vars
+    if value_vars is not None:
+        value_vars = [value_vars] if not is_list_like(value_vars) else list(value_vars)
+        if isinstance(frame.columns, ABCMultiIndex) and not isinstance(value_vars, list):
+            raise ValueError(""value_vars must be a list of tuples when columns are a MultiIndex"")
+
+        # Validate presence of value_vars
+        missing = Index(np.ravel(value_vars)).difference(cols)
+        if not missing.empty:
+            raise KeyError(""The following 'value_vars' are not present in the DataFrame: {missing}"".format(missing=list(missing)))
+    
+        # Filter frame for selected variables
+        frame = frame.loc[:, id_vars + value_vars]
+    else:
+        frame = frame.copy()
+
+    # Determine variable names
+    if var_name is None:
+        var_name = ['variable'] if not isinstance(frame.columns, ABCMultiIndex) else frame.columns.names
+    
+    N, K = frame.shape
+    K -= len(id_vars)
+
+    mdata = {}
+    # Gather id_data
+    for col in id_vars:
+        id_data = frame.pop(col)
+        id_data = concat([id_data] * K, ignore_index=True) if is_extension_array_dtype(id_data) else np.tile(id_data.values, K)
+        mdata[col] = id_data
+
+    # Collect melted data into mdata
+    mcolumns = id_vars + var_name + [value_name]
+    mdata[value_name] = frame.values.ravel('F')
+    
+    for i, col in enumerate(var_name):
+        mdata[col] = np.asanyarray(frame.columns._get_level_values(i)).repeat(N)
+
+    return frame._constructor(mdata, columns=mcolumns)
+```",
+pandas-118-vall_gpt-9,UNKNOWN,UNKNOWN,"```python
+@Appender(
+    _shared_docs[""melt""]
+    % dict(caller=""pd.melt(df, "", versionadded="""", other=""DataFrame.melt"")
+)
+def melt(
+    frame: DataFrame,
+    id_vars=None,
+    value_vars=None,
+    var_name=None,
+    value_name=""value"",
+    col_level=None,
+) -> DataFrame:
+    if isinstance(frame.columns, ABCMultiIndex):
+        cols = [x for c in frame.columns for x in c]
+    else:
+        cols = list(frame.columns)
+
+    if id_vars is not None:
+        if not is_list_like(id_vars):
+            id_vars = [id_vars]
+        elif isinstance(frame.columns, ABCMultiIndex) and not isinstance(id_vars, list):
+            raise ValueError(
+                ""id_vars must be a list of tuples when columns are a MultiIndex""
+            )
+        else:
+            id_vars = list(id_vars)
+            missing = Index(np.ravel(id_vars)).difference(cols)
+            if not missing.empty:
+                raise KeyError(
+                    ""The following 'id_vars' are not present""
+                    "" in the DataFrame: {missing}""
+                    """".format(missing=list(missing))
+                )
+    else:
+        id_vars = []
+
+    if value_vars is not None:
+        if not is_list_like(value_vars):
+            value_vars = [value_vars]
+        elif isinstance(frame.columns, ABCMultiIndex) and not isinstance(value_vars, list):
+            raise ValueError(
+                ""value_vars must be a list of tuples when columns are a MultiIndex""
+            )
+        else:
+            value_vars = list(value_vars)
+            missing = Index(np.ravel(value_vars)).difference(cols)
+            if not missing.empty:
+                raise KeyError(
+                    ""The following 'value_vars' are not present in""
+                    "" the DataFrame: {missing}""
+                    """".format(missing=list(missing))
+                )
+    else:
+        value_vars = list(set(cols) - set(id_vars))
+
+    frame = frame.loc[:, id_vars + value_vars] if value_vars else frame.copy()
+
+    if col_level is not None:
+        frame.columns = frame.columns.get_level_values(col_level)
+
+    if var_name is None:
+        if isinstance(frame.columns, ABCMultiIndex):
+            var_name = frame.columns.names if len(frame.columns.names) == len(set(frame.columns.names)) else ['variable_{i}'.format(i=i) for i in range(len(frame.columns.names))]
+        else:
+            var_name = [frame.columns.name if frame.columns.name is not None else ""variable""]
+
+    if isinstance(var_name, str):
+        var_name = [var_name]
+
+    N, K = frame.shape
+    K -= len(id_vars)
+
+    mdata = {}
+    for col in id_vars:
+        id_data = frame.pop(col)
+        if is_extension_array_dtype(id_data):
+            id_data = concat([id_data] * K, ignore_index=True)
+        else:
+            id_data = np.tile(id_data.values, K)
+        mdata[col] = id_data
+
+    mcolumns = id_vars + var_name + [value_name]
+
+    mdata[value_name] = frame.values.ravel(""F"")
+    for i, col in enumerate(var_name):
+        mdata[col] = np.asanyarray(frame.columns._get_level_values(i)).repeat(N)
+
+    return frame._constructor(mdata, columns=mcolumns)
+```",
