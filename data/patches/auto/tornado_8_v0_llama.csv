@@ -1,0 +1,138 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+tornado-8-v0_llama-0,UNKNOWN,UNKNOWN,"```python
+def accept_connection(self):
+    try:
+        self._handle_websocket_headers()
+        self._accept_connection()
+    except ValueError:
+        gen_log.debug(""Missing/Invalid WebSocket headers"")
+        if self.stream is not None:
+            self.stream.close()
+        return
+```",
+tornado-8-v0_llama-1,UNKNOWN,UNKNOWN,"```python
+def accept_connection(self):
+    try:
+        self._handle_websocket_headers()
+        self._accept_connection()
+    except ValueError as e:
+        gen_log.debug(""Malformed WebSocket request received: %s"",
+                      str(e))
+        if self.stream is not None:
+            self.stream.close()
+        self.close()
+        return
+```",
+tornado-8-v0_llama-2,UNKNOWN,UNKNOWN,"```python
+def accept_connection(self):
+    try:
+        self._handle_websocket_headers()
+        self._accept_connection()
+    except ValueError as e:
+        gen_log.debug(""Missing/Invalid WebSocket headers: %s"", e)
+        if self.stream is not None:
+            self.stream.close()
+        self.close()
+        return
+```",
+tornado-8-v0_llama-3,UNKNOWN,UNKNOWN,"```python
+def accept_connection(self):
+    try:
+        self._handle_websocket_headers()
+        self._accept_connection()
+    except ValueError as e:
+        gen_log.debug(""Malformed WebSocket request received: %s"",
+                      str(e))
+        if self.stream is not None:
+            self.stream.close()
+        self.close()
+        return
+```",
+tornado-8-v0_llama-4,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **The `accept_connection` method** in the provided code does not check if `self.stream` is `None` before calling `self._abort()`. 
+2. **The `_abort` method** attempts to close `self.stream` without checking if it is `None`, leading to an `AttributeError` because `None` does not have a `close` method.
+3. **The error occurs** when there are missing or invalid WebSocket headers in the request, causing a `ValueError` exception to be raised.
+4. **The test fails** because the server returns a 500 error instead of the expected 400 error when a required header is missing.
+
+### Fixed solution:
+```python
+def accept_connection(self):
+    try:
+        self._handle_websocket_headers()
+        self._accept_connection()
+    except ValueError as e:
+        gen_log.debug(""Malformed WebSocket request received: %s"", e)
+        if self.stream is not None:
+            self.stream.close()
+        self.close(code=400, reason='Missing/Invalid WebSocket headers')
+        return
+```
+
+### Explanation of changes:
+*   **Added a check** for `self.stream` being `None` before attempting to close it to prevent the `AttributeError`.
+*   **Replaced `self._abort()`** with explicit `self.stream.close()` and `self.close()` calls to ensure that the connection is properly closed and to provide a more informative error message.
+*   **Added a `code` and `reason`** to `self.close()` to return a 400 error with a descriptive reason when there are missing or invalid WebSocket headers.
+
+### Tests and example uses:
+The provided test function `test_missing_websocket_key` should now pass with the corrected `accept_connection` method. Additionally, you can test the function with other invalid requests to ensure it handles them correctly and returns the expected error codes and messages.",
+tornado-8-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+def accept_connection(self):
+    try:
+        self._handle_websocket_headers()
+        self._accept_connection()
+    except ValueError:
+        gen_log.debug(""Malformed WebSocket request received"",
+                      exc_info=True)
+        if self.stream is not None:
+            self.stream.close()
+        self.close()
+        return
+```",
+tornado-8-v0_llama-6,UNKNOWN,UNKNOWN,"```python
+def accept_connection(self):
+    try:
+        self._handle_websocket_headers()
+        self._accept_connection()
+    except ValueError:
+        gen_log.debug(""Malformed WebSocket request received"",
+                      exc_info=True)
+        if self.stream is not None:
+            self.stream.close()
+        return
+```",
+tornado-8-v0_llama-7,UNKNOWN,UNKNOWN,"```python
+def accept_connection(self):
+    try:
+        self._handle_websocket_headers()
+        self._accept_connection()
+    except ValueError as e:
+        gen_log.debug(""Malformed WebSocket request received: %s"", e)
+        if self.stream is not None:
+            self.stream.close()
+        self.close(code=400, reason='Missing/Invalid WebSocket headers')
+        return
+```",
+tornado-8-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+def accept_connection(self):
+    try:
+        self._handle_websocket_headers()
+        self._accept_connection()
+    except ValueError as e:
+        gen_log.debug(""Malformed WebSocket request received: %s"", e)
+        if self.stream is not None:
+            self.stream.close()
+        self.close()
+        return
+```",
+tornado-8-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+def accept_connection(self):
+    try:
+        self._handle_websocket_headers()
+        self._accept_connection()
+    except ValueError as e:
+        gen_log.debug(""Malformed WebSocket request received: %s"", e)
+        if self.stream is not None:
+            self.stream.close()
+        self.close()
+        return
+```",

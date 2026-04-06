@@ -1,0 +1,334 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+matplotlib-13-vall_gpt-0,UNKNOWN,UNKNOWN,"```python
+@classmethod
+def make_compound_path(cls, *args):
+    """"""Make a compound path from a list of Path objects.""""""
+    # Handle an empty list in args (i.e. no args).
+    if not args:
+        return Path(np.empty([0, 2], dtype=np.float32))
+
+    vertices = []
+    codes = []
+    i = 0
+    
+    for path in args:
+        if not isinstance(path, cls):
+            raise ValueError(""Each argument must be a Path object."")
+        
+        path_length = len(path.vertices)
+        if path_length == 0:
+            continue  # Skip empty paths
+        
+        vertices.append(path.vertices)
+        
+        if path.codes is None:
+            if i == 0:
+                codes.append(np.full((1,), cls.MOVETO, dtype=cls.code_type))  # Start with MOVETO for the first segment
+            codes.append(np.full((path_length - 1,), cls.LINETO, dtype=cls.code_type))  # LINETO for the rest
+        else:
+            codes.append(path.codes)
+        
+        i += path_length
+
+    # Concatenate all vertices and codes
+    vertices = np.concatenate(vertices)
+    codes = np.concatenate(codes)
+
+    # Remove internal STOP codes if present
+    stop_indices = np.where(codes == cls.STOP)[0]
+    if len(stop_indices) > 0:
+        codes = np.delete(codes, stop_indices[1:])  # Keep only the first STOP
+    
+    return cls(vertices, codes)
+```",
+matplotlib-13-vall_gpt-1,UNKNOWN,UNKNOWN,"```python
+@classmethod
+def make_compound_path(cls, *args):
+    """"""Make a compound path from a list of Path objects.""""""
+    # Handle an empty list in args (i.e. no args).
+    if not args:
+        return Path(np.empty([0, 2], dtype=np.float32))
+
+    vertices_list = []
+    codes_list = []
+    
+    for path in args:
+        if path.codes is None:
+            # If path has no codes, treat all vertices as LINETO except the first MOVETO
+            vertices_list.append(path.vertices)
+            if len(path.vertices) > 0:
+                codes_list.append([cls.MOVETO] + [cls.LINETO] * (len(path.vertices) - 1))
+        else:
+            # If path has codes, use them directly
+            vertices_list.append(path.vertices)
+            codes_list.append(path.codes)
+
+    vertices = np.concatenate(vertices_list)
+    codes = np.concatenate(codes_list)
+
+    # Remove internal STOP codes if they exist
+    stop_indices = np.where(codes == cls.STOP)[0]
+    
+    if len(stop_indices) > 0:
+        # If there are STOP codes, keep only the first one
+        codes = np.delete(codes, stop_indices[1:])
+
+    return cls(vertices, codes)
+```",
+matplotlib-13-vall_gpt-2,UNKNOWN,UNKNOWN,"```python
+@classmethod
+def make_compound_path(cls, *args):
+    """"""Make a compound path from a list of Path objects.""""""
+    # Handle an empty list in args (i.e., no args).
+    if not args:
+        return Path(np.empty([0, 2], dtype=np.float32))
+
+    vertices = []
+    codes = []
+
+    for path in args:
+        if not isinstance(path, cls):
+            raise ValueError(""Each argument must be a Path object."")
+        
+        if path.codes is None:
+            # Handle case where path.codes is None
+            codes.append([cls.MOVETO] + [cls.LINETO] * (len(path.vertices) - 1))
+        else:
+            codes.append(path.codes)
+        
+        vertices.append(path.vertices)
+    
+    # Concatenate the lists to form final vertices and codes arrays
+    vertices = np.concatenate(vertices)
+    
+    # Flatten the list of codes; they might be lists of arrays
+    codes = np.concatenate(codes)
+
+    # Remove internal STOP codes while keeping only one STOP at the end
+    stop_indices = np.where(codes == cls.STOP)[0]
+    if len(stop_indices) > 1:
+        first_stop_index = stop_indices[0]
+        codes = np.delete(codes, stop_indices[1:])  # Remove all but the first STOP
+        # To ensure that we leave only one stop at the end
+        codes = np.concatenate([codes[:first_stop_index], [cls.STOP], codes[first_stop_index:]])
+
+    return cls(vertices, codes)
+```",
+matplotlib-13-vall_gpt-3,UNKNOWN,UNKNOWN,"```python
+@classmethod
+def make_compound_path(cls, *args):
+    """"""Make a compound path from a list of Path objects.""""""
+    # Handle an empty list in args (i.e. no args).
+    if not args:
+        return Path(np.empty([0, 2], dtype=np.float32))
+
+    vertices = np.concatenate([x.vertices for x in args])
+    # Calculate initial size for codes considering STOP codes
+    codes = np.empty(len(vertices), dtype=cls.code_type)
+    
+    i = 0
+    for path in args:
+        if path.codes is None:
+            codes[i] = cls.MOVETO
+            codes[i + 1:i + len(path.vertices)] = cls.LINETO
+        else:
+            codes[i:i + len(path.codes)] = path.codes
+        i += len(path.vertices)
+
+    # Remove internal STOP codes
+    stop_indices = np.where(codes == cls.STOP)[0]
+    if len(stop_indices) > 1:
+        codes = np.delete(codes, stop_indices[1:])  # Keep only the first STOP
+        vertices = np.delete(vertices, stop_indices[1:] - 1, axis=0)  # Adjust indices
+
+    return cls(vertices, codes)
+```",
+matplotlib-13-vall_gpt-4,UNKNOWN,UNKNOWN,"```python
+@classmethod
+def make_compound_path(cls, *args):
+    """"""Make a compound path from a list of Path objects.""""""
+    # Handle an empty list in args (i.e. no args).
+    if not args:
+        return Path(np.empty([0, 2], dtype=np.float32))
+
+    vertices = np.concatenate([x.vertices for x in args])
+    codes = np.empty(len(vertices), dtype=cls.code_type)
+    i = 0
+    
+    for path in args:
+        if path.codes is None:
+            codes[i] = cls.MOVETO
+            codes[i + 1:i + len(path.vertices)] = cls.LINETO
+        else:
+            codes[i:i + len(path.codes)] = path.codes
+        i += len(path.vertices)
+        
+    # Ensure there is only one STOP in the final path
+    if cls.STOP in codes:
+        stop_indices = np.where(codes == cls.STOP)[0]
+        if len(stop_indices) > 1:
+            codes = np.delete(codes, stop_indices[1:])  # Keep only first STOP
+
+    return cls(vertices, codes)
+```",
+matplotlib-13-vall_gpt-5,UNKNOWN,UNKNOWN,"```python
+@classmethod
+def make_compound_path(cls, *args):
+    """"""Make a compound path from a list of Path objects.""""""
+    # Handle an empty list in args (i.e. no args).
+    if not args:
+        return Path(np.empty([0, 2], dtype=np.float32))
+
+    vertices = []
+    codes = []
+
+    for path in args:
+        if path.codes is None:
+            vertices.append(path.vertices)
+            codes.append(np.full(len(path.vertices), cls.LINETO, dtype=cls.code_type))
+            codes[0][0] = cls.MOVETO  # Set first MOVETO code explicitly
+        else:
+            # If there are STOP codes, we need to adjust them.
+            vertices.append(path.vertices)
+            codes.append(path.codes)
+
+    # Concatenate all vertices and codes
+    vertices = np.concatenate(vertices)
+    codes = np.concatenate(codes)
+
+    # Ensure there are no internal STOP codes. 
+    if np.any(codes == cls.STOP):
+        stop_indices = np.where(codes == cls.STOP)[0]
+        # Only keep the first stop code for the whole compound path
+        codes = np.delete(codes, stop_indices[1:])
+    
+    return cls(vertices, codes)
+```",
+matplotlib-13-vall_gpt-6,UNKNOWN,UNKNOWN,"```python
+@classmethod
+def make_compound_path(cls, *args):
+    """"""Make a compound path from a list of Path objects.""""""
+    if not args:
+        return Path(np.empty([0, 2], dtype=np.float32))
+
+    vertices = []
+    codes = []
+
+    for path in args:
+        if isinstance(path, cls):
+            if path.codes is None:
+                codes.append(np.full(len(path.vertices), cls.LINETO, dtype=cls.code_type))
+                codes[0][0] = cls.MOVETO  # First vertex should be MOVETO
+            else:
+                codes.append(path.codes)
+            vertices.append(path.vertices)
+        else:
+            raise ValueError(""All arguments must be Path objects."")
+
+    # Concatenate vertices and codes
+    vertices = np.concatenate(vertices)
+    codes = np.concatenate(codes)
+
+    # Remove internal STOP codes (if any) and ensure only one STOP at the end
+    stop_count = np.sum(codes == cls.STOP)
+    if stop_count > 1:
+        codes = codes[codes != cls.STOP]
+        codes = np.append(codes, cls.STOP)
+
+    return cls(vertices, codes)
+```",
+matplotlib-13-vall_gpt-7,UNKNOWN,UNKNOWN,"```python
+@classmethod
+def make_compound_path(cls, *args):
+    """"""Make a compound path from a list of Path objects.""""""
+    # Handle an empty list in args (i.e. no args).
+    if not args:
+        return Path(np.empty([0, 2], dtype=np.float32))
+
+    vertices = np.concatenate([x.vertices for x in args])
+    codes = np.empty(len(vertices), dtype=cls.code_type)
+    i = 0
+    for path in args:
+        if path.codes is None:
+            codes[i] = cls.MOVETO
+            codes[i + 1:i + len(path.vertices)] = cls.LINETO
+            # Ensure no internal STOP codes are present
+            if i > 0 and codes[i - 1] == cls.STOP:
+                codes[i] = cls.MOVETO
+        else:
+            codes[i:i + len(path.codes)] = path.codes
+        i += len(path.vertices)
+
+    # Trim any trailing codes if they are STOP
+    if i > 0 and codes[i - 1] == cls.STOP:
+        codes = codes[:i - 1]
+
+    return cls(vertices, codes)
+```",
+matplotlib-13-vall_gpt-8,UNKNOWN,UNKNOWN,"```python
+@classmethod
+def make_compound_path(cls, *args):
+    """"""Make a compound path from a list of Path objects.""""""
+    # Handle an empty list in args (i.e. no args).
+    if not args:
+        return Path(np.empty([0, 2], dtype=np.float32))
+
+    vertices = []
+    codes = []
+
+    for path in args:
+        if not isinstance(path, cls):
+            raise ValueError(""All arguments must be instances of Path"")
+
+        # Get the vertices and append them
+        vertices.append(path.vertices)
+
+        # Get the corresponding codes
+        if path.codes is None:
+            # If there are no codes, all elements are LINETO except the first MOVETO
+            codes.append(np.full(len(path.vertices), cls.LINETO))
+            codes[-len(path.vertices)] = cls.MOVETO   # Set MOVETO for the first code
+        else:
+            codes.append(path.codes)
+
+    # Concatenate all vertices and codes
+    vertices = np.concatenate(vertices)
+    codes = np.concatenate(codes)
+
+    # Replace internal STOPs with LINETOs to maintain pathological conditions
+    cleaned_codes = []
+    for code in codes:
+        if code == cls.STOP:
+            cleaned_codes.append(cls.LINETO)
+        else:
+            cleaned_codes.append(code)
+
+    return cls(vertices, np.array(cleaned_codes, dtype=cls.code_type))
+```",
+matplotlib-13-vall_gpt-9,UNKNOWN,UNKNOWN,"```python
+@classmethod
+def make_compound_path(cls, *args):
+    """"""Make a compound path from a list of Path objects.""""""
+    # Handle an empty list in args (i.e. no args).
+    if not args:
+        return Path(np.empty([0, 2], dtype=np.float32))
+
+    vertices = np.concatenate([x.vertices for x in args if x.vertices.size > 0])
+    codes = np.empty(len(vertices), dtype=cls.code_type)
+    i = 0
+    for path in args:
+        if path.codes is None:
+            if i == 0:
+                codes[i] = cls.MOVETO  # First vertex should always be MOVETO
+            else:
+                codes[i] = cls.LINETO  # Subsequent vertices should be LINETO
+            codes[i + 1:i + len(path.vertices)] = cls.LINETO
+        else:
+            codes[i:i + len(path.codes)] = path.codes
+        i += len(path.vertices)
+
+    # Remove any internal STOP codes
+    codes = codes[codes != cls.STOP]
+
+    return cls(vertices, codes)
+```",

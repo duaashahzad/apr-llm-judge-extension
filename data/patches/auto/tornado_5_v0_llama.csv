@@ -1,0 +1,100 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+tornado-5-v0_llama-0,UNKNOWN,UNKNOWN,"```python
+def _update_next(self, current_time):
+    if self._next_timeout <= current_time:
+        callback_time_sec = self.callback_time / 1000.0
+        if current_time < self._next_timeout:
+            # time jumped backwards, skip this callback
+            pass
+        else:
+            self._next_timeout += (math.floor((current_time - self._next_timeout) /
+                                              callback_time_sec) + 1) * callback_time_sec
+    return self._next_timeout
+```",
+tornado-5-v0_llama-1,UNKNOWN,UNKNOWN,"```python
+def _update_next(self, current_time):
+    if self._next_timeout <= current_time:
+        callback_time_sec = self.callback_time / 1000.0
+        if current_time < self._next_timeout + callback_time_sec:
+            self._next_timeout = current_time + callback_time_sec
+        else:
+            self._next_timeout += (math.floor((current_time - self._next_timeout) /
+                                              callback_time_sec) + 1) * callback_time_sec
+```",
+tornado-5-v0_llama-2,UNKNOWN,UNKNOWN,"```python
+def _update_next(self, current_time):
+    if self._next_timeout <= current_time:
+        callback_time_sec = self.callback_time / 1000.0
+        # Always round up to the nearest whole number to prevent the callback from being executed too often
+        self._next_timeout = current_time + math.ceil((current_time - self._next_timeout) / callback_time_sec) * callback_time_sec
+```",
+tornado-5-v0_llama-3,UNKNOWN,UNKNOWN,"```python
+def _update_next(self, current_time):
+    if self._next_timeout <= current_time:
+        callback_time_sec = self.callback_time / 1000.0
+        time_elapsed = current_time - self._next_timeout
+        if time_elapsed > 0:
+            self._next_timeout = current_time + callback_time_sec
+        else:
+            self._next_timeout += callback_time_sec
+```
+This change should prevent the _next_timeout from not being updated when the time elapsed is less than the callback time. This was the cause of the error where the callbacks were being executed too often on Windows.",
+tornado-5-v0_llama-4,UNKNOWN,UNKNOWN,"```python
+def _update_next(self, current_time):
+    if self._next_timeout <= current_time:
+        callback_time_sec = self.callback_time / 1000.0
+        time_elapsed = current_time - self._next_timeout
+        if time_elapsed < 0:
+            time_elapsed = 0
+        self._next_timeout += math.ceil(time_elapsed / callback_time_sec) * callback_time_sec
+```",
+tornado-5-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+def _update_next(self, current_time):
+    if self._next_timeout <= current_time:
+        callback_time_sec = self.callback_time / 1000.0
+        time_elapsed = current_time - self._next_timeout
+        if time_elapsed < 0:
+            time_elapsed = 0
+        self._next_timeout = current_time + (callback_time_sec - (time_elapsed % callback_time_sec))
+```",
+tornado-5-v0_llama-6,UNKNOWN,UNKNOWN,"```python
+def _update_next(self, current_time):
+    if self._next_timeout <= current_time:
+        callback_time_sec = self.callback_time / 1000.0
+        time_missed = current_time - self._next_timeout
+        num_callbacks_missed = math.floor(time_missed / callback_time_sec)
+        self._next_timeout = current_time + (num_callbacks_missed + 1) * callback_time_sec
+```",
+tornado-5-v0_llama-7,UNKNOWN,UNKNOWN,"```python
+def _update_next(self, current_time):
+    if self._next_timeout <= current_time:
+        callback_time_sec = self.callback_time / 1000.0
+        self._next_timeout = current_time + callback_time_sec
+        # To ensure the next timeout is at the exact interval from the last execution,
+        # and not cumulatively shifted by any delays in execution.
+        # Calculate how many intervals have passed since the last execution,
+        # and move the next timeout forward by the remaining interval.
+        intervals_passed = (current_time - self._next_timeout) / callback_time_sec
+        if intervals_passed > 0:
+            self._next_timeout += math.floor(intervals_passed) * callback_time_sec
+```",
+tornado-5-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+def _update_next(self, current_time):
+    if self._next_timeout <= current_time:
+        callback_time_sec = self.callback_time / 1000.0
+        self._next_timeout = current_time + callback_time_sec
+        # update to the next interval if current_time is ahead of _next_timeout
+        if self._next_timeout < current_time + callback_time_sec:
+            self._next_timeout += callback_time_sec
+```",
+tornado-5-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+def _update_next(self, current_time):
+    if self._next_timeout <= current_time:
+        callback_time_sec = self.callback_time / 1000.0
+        time_missed = current_time - self._next_timeout
+        if time_missed > callback_time_sec:
+            self._next_timeout += (math.floor(time_missed / callback_time_sec) + 1) * callback_time_sec
+        else:
+            self._next_timeout += callback_time_sec
+```
+This updated function first checks if the `_next_timeout` has been reached. If it has, it calculates the `time_missed` by subtracting `_next_timeout` from `current_time`. It then checks if `time_missed` is greater than `callback_time_sec`. If it is, it adds the difference to `_next_timeout` in increments of `callback_time_sec`. If not, it simply adds `callback_time_sec` to `_next_timeout`. This ensures that the function will always run at the correct interval, even if the system clock changes.",

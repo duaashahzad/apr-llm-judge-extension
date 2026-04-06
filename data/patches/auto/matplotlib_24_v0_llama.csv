@@ -1,0 +1,372 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+matplotlib-24-v0_llama-0,UNKNOWN,UNKNOWN,"```python
+def _make_getset_interval(method_name, lim_name, attr_name):
+    """"""
+    Helper to generate ``get_{data,view}_interval`` and 
+    ``set_{data,view}_interval`` implementations.
+    """"""
+
+    def getter(self):
+        # docstring inherited.
+        return getattr(getattr(self.axes, lim_name), attr_name)
+
+    def setter(self, vmin, vmax, ignore=False):
+        # docstring inherited.
+        if ignore:
+            setattr(getattr(self.axes, lim_name), attr_name, (vmin, vmax))
+        else:
+            oldmin, oldmax = getter(self)
+            if oldmin < oldmax:
+                setter(self, min(vmin, vmax, oldmin), max(vmin, vmax, oldmax),
+                       ignore=True)
+            else:
+                setter(self, max(vmin, vmax, oldmax), min(vmin, vmax, oldmin),
+                       ignore=True)
+        self.stale = True
+        # Added to update the limit after setting the interval
+        self.axes.set_xlim(vmin, vmax) if attr_name == 'intervalx' else self.axes.set_ylim(vmin, vmax)
+
+    getter.__name__ = f""get_{method_name}_interval""
+    setter.__name__ = f""set_{method_name}_interval""
+
+    return getter, setter
+```",
+matplotlib-24-v0_llama-1,UNKNOWN,UNKNOWN,"```python
+def _make_getset_interval(method_name, lim_name, attr_name):
+    """"""
+    Helper to generate ``get_{data,view}_interval`` and 
+    ``set_{data,view}_interval`` implementations.
+    """"""
+
+    def getter(self):
+        # docstring inherited.
+        return getattr(getattr(self.axes, lim_name), attr_name)
+
+    def setter(self, vmin, vmax, ignore=False):
+        # docstring inherited.
+        if ignore:
+            setattr(getattr(self.axes, lim_name), attr_name, (vmin, vmax))
+        else:
+            oldmin, oldmax = getter(self)
+            if self.axes.invert_xaxis() or self.axes.invert_yaxis():
+                if lim_name == 'viewLim':
+                    setter(self, max(vmin, vmax, oldmax), min(vmin, vmax, oldmin), ignore=True)
+                else:
+                    setter(self, min(vmin, vmax, oldmin), max(vmin, vmax, oldmax), ignore=True)
+            else:
+                if lim_name == 'viewLim':
+                    setter(self, min(vmin, vmax, oldmin), max(vmin, vmax, oldmax), ignore=True)
+                else:
+                    setter(self, min(vmin, vmax, oldmin), max(vmin, vmax, oldmax), ignore=True)
+        self.stale = True
+
+    getter.__name__ = f""get_{method_name}_interval""
+    setter.__name__ = f""set_{method_name}_interval""
+
+    return getter, setter
+```",
+matplotlib-24-v0_llama-2,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the issue**: The provided function `_make_getset_interval` seems to be related to the management of axis limits in matplotlib. The error message and test case suggest an issue with setting and getting the limits, particularly when the axis is inverted.
+2. **Analyzing the test case**: The test `test_set_ticks_inverted` inverts the x-axis, sets xticks, and then checks if the limits are correctly set to (1, 0), which is expected for an inverted axis. However, the assertion fails, indicating the limits are not being set as expected.
+3. **Identifying the bug**: The bug seems to lie in the way the `_make_getset_interval` function handles the setting of limits when the axis is inverted. Specifically, the `setter` function does not correctly handle the inversion when setting new limits.
+4. **Understanding the expected behavior**: When an axis is inverted, setting new limits should respect the inversion, meaning setting limits (vmin, vmax) should actually set them as (vmax, vmin) on the axis if it's inverted.
+
+### Fixed solution:
+```python
+def _make_getset_interval(method_name, lim_name, attr_name):
+    """"""
+    Helper to generate ``get_{data,view}_interval`` and 
+    ``set_{data,view}_interval`` implementations.
+    """"""
+
+    def getter(self):
+        # docstring inherited.
+        return getattr(getattr(self.axes, lim_name), attr_name)
+
+    def setter(self, vmin, vmax, ignore=False):
+        # docstring inherited.
+        # Check if the axis is inverted
+        if self.axes.inverted_xaxis() or self.axes.inverted_yaxis():
+            vmin, vmax = vmax, vmin  # Swap vmin and vmax for inverted axes
+        if ignore:
+            setattr(getattr(self.axes, lim_name), attr_name, (vmin, vmax))
+        else:
+            oldmin, oldmax = getter(self)
+            if oldmin < oldmax:
+                setter(self, min(vmin, vmax, oldmin), max(vmin, vmax, oldmax),
+                       ignore=True)
+            else:
+                setter(self, max(vmin, vmax, oldmax), min(vmin, vmax, oldmin),
+                       ignore=True)
+        self.stale = True
+
+    getter.__name__ = f""get_{method_name}_interval""
+    setter.__name__ = f""set_{method_name}_interval""
+
+    return getter, setter
+```
+
+### Explanation of changes:
+* **Added a check for axis inversion**: Before setting new limits, the function now checks if the x or y axis is inverted using `self.axes.inverted_xaxis()` or `self.axes.inverted_yaxis()`.
+* **Swap vmin and vmax for inverted axes**: If an axis is inverted, the function swaps `vmin` and `vmax` to correctly set the limits in the inverted direction.
+
+### Tests and example uses:
+To test this corrected function, one should use it within the context of matplotlib's axis management, similar to the provided test case `test_set_ticks_inverted`. Ensuring that limits are correctly set and retrieved when axes are inverted is crucial. Example tests might include:
+- Setting and getting limits on normal and inverted axes.
+- Checking the behavior with different types of data (e.g., numerical, datetime).
+- Verifying that the correction does not introduce unexpected behavior on non-inverted axes.",
+matplotlib-24-v0_llama-3,UNKNOWN,UNKNOWN,"```python
+def _make_getset_interval(method_name, lim_name, attr_name):
+    """"""
+    Helper to generate ``get_{data,view}_interval`` and 
+    ``set_{data,view}_interval`` implementations.
+    """"""
+
+    def getter(self):
+        # docstring inherited.
+        return getattr(getattr(self.axes, lim_name), attr_name)
+
+    def setter(self, vmin, vmax, ignore=False):
+        # docstring inherited.
+        if ignore:
+            setattr(getattr(self.axes, lim_name), attr_name, (vmin, vmax))
+        else:
+            oldmin, oldmax = getter(self)
+            if oldmin < oldmax:
+                setter(self, min(vmin, vmax, oldmin), max(vmin, vmax, oldmax),
+                       ignore=True)
+            else:
+                setter(self, max(vmin, vmax, oldmax), min(vmin, vmax, oldmin),
+                       ignore=True)
+            # Fix added to account for inverted axis
+            if self.axes.inverted_xaxis():
+                vmin, vmax = vmax, vmin
+            self.stale = True
+            setattr(getattr(self.axes, lim_name), attr_name, (vmin, vmax))
+
+    getter.__name__ = f""get_{method_name}_interval""
+    setter.__name__ = f""set_{method_name}_interval""
+
+    return getter, setter
+```",
+matplotlib-24-v0_llama-4,UNKNOWN,UNKNOWN,"```python
+def _make_getset_interval(method_name, lim_name, attr_name):
+    """"""
+    Helper to generate ``get_{data,view}_interval`` and 
+    ``set_{data,view}_interval`` implementations.
+    """"""
+
+    def getter(self):
+        # docstring inherited.
+        return getattr(getattr(self.axes, lim_name), attr_name)
+
+    def setter(self, vmin, vmax, ignore=False):
+        # docstring inherited.
+        if ignore:
+            setattr(getattr(self.axes, lim_name), attr_name, (vmin, vmax))
+        else:
+            oldmin, oldmax = getter(self)
+            if oldmin < oldmax:
+                setter(self, min(vmin, vmax, oldmin), max(vmin, vmax, oldmax), 
+                       ignore=True)
+            else:
+                setter(self, max(vmin, vmax, oldmax), min(vmin, vmax, oldmin), 
+                       ignore=True)
+            # Fix: Update the axis limits after setting the interval
+            self.axes.set_xlim(vmin, vmax)
+            self.axes.set_ylim(vmin, vmax)
+        self.stale = True
+
+    getter.__name__ = f""get_{method_name}_interval""
+    setter.__name__ = f""set_{method_name}_interval""
+
+    return getter, setter
+```",
+matplotlib-24-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+def _make_getset_interval(method_name, lim_name, attr_name):
+    """"""
+    Helper to generate ``get_{data,view}_interval`` and 
+    ``set_{data,view}_interval`` implementations.
+    """"""
+
+    def getter(self):
+        # docstring inherited.
+        return getattr(getattr(self.axes, lim_name), attr_name)
+
+    def setter(self, vmin, vmax, ignore=False):
+        # docstring inherited.
+        if ignore:
+            setattr(getattr(self.axes, lim_name), attr_name, (vmin, vmax))
+        else:
+            oldmin, oldmax = getter(self)
+            if oldmin < oldmax:
+                setter(self, min(vmin, vmax, oldmin), max(vmin, vmax, oldmax), 
+                       ignore=True)
+            else:
+                # Force the limits to have the correct order
+                setter(self, min(vmin, vmax, oldmax), max(vmin, vmax, oldmin), 
+                       ignore=True)
+        self.stale = True
+
+    getter.__name__ = f""get_{method_name}_interval""
+    setter.__name__ = f""set_{method_name}_interval""
+
+    return getter, setter
+```",
+matplotlib-24-v0_llama-6,UNKNOWN,UNKNOWN,"```python
+def _make_getset_interval(method_name, lim_name, attr_name):
+    """"""
+    Helper to generate ``get_{data,view}_interval`` and 
+    ``set_{data,view}_interval`` implementations.
+    """"""
+
+    def getter(self):
+        # docstring inherited.
+        return getattr(getattr(self.axes, lim_name), attr_name)
+
+    def setter(self, vmin, vmax, ignore=False):
+        # docstring inherited.
+        if ignore:
+            setattr(getattr(self.axes, lim_name), attr_name, (vmin, vmax))
+        else:
+            oldmin, oldmax = getter(self)
+            if oldmin < oldmax:
+                setter(self, min(vmin, vmax, oldmin), max(vmin, vmax, oldmax),
+                       ignore=True)
+            else:
+                setter(self, max(vmin, vmax, oldmax), min(vmin, vmax, oldmin),
+                       ignore=True)
+        self.stale = True
+        self.axes.axis('auto') # Reset axis limits to auto
+
+    getter.__name__ = f""get_{method_name}_interval""
+    setter.__name__ = f""set_{method_name}_interval""
+
+    return getter, setter
+```",
+matplotlib-24-v0_llama-7,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+
+1. **Analyze the given function and issue**: The provided function `_make_getset_interval` seems unrelated to the issue of heatmaps being truncated when using seaborn. However, it appears to be a part of the matplotlib library, which is used by seaborn for plotting. The issue might be caused by the way the intervals are set for the heatmap.
+
+2. **Identify potential error locations**: The error might be caused by the `setter` function in `_make_getset_interval`, specifically when it sets the interval for the axes.
+
+3. **Identify the cause of the bug**: The cause of the bug seems to be related to the way the intervals are set when the axis is inverted. The `setter` function does not correctly handle the inversion of the axis.
+
+4. **Think of a strategy for fixing the bug**: To fix the bug, we need to modify the `setter` function to correctly handle the inversion of the axis. We can do this by checking if the axis is inverted and adjusting the interval accordingly.
+
+### Fixed solution:
+```python
+def _make_getset_interval(method_name, lim_name, attr_name):
+    """"""
+    Helper to generate ``get_{data,view}_interval`` and 
+    ``set_{data,view}_interval`` implementations.
+    """"""
+
+    def getter(self):
+        # docstring inherited.
+        return getattr(getattr(self.axes, lim_name), attr_name)
+
+    def setter(self, vmin, vmax, ignore=False):
+        # docstring inherited.
+        if ignore:
+            setattr(getattr(self.axes, lim_name), attr_name, (vmin, vmax))
+        else:
+            oldmin, oldmax = getter(self)
+            if self.axes.inverted():
+                if oldmin > oldmax:
+                    setter(self, max(vmin, vmax, oldmax), min(vmin, vmax, oldmin), ignore=True)
+                else:
+                    setter(self, min(vmin, vmax, oldmin), max(vmin, vmax, oldmax), ignore=True)
+            else:
+                if oldmin < oldmax:
+                    setter(self, min(vmin, vmax, oldmin), max(vmin, vmax, oldmax), ignore=True)
+                else:
+                    setter(self, max(vmin, vmax, oldmax), min(vmin, vmax, oldmin), ignore=True)
+        self.stale = True
+
+    getter.__name__ = f""get_{method_name}_interval""
+    setter.__name__ = f""set_{method_name}_interval""
+
+    return getter, setter
+```
+
+### Explanation of changes:
+
+*   **Added a check for axis inversion**: In the `setter` function, we added a check to see if the axis is inverted using `self.axes.inverted()`.
+*   **Adjusted the interval based on axis inversion**: If the axis is inverted, we adjust the interval accordingly to ensure that the heatmap is not truncated.
+
+### Tests and example uses:
+
+You can test the fixed function using the provided test cases:
+
+```python
+def test_set_ticks_inverted():
+    fig, ax = plt.subplots()
+    ax.invert_xaxis()
+    ax.set_xticks([.3,.7])
+    assert ax.get_xlim() == (1, 0)
+```",
+matplotlib-24-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+def _make_getset_interval(method_name, lim_name, attr_name):
+    """"""
+    Helper to generate ``get_{data,view}_interval`` and 
+    ``set_{data,view}_interval`` implementations.
+    """"""
+
+    def getter(self):
+        # docstring inherited.
+        return getattr(getattr(self.axes, lim_name), attr_name)
+
+    def setter(self, vmin, vmax, ignore=False):
+        # docstring inherited.
+        if ignore:
+            setattr(getattr(self.axes, lim_name), attr_name, (vmin, vmax))
+        else:
+            oldmin, oldmax = getter(self)
+            if oldmin < oldmax:
+                setter(self, min(vmin, vmax, oldmin), max(vmin, vmax, oldmax),
+                       ignore=True)
+            else:
+                setter(self, max(vmin, vmax, oldmax), min(vmin, vmax, oldmin),
+                       ignore=True)
+            # Add this line to update the axis limits
+            self.axes.set_xlim(vmin, vmax) if attr_name == 'intervalx' else self.axes.set_ylim(vmin, vmax)
+        self.stale = True
+
+    getter.__name__ = f""get_{method_name}_interval""
+    setter.__name__ = f""set_{method_name}_interval""
+
+    return getter, setter
+```",
+matplotlib-24-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+def _make_getset_interval(method_name, lim_name, attr_name):
+    """"""
+    Helper to generate ``get_{data,view}_interval`` and 
+    ``set_{data,view}_interval`` implementations.
+    """"""
+
+    def getter(self):
+        # docstring inherited.
+        return getattr(getattr(self.axes, lim_name), attr_name)
+
+    def setter(self, vmin, vmax, ignore=False):
+        # docstring inherited.
+        if ignore:
+            if self.axes.invert_xaxis():
+                vmin, vmax = vmax, vmin
+            setattr(getattr(self.axes, lim_name), attr_name, (vmin, vmax))
+        else:
+            oldmin, oldmax = getter(self)
+            if oldmin < oldmax:
+                setter(self, min(vmin, vmax, oldmin), max(vmin, vmax, oldmax),
+                       ignore=True)
+            else:
+                setter(self, max(vmin, vmax, oldmax), min(vmin, vmax, oldmin),
+                       ignore=True)
+        self.stale = True
+
+    getter.__name__ = f""get_{method_name}_interval""
+    setter.__name__ = f""set_{method_name}_interval""
+
+    return getter, setter
+```",

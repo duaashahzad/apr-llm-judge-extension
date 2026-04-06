@@ -1,0 +1,491 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+tornado-11-v0_gpt-0,UNKNOWN,UNKNOWN,"```python
+def _read_body(self, code, headers, delegate):
+    if ""Content-Length"" in headers:
+        if ""Transfer-Encoding"" in headers:
+            # Response cannot contain both Content-Length and
+            # Transfer-Encoding headers.
+            raise httputil.HTTPInputError(
+                ""Response with both Transfer-Encoding and Content-Length"")
+        if "","" in headers[""Content-Length""]:
+            # Proxies sometimes cause Content-Length headers to get
+            # duplicated.  If all the values are identical then we can
+            # use them but if they differ it's an error.
+            pieces = re.split(r',\s*', headers[""Content-Length""])
+            if any(i != pieces[0] for i in pieces):
+                raise httputil.HTTPInputError(
+                    ""Multiple unequal Content-Lengths: %r"" %
+                    headers[""Content-Length""])
+            headers[""Content-Length""] = pieces[0]
+
+        try:
+            content_length = int(headers[""Content-Length""])
+        except ValueError:
+            # Handles non-integer Content-Length value.
+            raise httputil.HTTPInputError(
+                ""Only integer Content-Length is allowed: %s"" % headers[""Content-Length""])
+
+        if content_length > self._max_body_size:
+            raise httputil.HTTPInputError(""Content-Length too long"")
+    else:
+        content_length = None
+
+    if code == 204:
+        # This response code is not allowed to have a non-empty body,
+        # and has an implicit length of zero instead of read-until-close.
+        if (""Transfer-Encoding"" in headers or
+                content_length not in (None, 0)):
+            raise httputil.HTTPInputError(
+                ""Response with code %d should not have body"" % code)
+        content_length = 0
+
+    if content_length is not None:
+        return self._read_fixed_body(content_length, delegate)
+    
+    # Fix here: Check for Transfer-Encoding in a case-insensitive manner
+    transfer_encoding = headers.get(""Transfer-Encoding"")
+    if transfer_encoding and transfer_encoding.lower() == ""chunked"":
+        return self._read_chunked_body(delegate)
+    if self.is_client:
+        return self._read_body_until_close(delegate)
+    return None
+```",
+tornado-11-v0_gpt-1,UNKNOWN,UNKNOWN,"```python
+def _read_body(self, code, headers, delegate):
+    if ""Content-Length"" in headers:
+        if ""Transfer-Encoding"" in headers:
+            # Response cannot contain both Content-Length and
+            # Transfer-Encoding headers.
+            # http://tools.ietf.org/html/rfc7230#section-3.3.3
+            raise httputil.HTTPInputError(
+                ""Response with both Transfer-Encoding and Content-Length"")
+        if "","" in headers[""Content-Length""]:
+            # Proxies sometimes cause Content-Length headers to get
+            # duplicated.  If all the values are identical then we can
+            # use them but if they differ it's an error.
+            pieces = re.split(r',\s*', headers[""Content-Length""])
+            if any(i != pieces[0] for i in pieces):
+                raise httputil.HTTPInputError(
+                    ""Multiple unequal Content-Lengths: %r"" %
+                    headers[""Content-Length""])
+            headers[""Content-Length""] = pieces[0]
+
+        try:
+            content_length = int(headers[""Content-Length""])
+        except ValueError:
+            # Handles non-integer Content-Length value.
+            raise httputil.HTTPInputError(
+                ""Only integer Content-Length is allowed: %s"" % headers[""Content-Length""])
+
+        if content_length > self._max_body_size:
+            raise httputil.HTTPInputError(""Content-Length too long"")
+    else:
+        content_length = None
+
+    if code == 204:
+        # This response code is not allowed to have a non-empty body,
+        # and has an implicit length of zero instead of read-until-close.
+        # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.3
+        if (""Transfer-Encoding"" in headers or
+                content_length not in (None, 0)):
+            raise httputil.HTTPInputError(
+                ""Response with code %d should not have body"" % code)
+        content_length = 0
+
+    if content_length is not None:
+        return self._read_fixed_body(content_length, delegate)
+    
+    # Check for Transfer-Encoding in a case-insensitive manner
+    if any(header.lower() == ""transfer-encoding"" for header in headers):
+        if headers.get(""Transfer-Encoding"").lower() == ""chunked"":
+            return self._read_chunked_body(delegate)
+    
+    if self.is_client:
+        return self._read_body_until_close(delegate)
+    return None
+```",
+tornado-11-v0_gpt-2,UNKNOWN,UNKNOWN,"```python
+def _read_body(self, code, headers, delegate):
+    # Normalize ""Transfer-Encoding"" to lower case for case-insensitivity
+    transfer_encoding = headers.get(""Transfer-Encoding"", """").lower()
+
+    if ""Content-Length"" in headers:
+        if transfer_encoding:
+            # Response cannot contain both Content-Length and
+            # Transfer-Encoding headers.
+            raise httputil.HTTPInputError(
+                ""Response with both Transfer-Encoding and Content-Length"")
+        if "","" in headers[""Content-Length""]:
+            pieces = re.split(r',\s*', headers[""Content-Length""])
+            if any(i != pieces[0] for i in pieces):
+                raise httputil.HTTPInputError(
+                    ""Multiple unequal Content-Lengths: %r"" %
+                    headers[""Content-Length""])
+            headers[""Content-Length""] = pieces[0]
+
+        try:
+            content_length = int(headers[""Content-Length""])
+        except ValueError:
+            raise httputil.HTTPInputError(
+                ""Only integer Content-Length is allowed: %s"" % headers[""Content-Length""])
+
+        if content_length > self._max_body_size:
+            raise httputil.HTTPInputError(""Content-Length too long"")
+    else:
+        content_length = None
+
+    if code == 204:
+        if transfer_encoding or content_length not in (None, 0):
+            raise httputil.HTTPInputError(
+                ""Response with code %d should not have body"" % code)
+        content_length = 0
+
+    if content_length is not None:
+        return self._read_fixed_body(content_length, delegate)
+    if transfer_encoding == ""chunked"":
+        return self._read_chunked_body(delegate)
+    if self.is_client:
+        return self._read_body_until_close(delegate)
+    return None
+```",
+tornado-11-v0_gpt-3,UNKNOWN,UNKNOWN,"```python
+def _read_body(self, code, headers, delegate):
+    if ""Content-Length"" in headers:
+        if ""Transfer-Encoding"" in headers:
+            # Response cannot contain both Content-Length and
+            # Transfer-Encoding headers.
+            # http://tools.ietf.org/html/rfc7230#section-3.3.3
+            raise httputil.HTTPInputError(
+                ""Response with both Transfer-Encoding and Content-Length"")
+        if "","" in headers[""Content-Length""]:
+            # Proxies sometimes cause Content-Length headers to get
+            # duplicated.  If all the values are identical then we can
+            # use them but if they differ it's an error.
+            pieces = re.split(r',\s*', headers[""Content-Length""])
+            if any(i != pieces[0] for i in pieces):
+                raise httputil.HTTPInputError(
+                    ""Multiple unequal Content-Lengths: %r"" %
+                    headers[""Content-Length""])
+            headers[""Content-Length""] = pieces[0]
+
+        try:
+            content_length = int(headers[""Content-Length""])
+        except ValueError:
+            # Handles non-integer Content-Length value.
+            raise httputil.HTTPInputError(
+                ""Only integer Content-Length is allowed: %s"" % headers[""Content-Length""])
+
+        if content_length > self._max_body_size:
+            raise httputil.HTTPInputError(""Content-Length too long"")
+    else:
+        content_length = None
+
+    if code == 204:
+        # This response code is not allowed to have a non-empty body,
+        # and has an implicit length of zero instead of read-until-close.
+        # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.3
+        if (""Transfer-Encoding"" in headers or
+                content_length not in (None, 0)):
+            raise httputil.HTTPInputError(
+                ""Response with code %d should not have body"" % code)
+        content_length = 0
+
+    if content_length is not None:
+        return self._read_fixed_body(content_length, delegate)
+    if headers.get(""Transfer-Encoding"", """").lower() == ""chunked"":  # Fixed here
+        return self._read_chunked_body(delegate)
+    if self.is_client:
+        return self._read_body_until_close(delegate)
+    return None
+```",
+tornado-11-v0_gpt-4,UNKNOWN,UNKNOWN,"```python
+def _read_body(self, code, headers, delegate):
+    if ""Content-Length"" in headers:
+        if ""Transfer-Encoding"" in headers:
+            # Response cannot contain both Content-Length and
+            # Transfer-Encoding headers.
+            # http://tools.ietf.org/html/rfc7230#section-3.3.3
+            raise httputil.HTTPInputError(
+                ""Response with both Transfer-Encoding and Content-Length"")
+        if "","" in headers[""Content-Length""]:
+            # Proxies sometimes cause Content-Length headers to get
+            # duplicated. If all the values are identical then we can
+            # use them but if they differ it's an error.
+            pieces = re.split(r',\s*', headers[""Content-Length""])
+            if any(i != pieces[0] for i in pieces):
+                raise httputil.HTTPInputError(
+                    ""Multiple unequal Content-Lengths: %r"" %
+                    headers[""Content-Length""])
+            headers[""Content-Length""] = pieces[0]
+
+        try:
+            content_length = int(headers[""Content-Length""])
+        except ValueError:
+            # Handles non-integer Content-Length value.
+            raise httputil.HTTPInputError(
+                ""Only integer Content-Length is allowed: %s"" % headers[""Content-Length""])
+
+        if content_length > self._max_body_size:
+            raise httputil.HTTPInputError(""Content-Length too long"")
+    else:
+        content_length = None
+
+    if code == 204:
+        # This response code is not allowed to have a non-empty body,
+        # and has an implicit length of zero instead of read-until-close.
+        # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.3
+        if (""Transfer-Encoding"" in headers or
+                content_length not in (None, 0)):
+            raise httputil.HTTPInputError(
+                ""Response with code %d should not have body"" % code)
+        content_length = 0
+
+    if content_length is not None:
+        return self._read_fixed_body(content_length, delegate)
+    
+    # Fixing the case insensitivity issue by checking Transfer-Encoding key in a case-insensitive manner
+    if any(key.lower() == ""transfer-encoding"" for key in headers.keys()):
+        transfer_encoding_value = next(value for key, value in headers.items() if key.lower() == ""transfer-encoding"")
+        if transfer_encoding_value.lower() == ""chunked"":
+            return self._read_chunked_body(delegate)
+
+    if self.is_client:
+        return self._read_body_until_close(delegate)
+    return None
+```",
+tornado-11-v0_gpt-5,UNKNOWN,UNKNOWN,"```python
+def _read_body(self, code, headers, delegate):
+    if ""Content-Length"" in headers:
+        if ""Transfer-Encoding"" in headers:
+            # Response cannot contain both Content-Length and
+            # Transfer-Encoding headers.
+            # http://tools.ietf.org/html/rfc7230#section-3.3.3
+            raise httputil.HTTPInputError(
+                ""Response with both Transfer-Encoding and Content-Length"")
+        if "","" in headers[""Content-Length""]:
+            # Proxies sometimes cause Content-Length headers to get
+            # duplicated.  If all the values are identical then we can
+            # use them but if they differ it's an error.
+            pieces = re.split(r',\s*', headers[""Content-Length""])
+            if any(i != pieces[0] for i in pieces):
+                raise httputil.HTTPInputError(
+                    ""Multiple unequal Content-Lengths: %r"" %
+                    headers[""Content-Length""])
+            headers[""Content-Length""] = pieces[0]
+
+        try:
+            content_length = int(headers[""Content-Length""])
+        except ValueError:
+            # Handles non-integer Content-Length value.
+            raise httputil.HTTPInputError(
+                ""Only integer Content-Length is allowed: %s"" % headers[""Content-Length""])
+
+        if content_length > self._max_body_size:
+            raise httputil.HTTPInputError(""Content-Length too long"")
+    else:
+        content_length = None
+
+    if code == 204:
+        # This response code is not allowed to have a non-empty body,
+        # and has an implicit length of zero instead of read-until-close.
+        # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.3
+        if (""Transfer-Encoding"" in headers or
+                content_length not in (None, 0)):
+            raise httputil.HTTPInputError(
+                ""Response with code %d should not have body"" % code)
+        content_length = 0
+
+    if content_length is not None:
+        return self._read_fixed_body(content_length, delegate)
+    if headers.get(""Transfer-Encoding"", """").lower() == ""chunked"":
+        return self._read_chunked_body(delegate)
+    if self.is_client:
+        return self._read_body_until_close(delegate)
+    return None
+```",
+tornado-11-v0_gpt-6,UNKNOWN,UNKNOWN,"```python
+def _read_body(self, code, headers, delegate):
+    # Normalize ""Transfer-Encoding"" header to lowercase for case insensitivity compliance
+    transfer_encoding = headers.get(""Transfer-Encoding"", """").lower()
+    
+    if ""Content-Length"" in headers:
+        if transfer_encoding:
+            # Response cannot contain both Content-Length and
+            # Transfer-Encoding headers.
+            # http://tools.ietf.org/html/rfc7230#section-3.3.3
+            raise httputil.HTTPInputError(
+                ""Response with both Transfer-Encoding and Content-Length"")
+        if "","" in headers[""Content-Length""]:
+            # Proxies sometimes cause Content-Length headers to get
+            # duplicated.  If all the values are identical then we can
+            # use them but if they differ it's an error.
+            pieces = re.split(r',\s*', headers[""Content-Length""])
+            if any(i != pieces[0] for i in pieces):
+                raise httputil.HTTPInputError(
+                    ""Multiple unequal Content-Lengths: %r"" %
+                    headers[""Content-Length""])
+            headers[""Content-Length""] = pieces[0]
+
+        try:
+            content_length = int(headers[""Content-Length""])
+        except ValueError:
+            # Handles non-integer Content-Length value.
+            raise httputil.HTTPInputError(
+                ""Only integer Content-Length is allowed: %s"" % headers[""Content-Length""])
+
+        if content_length > self._max_body_size:
+            raise httputil.HTTPInputError(""Content-Length too long"")
+    else:
+        content_length = None
+
+    if code == 204:
+        # This response code is not allowed to have a non-empty body,
+        # and has an implicit length of zero instead of read-until-close.
+        # http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.3
+        if transfer_encoding or content_length not in (None, 0):
+            raise httputil.HTTPInputError(
+                ""Response with code %d should not have body"" % code)
+        content_length = 0
+
+    if content_length is not None:
+        return self._read_fixed_body(content_length, delegate)
+    if transfer_encoding == ""chunked"":
+        return self._read_chunked_body(delegate)
+    if self.is_client:
+        return self._read_body_until_close(delegate)
+    return None
+```",
+tornado-11-v0_gpt-7,UNKNOWN,UNKNOWN,"```python
+def _read_body(self, code, headers, delegate):
+    # Normalize the Transfer-Encoding header to lower case for case-insensitivity
+    transfer_encoding = {key.lower(): value for key, value in headers.items()}.get(""transfer-encoding"")
+
+    if ""Content-Length"" in headers:
+        if transfer_encoding:
+            # Response cannot contain both Content-Length and
+            # Transfer-Encoding headers.
+            # http://tools.ietf.org/html/rfc7230#section-3.3.3
+            raise httputil.HTTPInputError(
+                ""Response with both Transfer-Encoding and Content-Length"")
+        if "","" in headers[""Content-Length""]:
+            pieces = re.split(r',\s*', headers[""Content-Length""])
+            if any(i != pieces[0] for i in pieces):
+                raise httputil.HTTPInputError(
+                    ""Multiple unequal Content-Lengths: %r"" %
+                    headers[""Content-Length""])
+            headers[""Content-Length""] = pieces[0]
+
+        try:
+            content_length = int(headers[""Content-Length""])
+        except ValueError:
+            raise httputil.HTTPInputError(
+                ""Only integer Content-Length is allowed: %s"" % headers[""Content-Length""])
+
+        if content_length > self._max_body_size:
+            raise httputil.HTTPInputError(""Content-Length too long"")
+    else:
+        content_length = None
+
+    if code == 204:
+        # This response code is not allowed to have a non-empty body,
+        # and has an implicit length of zero instead of read-until-close.
+        if transfer_encoding or content_length not in (None, 0):
+            raise httputil.HTTPInputError(
+                ""Response with code %d should not have body"" % code)
+        content_length = 0
+
+    if content_length is not None:
+        return self._read_fixed_body(content_length, delegate)
+    if transfer_encoding == ""chunked"":
+        return self._read_chunked_body(delegate)
+    if self.is_client:
+        return self._read_body_until_close(delegate)
+    return None
+```",
+tornado-11-v0_gpt-8,UNKNOWN,UNKNOWN,"```python
+def _read_body(self, code, headers, delegate):
+    # Normalize the header keys
+    normalized_headers = {k.lower(): v for k, v in headers.items()}
+    
+    if ""content-length"" in normalized_headers:
+        if ""transfer-encoding"" in normalized_headers:
+            raise httputil.HTTPInputError(
+                ""Response with both Transfer-Encoding and Content-Length"")
+        if "","" in normalized_headers[""content-length""]:
+            pieces = re.split(r',\s*', normalized_headers[""content-length""])
+            if any(i != pieces[0] for i in pieces):
+                raise httputil.HTTPInputError(
+                    ""Multiple unequal Content-Lengths: %r"" %
+                    normalized_headers[""content-length""])
+            normalized_headers[""content-length""] = pieces[0]
+
+        try:
+            content_length = int(normalized_headers[""content-length""])
+        except ValueError:
+            raise httputil.HTTPInputError(
+                ""Only integer Content-Length is allowed: %s"" % normalized_headers[""content-length""])
+
+        if content_length > self._max_body_size:
+            raise httputil.HTTPInputError(""Content-Length too long"")
+    else:
+        content_length = None
+
+    if code == 204:
+        if (""transfer-encoding"" in normalized_headers or
+                content_length not in (None, 0)):
+            raise httputil.HTTPInputError(
+                ""Response with code %d should not have body"" % code)
+        content_length = 0
+
+    if content_length is not None:
+        return self._read_fixed_body(content_length, delegate)
+    if normalized_headers.get(""transfer-encoding"") == ""chunked"":
+        return self._read_chunked_body(delegate)
+    if self.is_client:
+        return self._read_body_until_close(delegate)
+    return None
+```",
+tornado-11-v0_gpt-9,UNKNOWN,UNKNOWN,"```python
+def _read_body(self, code, headers, delegate):
+    if ""Content-Length"" in headers:
+        if ""Transfer-Encoding"" in headers:
+            raise httputil.HTTPInputError(
+                ""Response with both Transfer-Encoding and Content-Length"")
+        if "","" in headers[""Content-Length""]:
+            pieces = re.split(r',\s*', headers[""Content-Length""])
+            if any(i != pieces[0] for i in pieces):
+                raise httputil.HTTPInputError(
+                    ""Multiple unequal Content-Lengths: %r"" %
+                    headers[""Content-Length""])
+            headers[""Content-Length""] = pieces[0]
+
+        try:
+            content_length = int(headers[""Content-Length""])
+        except ValueError:
+            raise httputil.HTTPInputError(
+                ""Only integer Content-Length is allowed: %s"" % headers[""Content-Length""])
+
+        if content_length > self._max_body_size:
+            raise httputil.HTTPInputError(""Content-Length too long"")
+    else:
+        content_length = None
+
+    if code == 204:
+        if (""Transfer-Encoding"" in headers or
+                content_length not in (None, 0)):
+            raise httputil.HTTPInputError(
+                ""Response with code %d should not have body"" % code)
+        content_length = 0
+
+    if content_length is not None:
+        return self._read_fixed_body(content_length, delegate)
+
+    if any(key.lower() == ""transfer-encoding"" for key in headers):
+        if headers.get(""Transfer-Encoding"", """").lower() == ""chunked"":
+            return self._read_chunked_body(delegate)
+
+    if self.is_client:
+        return self._read_body_until_close(delegate)
+    
+    return None
+```",

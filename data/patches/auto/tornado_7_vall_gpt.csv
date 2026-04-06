@@ -1,0 +1,297 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+tornado-7-vall_gpt-0,UNKNOWN,UNKNOWN,"```python
+def run_in_executor(self, executor, func, *args):
+    """"""Runs a function in a ``concurrent.futures.Executor``. If
+    ``executor`` is ``None``, the IO loop's default executor will be used.
+
+    Use `functools.partial` to pass keyword arguments to `func`.
+    """"""
+    if ThreadPoolExecutor is None:
+        raise RuntimeError(
+            ""concurrent.futures is required to use IOLoop.run_in_executor""
+        )
+
+    if not callable(func):
+        raise ValueError(""func must be a callable."")
+        
+    if executor is None:
+        if not hasattr(self, '_executor'):
+            from tornado.process import cpu_count
+            self._executor = ThreadPoolExecutor(max_workers=(cpu_count() * 5))
+        executor = self._executor
+
+    # Submit the function and return the Future
+    return executor.submit(func, *args)
+```",
+tornado-7-vall_gpt-1,UNKNOWN,UNKNOWN,"```python
+def run_in_executor(self, executor, func, *args):
+    """"""Runs a function in a ``concurrent.futures.Executor``. If
+    ``executor`` is ``None``, the IO loop's default executor will be used.
+
+    Use `functools.partial` to pass keyword arguments to `func`.
+    """"""
+    if ThreadPoolExecutor is None:
+        raise RuntimeError(
+            ""concurrent.futures is required to use IOLoop.run_in_executor"")
+
+    if not callable(func):
+        raise ValueError(""The provided function must be callable."")
+
+    if executor is None:
+        if not hasattr(self, '_executor'):
+            from tornado.process import cpu_count
+            self._executor = ThreadPoolExecutor(max_workers=(cpu_count() * 5))
+        executor = self._executor
+
+    # Submit the function to the executor and return the Future
+    c_future = executor.submit(func, *args)
+    
+    # Transform the concurrent Future into a Tornado Future
+    tornado_future = Future()
+    c_future.add_done_callback(lambda future: tornado_future.set_result(future.result()))
+    
+    return tornado_future
+```",
+tornado-7-vall_gpt-2,UNKNOWN,UNKNOWN,"```python
+def run_in_executor(self, executor, func, *args):
+    """"""Runs a function in a ``concurrent.futures.Executor``. If
+    ``executor`` is ``None``, the IO loop's default executor will be used.
+
+    Use `functools.partial` to pass keyword arguments to `func`.
+    """"""
+    if ThreadPoolExecutor is None:
+        raise RuntimeError(
+            ""concurrent.futures is required to use IOLoop.run_in_executor"")
+
+    if not callable(func):
+        raise ValueError(""The provided function must be callable."")
+    
+    if executor is None:
+        if not hasattr(self, '_executor'):
+            from tornado.process import cpu_count
+            self._executor = ThreadPoolExecutor(max_workers=(cpu_count() * 5))
+        executor = self._executor
+
+    # Submit the function to the executor, wrapping it in a try/except
+    future = executor.submit(func, *args)
+
+    # Transform the Future into a Tornado Future
+    tornado_future = self.future()
+    if isinstance(future, tornado.Future):
+        future.add_done_callback(tornado_future.set_result)
+    else:
+        tornado_future.set_result(future)
+
+    return tornado_future
+```",
+tornado-7-vall_gpt-3,UNKNOWN,UNKNOWN,"```python
+def run_in_executor(self, executor, func, *args):
+    """"""Runs a function in a ``concurrent.futures.Executor``. If
+    ``executor`` is ``None``, the IO loop's default executor will be used.
+
+    Use `functools.partial` to pass keyword arguments to `func`.
+    """"""
+    if ThreadPoolExecutor is None:
+        raise RuntimeError(
+            ""concurrent.futures is required to use IOLoop.run_in_executor"")
+
+    if not callable(func):
+        raise ValueError(""The provided function must be callable."")
+
+    if executor is None:
+        if not hasattr(self, '_executor'):
+            from tornado.process import cpu_count
+            self._executor = ThreadPoolExecutor(max_workers=(cpu_count() * 5))
+        executor = self._executor
+
+    c_future = executor.submit(func, *args)
+    
+    # Wrap the concurrent Future with a Tornado Future
+    tornado_future = Future()
+    
+    def _callback(future):
+        if future.cancelled():
+            tornado_future.cancel()
+        elif future.done():
+            try:
+                result = future.result()
+                tornado_future.set_result(result)
+            except Exception as e:
+                tornado_future.set_exception(e)
+
+    c_future.add_done_callback(_callback)
+
+    return tornado_future
+```",
+tornado-7-vall_gpt-4,UNKNOWN,UNKNOWN,"```python
+def run_in_executor(self, executor, func, *args):
+    """"""Runs a function in a ``concurrent.futures.Executor``. If
+    ``executor`` is ``None``, the IO loop's default executor will be used.
+
+    Use `functools.partial` to pass keyword arguments to `func`.
+
+    """"""
+    if ThreadPoolExecutor is None:
+        raise RuntimeError(
+            ""concurrent.futures is required to use IOLoop.run_in_executor"")
+
+    if not callable(func):
+        raise ValueError(""The provided function must be callable."")
+
+    if executor is None:
+        if not hasattr(self, '_executor'):
+            from tornado.process import cpu_count
+            self._executor = ThreadPoolExecutor(max_workers=(cpu_count() * 5))
+        executor = self._executor
+
+    future = executor.submit(func, *args)
+    return future
+```",
+tornado-7-vall_gpt-5,UNKNOWN,UNKNOWN,"```python
+def run_in_executor(self, executor, func, *args):
+    """"""Runs a function in a ``concurrent.futures.Executor``. If
+    ``executor`` is ``None``, the IO loop's default executor will be used.
+
+    Use `functools.partial` to pass keyword arguments to `func`.
+    """"""
+    if ThreadPoolExecutor is None:
+        raise RuntimeError(
+            ""concurrent.futures is required to use IOLoop.run_in_executor""
+        )
+
+    if not callable(func):
+        raise ValueError(""The provided function must be callable."")
+
+    if executor is None:
+        if not hasattr(self, '_executor'):
+            from tornado.process import cpu_count
+            self._executor = ThreadPoolExecutor(max_workers=(cpu_count() * 5))
+        executor = self._executor
+
+    future = executor.submit(func, *args)
+    tornado_future = future  # Return the Future directly.
+
+    return tornado_future
+```",
+tornado-7-vall_gpt-6,UNKNOWN,UNKNOWN,"```python
+def run_in_executor(self, executor, func, *args):
+    """"""Runs a function in a ``concurrent.futures.Executor``. If
+    ``executor`` is ``None``, the IO loop's default executor will be used.
+
+    Use `functools.partial` to pass keyword arguments to `func`.
+    """"""
+    if ThreadPoolExecutor is None:
+        raise RuntimeError(
+            ""concurrent.futures is required to use IOLoop.run_in_executor"")
+
+    if not callable(func):
+        raise ValueError(""The provided function must be callable."")
+
+    if executor is None:
+        if not hasattr(self, '_executor'):
+            from tornado.process import cpu_count
+            self._executor = ThreadPoolExecutor(max_workers=(cpu_count() * 5))
+        executor = self._executor
+
+    future = executor.submit(func, *args)
+    tornado_future = Future()  # Create a Tornado Future
+
+    def callback(f):
+        if f.cancelled():
+            tornado_future.cancel()
+        elif f.done():
+            try:
+                result = f.result()  # This may raise an exception
+                tornado_future.set_result(result)
+            except Exception as e:
+                tornado_future.set_exception(e)
+
+    future.add_done_callback(callback)
+    return tornado_future
+```",
+tornado-7-vall_gpt-7,UNKNOWN,UNKNOWN,"```python
+def run_in_executor(self, executor, func, *args):
+    """"""Runs a function in a ``concurrent.futures.Executor``. If
+    ``executor`` is ``None``, the IO loop's default executor will be used.
+
+    Use `functools.partial` to pass keyword arguments to `func`.
+    """"""
+    if ThreadPoolExecutor is None:
+        raise RuntimeError(
+            ""concurrent.futures is required to use IOLoop.run_in_executor""
+        )
+
+    if executor is None:
+        if not hasattr(self, '_executor'):
+            from tornado.process import cpu_count
+            self._executor = ThreadPoolExecutor(max_workers=(cpu_count() * 5))
+        executor = self._executor
+
+    # Submit the function to the executor
+    future = executor.submit(func, *args)
+
+    # Convert the concurrent.Future to a Tornado Future
+    tornado_future = self.add_future(future, lambda f: f.result())
+
+    return tornado_future
+```",
+tornado-7-vall_gpt-8,UNKNOWN,UNKNOWN,"```python
+def run_in_executor(self, executor, func, *args):
+    """"""Runs a function in a ``concurrent.futures.Executor``. If
+    ``executor`` is ``None``, the IO loop's default executor will be used.
+
+    Use `functools.partial` to pass keyword arguments to `func`.
+
+    The function returns a Tornado Future that can be awaited.
+    """"""
+    if ThreadPoolExecutor is None:
+        raise RuntimeError(
+            ""concurrent.futures is required to use IOLoop.run_in_executor"")
+
+    if not callable(func):
+        raise ValueError(""The provided function must be callable."")
+
+    if executor is None:
+        if not hasattr(self, '_executor'):
+            from tornado.process import cpu_count
+            self._executor = ThreadPoolExecutor(max_workers=(cpu_count() * 5))
+        executor = self._executor
+
+    # Use concurrent.futures.Future to get the result in a Tornado-compatible way
+    future = executor.submit(func, *args)
+    
+    # We need to wrap the concurrent Future in a Tornado Future to be usable with await
+    tornado_future = self.add_future(future)
+
+    return tornado_future
+```",
+tornado-7-vall_gpt-9,UNKNOWN,UNKNOWN,"```python
+def run_in_executor(self, executor, func, *args):
+    """"""Runs a function in a ``concurrent.futures.Executor``. If
+    ``executor`` is ``None``, the IO loop's default executor will be used.
+
+    Use `functools.partial` to pass keyword arguments to `func`.
+    """"""
+    if ThreadPoolExecutor is None:
+        raise RuntimeError(
+            ""concurrent.futures is required to use IOLoop.run_in_executor"")
+
+    if not callable(func):
+        raise ValueError(""The provided function must be callable."")
+
+    if executor is None:
+        if not hasattr(self, '_executor'):
+            from tornado.process import cpu_count
+            self._executor = ThreadPoolExecutor(max_workers=(cpu_count() * 5))
+        executor = self._executor
+
+    future = executor.submit(func, *args)
+
+    # Transform the Future into a Tornado Future
+    tornado_future = self._tornado_future(future)
+    return tornado_future
+
+def _tornado_future(self, future):
+    from tornado import concurrent
+    return concurrent.wrap_future(future)
+```",

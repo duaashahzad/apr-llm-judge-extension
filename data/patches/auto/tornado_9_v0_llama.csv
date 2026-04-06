@@ -1,0 +1,492 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+tornado-9-v0_llama-0,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. The issue arises from the `url_concat` function when it encounters a `None` value for the `args` parameter.
+2. The function is designed to handle `dict`, `list`, or `tuple` types for the `args` parameter but does not account for `None`.
+3. When `args` is `None`, the function correctly identifies this as an invalid type and raises a `TypeError`.
+4. However, the requirement from the test case `test_url_concat_none_params` indicates that when `args` is `None`, the function should simply return the original URL without modifications.
+
+### Fixed solution:
+```python
+def url_concat(url, args):
+    """"""Concatenate url and arguments regardless of whether
+    url has existing query parameters.
+
+    ``args`` may be either a dictionary or a list of key-value pairs
+    (the latter allows for multiple values with the same key.
+
+    >>> url_concat(""http://example.com/foo"", dict(c=""d""))
+    'http://example.com/foo?c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", dict(c=""d""))
+    'http://example.com/foo?a=b&c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", [(""c"", ""d""), (""c"", ""d2"")])
+    'http://example.com/foo?a=b&c=d&c=d2'
+    """"""
+    if args is None:
+        return url  # If args is None, return the original URL
+
+    parsed_url = urlparse(url)
+    if isinstance(args, dict):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args.items())
+    elif isinstance(args, list) or isinstance(args, tuple):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args)
+    else:
+        err = ""'args' parameter should be dict, list or tuple. Not {0}"".format(
+            type(args))
+        raise TypeError(err)
+    final_query = urlencode(parsed_query)
+    url = urlunparse((
+        parsed_url[0],
+        parsed_url[1],
+        parsed_url[2],
+        parsed_url[3],
+        final_query,
+        parsed_url[5]))
+    return url
+```
+
+### Explanation of changes:
+- Added a condition at the beginning of the function to check if `args` is `None`.
+- If `args` is `None`, the function immediately returns the original `url` without any modifications.
+
+### Tests and example uses:
+The provided test case `test_url_concat_none_params` should now pass with the updated function. Additional tests can be added to ensure the function behaves correctly with different types of `args` (e.g., `dict`, `list`, `tuple`, and other invalid types).",
+tornado-9-v0_llama-1,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the issue**: The `url_concat` function is expected to concatenate a URL with additional query parameters. However, when `None` is passed as the `args` parameter, it raises a `TypeError` because `args` should be a dictionary, list, or tuple.
+2. **Analyzing the test case**: The test `test_url_concat_none_params` passes `None` as the `args` parameter and expects the original URL to be returned without any modifications.
+3. **Identifying the bug**: The bug lies in the fact that the function does not handle the case when `args` is `None`. It should either return the original URL or raise an exception with a meaningful error message.
+
+### Fixed solution:
+```python
+def url_concat(url, args):
+    """"""
+    Concatenate url and arguments regardless of whether
+    url has existing query parameters.
+
+    ``args`` may be either a dictionary or a list of key-value pairs
+    (the latter allows for multiple values with the same key.
+
+    >>> url_concat(""http://example.com/foo"", dict(c=""d""))
+    'http://example.com/foo?c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", dict(c=""d""))
+    'http://example.com/foo?a=b&c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", [(""c"", ""d""), (""c"", ""d2"")])
+    'http://example.com/foo?a=b&c=d&c=d2'
+    """"""
+    if args is None:
+        # If args is None, return the original URL
+        return url
+
+    parsed_url = urlparse(url)
+    if isinstance(args, dict):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args.items())
+    elif isinstance(args, list) or isinstance(args, tuple):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args)
+    else:
+        err = ""'args' parameter should be dict, list or tuple. Not {0}"".format(
+            type(args))
+        raise TypeError(err)
+    final_query = urlencode(parsed_query)
+    url = urlunparse((
+        parsed_url[0],
+        parsed_url[1],
+        parsed_url[2],
+        parsed_url[3],
+        final_query,
+        parsed_url[5]))
+    return url
+```
+
+### Explanation of changes:
+*   **Added a check for `None`**: Before attempting to process the `args` parameter, the function now checks if `args` is `None`. If it is, the function returns the original URL without any modifications.
+*   **Handled the `None` case**: By returning the original URL when `args` is `None`, the function now behaves as expected in this edge case.
+
+### Tests and example uses:
+You can test the updated `url_concat` function with the following examples:
+
+```python
+print(url_concat(""https://localhost/path?r=1&t=2"", None))
+# Expected output: https://localhost/path?r=1&t=2
+
+print(url_concat(""https://localhost/path"", {""a"": ""b"", ""c"": ""d""}))
+# Expected output: https://localhost/path?a=b&c=d
+
+print(url_concat(""https://localhost/path?a=1&b=2"", [(""c"", ""3""), (""d"", ""4"")]))
+# Expected output: https://localhost/path?a=1&b=2&c=3&d=4
+```",
+tornado-9-v0_llama-2,UNKNOWN,UNKNOWN,"```python
+def url_concat(url, args):
+    """"""Concatenate url and arguments regardless of whether
+    url has existing query parameters.
+
+    ``args`` may be either a dictionary or a list of key-value pairs
+    (the latter allows for multiple values with the same key.
+
+    >>> url_concat(""http://example.com/foo"", dict(c=""d""))
+    'http://example.com/foo?c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", dict(c=""d""))
+    'http://example.com/foo?a=b&c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", [(""c"", ""d""), (""c"", ""d2"")])
+    'http://example.com/foo?a=b&c=d&c=d2'
+    """"""
+    if args is None:
+        return url
+
+    parsed_url = urlparse(url)
+    if isinstance(args, dict):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args.items())
+    elif isinstance(args, list) or isinstance(args, tuple):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args)
+    else:
+        err = ""'args' parameter should be dict, list or tuple. Not {0}"".format(
+            type(args))
+        raise TypeError(err)
+    final_query = urlencode(parsed_query)
+    url = urlunparse((
+        parsed_url[0],
+        parsed_url[1],
+        parsed_url[2],
+        parsed_url[3],
+        final_query,
+        parsed_url[5]))
+    return url
+```",
+tornado-9-v0_llama-3,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Analyzing the error message**: The error message `'args' parameter should be dict, list or tuple. Not <class 'NoneType'>` indicates that the `args` parameter passed to the `url_concat` function is `None`, which is not an accepted type.
+2. **Understanding the `url_concat` function**: The function is designed to concatenate a URL with additional query parameters. The `args` parameter can be a dictionary, list, or tuple, representing the query parameters to be added.
+3. **Identifying the issue**: The problem arises when `args` is `None`, which is not handled explicitly in the function. The function should either raise an error or return the original URL when `args` is `None`.
+4. **Expected behavior**: Based on the test case, when `args` is `None`, the function should return the original URL without modifying it.
+
+### Fixed solution:
+```python
+def url_concat(url, args):
+    """"""Concatenate url and arguments regardless of whether
+    url has existing query parameters.
+
+    ``args`` may be either a dictionary or a list of key-value pairs
+    (the latter allows for multiple values with the same key.
+
+    >>> url_concat(""http://example.com/foo"", dict(c=""d""))
+    'http://example.com/foo?c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", dict(c=""d""))
+    'http://example.com/foo?a=b&c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", [(""c"", ""d""), (""c"", ""d2"")])
+    'http://example.com/foo?a=b&c=d&c=d2'
+    """"""
+    if args is None:
+        return url  # Return the original URL when args is None
+
+    parsed_url = urlparse(url)
+    if isinstance(args, dict):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args.items())
+    elif isinstance(args, list) or isinstance(args, tuple):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args)
+    else:
+        err = ""'args' parameter should be dict, list or tuple. Not {0}"".format(
+            type(args))
+        raise TypeError(err)
+    final_query = urlencode(parsed_query)
+    url = urlunparse((
+        parsed_url[0],
+        parsed_url[1],
+        parsed_url[2],
+        parsed_url[3],
+        final_query,
+        parsed_url[5]))
+    return url
+```
+
+### Explanation of changes:
+* Added a check for `args is None` at the beginning of the function.
+* When `args` is `None`, the function returns the original URL without modifying it.
+* The rest of the function remains unchanged, handling `args` of types dictionary, list, or tuple as before.
+
+### Tests and example uses:
+The provided test case `test_url_concat_none_params` should pass with the updated function. Additional test cases can be written to cover other scenarios, such as passing empty dictionaries, lists, or tuples as `args`.",
+tornado-9-v0_llama-4,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the function's purpose**: The `url_concat` function is designed to concatenate a URL with additional query parameters. These parameters can be provided as a dictionary or a list of key-value pairs.
+
+2. **Identifying the issue**: The error message indicates that the `args` parameter should be a dictionary, list, or tuple, but it's receiving `None`. This suggests that the function is not handling the case where `args` is `None` properly.
+
+3. **Analyzing the expected behavior**: The test `test_url_concat_none_params` expects that when `args` is `None`, the function should return the original URL without any modifications.
+
+4. **Identifying the cause of the bug**: The current implementation of `url_concat` does not explicitly handle the case where `args` is `None`. It directly checks if `args` is a dictionary, list, or tuple, and if not, it raises a TypeError. This behavior does not align with the expected behavior described in the test.
+
+### Fixed solution:
+```python
+def url_concat(url, args):
+    """"""Concatenate url and arguments regardless of whether
+    url has existing query parameters.
+
+    ``args`` may be either a dictionary or a list of key-value pairs
+    (the latter allows for multiple values with the same key.
+
+    >>> url_concat(""http://example.com/foo"", dict(c=""d""))
+    'http://example.com/foo?c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", dict(c=""d""))
+    'http://example.com/foo?a=b&c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", [(""c"", ""d""), (""c"", ""d2"")])
+    'http://example.com/foo?a=b&c=d&c=d2'
+    """"""
+    if args is None:
+        return url  # If args is None, return the original URL
+    
+    parsed_url = urlparse(url)
+    if isinstance(args, dict):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args.items())
+    elif isinstance(args, list) or isinstance(args, tuple):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args)
+    else:
+        err = ""'args' parameter should be dict, list or tuple. Not {0}"".format(
+            type(args))
+        raise TypeError(err)
+    final_query = urlencode(parsed_query)
+    url = urlunparse((
+        parsed_url[0],
+        parsed_url[1],
+        parsed_url[2],
+        parsed_url[3],
+        final_query,
+        parsed_url[5]))
+    return url
+```
+
+### Explanation of changes:
+* Added a condition at the beginning of the function to check if `args` is `None`. If it is, the function now returns the original `url` without any modifications.
+* This change ensures that the function behaves as expected when `args` is `None`, aligning with the behavior described in the test `test_url_concat_none_params`.
+
+### Tests and example uses:
+The provided test `test_url_concat_none_params` should now pass with the modified function. Additional tests can be written to further verify the function's behavior with different types of input for `args`.",
+tornado-9-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+def url_concat(url, args):
+    """"""Concatenate url and arguments regardless of whether
+    url has existing query parameters.
+
+    ``args`` may be either a dictionary or a list of key-value pairs
+    (the latter allows for multiple values with the same key.
+
+    >>> url_concat(""http://example.com/foo"", dict(c=""d""))
+    'http://example.com/foo?c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", dict(c=""d""))
+    'http://example.com/foo?a=b&c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", [(""c"", ""d""), (""c"", ""d2"")])
+    'http://example.com/foo?a=b&c=d&c=d2'
+    """"""
+    if args is None:
+        return url
+    
+    parsed_url = urlparse(url)
+    if isinstance(args, dict):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args.items())
+    elif isinstance(args, list) or isinstance(args, tuple):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args)
+    else:
+        err = ""'args' parameter should be dict, list or tuple. Not {0}"".format(
+            type(args))
+        raise TypeError(err)
+    final_query = urlencode(parsed_query)
+    url = urlunparse((
+        parsed_url[0],
+        parsed_url[1],
+        parsed_url[2],
+        parsed_url[3],
+        final_query,
+        parsed_url[5]))
+    return url
+```",
+tornado-9-v0_llama-6,UNKNOWN,UNKNOWN,"### Corrected Code
+
+```python
+def url_concat(url, args):
+    """"""Concatenate url and arguments regardless of whether
+    url has existing query parameters.
+
+    ``args`` may be either a dictionary or a list of key-value pairs
+    (the latter allows for multiple values with the same key.
+
+    >>> url_concat(""http://example.com/foo"", dict(c=""d""))
+    'http://example.com/foo?c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", dict(c=""d""))
+    'http://example.com/foo?a=b&c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", [(""c"", ""d""), (""c"", ""d2"")])
+    'http://example.com/foo?a=b&c=d&c=d2'
+    """"""
+    if args is None:
+        return url
+
+    parsed_url = urlparse(url)
+    if isinstance(args, dict):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args.items())
+    elif isinstance(args, list) or isinstance(args, tuple):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args)
+    else:
+        err = ""'args' parameter should be dict, list or tuple. Not {0}"".format(
+            type(args))
+        raise TypeError(err)
+    final_query = urlencode(parsed_query)
+    url = urlunparse((
+        parsed_url[0],
+        parsed_url[1],
+        parsed_url[2],
+        parsed_url[3],
+        final_query,
+        parsed_url[5]))
+    return url
+```",
+tornado-9-v0_llama-7,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. The **TypeError** is raised when the `args` parameter passed to the `url_concat` function is **None**, which is not allowed according to the function's documentation. The error message clearly indicates that `args` should be a dictionary, list, or tuple.
+2. Examining the provided test case, `test_url_concat_none_params`, it is evident that the test is intentionally passing **None** as the `args` parameter to the `url_concat` function.
+3. The expected behavior in this case, as indicated by the test, is for the function to return the original URL without any modifications when `args` is **None**.
+
+### Fixed solution:
+```python
+def url_concat(url, args):
+    """"""Concatenate url and arguments regardless of whether
+    url has existing query parameters.
+
+    ``args`` may be either a dictionary or a list of key-value pairs
+    (the latter allows for multiple values with the same key.
+
+    >>> url_concat(""http://example.com/foo"", dict(c=""d""))
+    'http://example.com/foo?c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", dict(c=""d""))
+    'http://example.com/foo?a=b&c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", [(""c"", ""d""), (""c"", ""d2"")])
+    'http://example.com/foo?a=b&c=d&c=d2'
+    """"""
+    if args is None:
+        # If args is None, return the original URL without modifications
+        return url
+    
+    parsed_url = urlparse(url)
+    if isinstance(args, dict):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args.items())
+    elif isinstance(args, list) or isinstance(args, tuple):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args)
+    else:
+        err = ""'args' parameter should be dict, list or tuple. Not {0}"".format(
+            type(args))
+        raise TypeError(err)
+    final_query = urlencode(parsed_query)
+    url = urlunparse((
+        parsed_url[0],
+        parsed_url[1],
+        parsed_url[2],
+        parsed_url[3],
+        final_query,
+        parsed_url[5]))
+    return url
+```
+
+### Explanation of changes:
+* Added a conditional check at the beginning of the `url_concat` function to return the original `url` if `args` is **None**, thus preventing the **TypeError** from being raised in such cases.
+* This change aligns with the expected behavior as indicated by the provided test case `test_url_concat_none_params`.
+
+### Tests and example uses:
+The provided test case `test_url_concat_none_params` should now pass with the updated `url_concat` function. Additional tests with different types of `args` (e.g., dictionary, list, tuple) can be created to ensure the function behaves as expected in all scenarios.",
+tornado-9-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+def url_concat(url, args):
+    """"""Concatenate url and arguments regardless of whether
+    url has existing query parameters.
+
+    ``args`` may be either a dictionary or a list of key-value pairs
+    (the latter allows for multiple values with the same key.
+
+    >>> url_concat(""http://example.com/foo"", dict(c=""d""))
+    'http://example.com/foo?c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", dict(c=""d""))
+    'http://example.com/foo?a=b&c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", [(""c"", ""d""), (""c"", ""d2"")])
+    'http://example.com/foo?a=b&c=d&c=d2'
+    """"""
+    if args is None:
+        return url
+    parsed_url = urlparse(url)
+    if isinstance(args, dict):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args.items())
+    elif isinstance(args, list) or isinstance(args, tuple):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args)
+    else:
+        err = ""'args' parameter should be dict, list or tuple. Not {0}"".format(
+            type(args))
+        raise TypeError(err)
+    final_query = urlencode(parsed_query)
+    url = urlunparse((
+        parsed_url[0],
+        parsed_url[1],
+        parsed_url[2],
+        parsed_url[3],
+        final_query,
+        parsed_url[5]))
+    return url
+```",
+tornado-9-v0_llama-9,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. The `url_concat` function raises a `TypeError` when the `args` parameter is `None`.
+2. The function checks if `args` is a dictionary, list, or tuple, but it does not handle the case where `args` is `None`.
+3. The test function `test_url_concat_none_params` passes `None` as the `args` parameter to the `url_concat` function, which causes the error.
+4. The expected output of the test function is the original URL without any modifications, since `args` is `None`.
+
+### Fixed solution:
+```python
+def url_concat(url, args):
+    """"""Concatenate url and arguments regardless of whether
+    url has existing query parameters.
+
+    ``args`` may be either a dictionary or a list of key-value pairs
+    (the latter allows for multiple values with the same key.
+
+    >>> url_concat(""http://example.com/foo"", dict(c=""d""))
+    'http://example.com/foo?c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", dict(c=""d""))
+    'http://example.com/foo?a=b&c=d'
+    >>> url_concat(""http://example.com/foo?a=b"", [(""c"", ""d""), (""c"", ""d2"")])
+    'http://example.com/foo?a=b&c=d&c=d2'
+    """"""
+    if args is None:
+        return url  # Return the original URL if args is None
+    
+    parsed_url = urlparse(url)
+    if isinstance(args, dict):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args.items())
+    elif isinstance(args, list) or isinstance(args, tuple):
+        parsed_query = parse_qsl(parsed_url.query, keep_blank_values=True)
+        parsed_query.extend(args)
+    else:
+        err = ""'args' parameter should be dict, list or tuple. Not {0}"".format(
+            type(args))
+        raise TypeError(err)
+    final_query = urlencode(parsed_query)
+    url = urlunparse((
+        parsed_url[0],
+        parsed_url[1],
+        parsed_url[2],
+        parsed_url[3],
+        final_query,
+        parsed_url[5]))
+    return url
+```
+
+### Explanation of changes:
+* Added a check at the beginning of the function to return the original URL if `args` is `None`.
+* This change allows the function to handle the case where `args` is `None` without raising a `TypeError`.
+
+### Tests and example uses:
+The test function `test_url_concat_none_params` should now pass with the updated `url_concat` function. Additionally, you can test the function with other input parameters, such as dictionaries and lists, to ensure it works as expected.",

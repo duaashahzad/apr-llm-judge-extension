@@ -1,0 +1,1000 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+matplotlib-25-v0_llama-0,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the Issue**: The problem arises because the `eventplot` function sorts the input data in-place when it's provided as a numpy array, but it doesn't sort the data when it's provided as a list. This inconsistency can lead to unexpected behavior.
+
+2. **Identifying the Cause**: The cause of this issue lies in how numpy arrays and lists are handled within the `__init__` method of the `EventCollection` class. Specifically, when `positions` is a numpy array, the line `positions.sort()` sorts the array in-place. However, when `positions` is a list, this line sorts the list in-place as well, but the original list outside the function remains unsorted because lists are mutable and are passed by object reference.
+
+3. **Finding a Solution**: To fix this issue, we need to ensure that the input data is not modified in-place, regardless of whether it's a numpy array or a list. One way to achieve this is by making a copy of the input data at the beginning of the function, so any sorting or modifications happen on the copy, not the original data.
+
+### Fixed solution:
+```python
+def __init__(self,
+             positions,     # Cannot be None.
+             orientation=None,
+             lineoffset=0,
+             linelength=1,
+             linewidth=None,
+             color=None,
+             linestyle='solid',
+             antialiased=None,
+             **kwargs
+             ):
+    """"""
+    Parameters
+    ----------
+    positions : 1D array-like object
+        Each value is an event.
+
+    orientation : {None, 'horizontal', 'vertical'}, optional
+        The orientation of the **collection** (the event bars are along
+        the orthogonal direction). Defaults to 'horizontal' if not
+        specified or None.
+
+    lineoffset : scalar, optional, default: 0
+        The offset of the center of the markers from the origin, in the
+        direction orthogonal to *orientation*.
+
+    linelength : scalar, optional, default: 1
+        The total height of the marker (i.e. the marker stretches from
+        ``lineoffset - linelength/2`` to ``lineoffset + linelength/2``).
+
+    linewidth : scalar or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    color : color, sequence of colors or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    linestyle : str or tuple, optional, default: 'solid'
+        Valid strings are ['solid', 'dashed', 'dashdot', 'dotted',
+        '-', '--', '-.', ':']. Dash tuples should be of the form::
+
+            (offset, onoffseq),
+
+        where *onoffseq* is an even length tuple of on and off ink
+        in points.
+
+    antialiased : {None, 1, 2}, optional
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    **kwargs : optional
+        Other keyword arguments are line collection properties.  See
+        :class:`~matplotlib.collections.LineCollection` for a list of
+        the valid properties.
+
+    Examples
+    --------
+   .. plot:: gallery/lines_bars_and_markers/eventcollection_demo.py
+    """"""
+
+    # Make a copy of the positions to avoid modifying the original data
+    positions_copy = np.asarray(positions).copy() if hasattr(positions, 'ndim') else positions.copy()
+
+    segment = (lineoffset + linelength / 2.,
+               lineoffset - linelength / 2.)
+    if positions_copy is None or len(positions_copy) == 0:
+        segments = []
+    elif hasattr(positions_copy, 'ndim') and positions_copy.ndim > 1:
+        raise ValueError('positions cannot be an array with more than '
+                         'one dimension.')
+    elif (orientation is None or orientation.lower() == 'none' or
+          orientation.lower() == 'horizontal'):
+        positions_copy.sort()
+        segments = [[(coord1, coord2) for coord2 in segment] for
+                    coord1 in positions_copy]
+        self._is_horizontal = True
+    elif orientation.lower() == 'vertical':
+        positions_copy.sort()
+        segments = [[(coord2, coord1) for coord2 in segment] for
+                    coord1 in positions_copy]
+        self._is_horizontal = False
+    else:
+        cbook._check_in_list(['horizontal', 'vertical'],
+                             orientation=orientation)
+
+    LineCollection.__init__(self,
+                            segments,
+                            linewidths=linewidth,
+                            colors=color,
+                            antialiaseds=antialiased,
+                            linestyles=linestyle,
+                            **kwargs)
+
+    self._linelength = linelength
+    self._lineoffset = lineoffset
+```
+### Explanation of changes:
+*   A copy of the input `positions` is made at the beginning of the `__init__` method to avoid modifying the original data.
+*   If `positions` is a numpy array, `np.asarray(positions).copy()` is used to create a copy. If it's a list, `positions.copy()` is used.
+*   The rest of the code remains the same, but now it operates on the copied data, ensuring the original input remains unchanged.
+
+### Tests and example uses:
+The fixed function should pass the test `test_EventCollection_nosort` without modifying the input array. Additionally, you can test the function with list inputs to ensure it behaves consistently. For example:
+
+```python
+arr = np.array([3, 2, 1, 10])
+coll = EventCollection(arr)
+np.testing.assert_array_equal(arr, np.array([3, 2, 1, 10]))
+
+lst = [3, 2, 1, 10]
+coll = EventCollection(lst)
+assert lst == [3, 2, 1, 10]
+```",
+matplotlib-25-v0_llama-1,UNKNOWN,UNKNOWN,"```python
+def __init__(self,
+             positions,     # Cannot be None.
+             orientation=None,
+             lineoffset=0,
+             linelength=1,
+             linewidth=None,
+             color=None,
+             linestyle='solid',
+             antialiased=None,
+             **kwargs
+             ):
+    """"""
+    Parameters
+    ----------
+    positions : 1D array-like object
+        Each value is an event.
+
+    orientation : {None, 'horizontal', 'vertical'}, optional
+        The orientation of the **collection** (the event bars are along
+        the direction orthogonal to *orientation*). Defaults to 'horizontal' if not
+        specified or None.
+
+    lineoffset : scalar, optional, default: 0
+        The offset of the center of the markers from the origin, in the
+        direction orthogonal to *orientation*.
+
+    linelength : scalar, optional, default: 1
+        The total height of the marker (i.e. the marker stretches from
+        ``lineoffset - linelength/2`` to ``lineoffset + linelength/2``).
+
+    linewidth : scalar or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    color : color, sequence of colors or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    linestyle : str or tuple, optional, default: 'solid'
+        Valid strings are ['solid', 'dashed', 'dashdot', 'dotted',
+        '-', '--', '-.', ':']. Dash tuples should be of the form::
+
+            (offset, onoffseq),
+
+        where *onoffseq* is an even length tuple of on and off ink
+        in points.
+
+    antialiased : {None, 1, 2}, optional
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    **kwargs : optional
+        Other keyword arguments are line collection properties.  See
+        :class:`~matplotlib.collections.LineCollection` for a list of
+        the valid properties.
+
+    Examples
+    --------
+
+   .. plot:: gallery/lines_bars_and_markers/eventcollection_demo.py
+    """"""
+
+    segment = (lineoffset + linelength / 2.,
+               lineoffset - linelength / 2.)
+    if positions is None or len(positions) == 0:
+        segments = []
+    elif hasattr(positions, 'ndim') and positions.ndim > 1:
+        raise ValueError('positions cannot be an array with more than '
+                         'one dimension.')
+    else:
+        # Create a copy of positions to avoid modifying the original array
+        positions_copy = np.asarray(positions)
+        if (orientation is None or orientation.lower() == 'none' or
+            orientation.lower() == 'horizontal'):
+            positions_copy.sort()
+            segments = [[(coord1, coord2) for coord2 in segment] for
+                        coord1 in positions_copy]
+            self._is_horizontal = True
+        elif orientation.lower() == 'vertical':
+            positions_copy.sort()
+            segments = [[(coord2, coord1) for coord2 in segment] for
+                        coord1 in positions_copy]
+            self._is_horizontal = False
+        else:
+            cbook._check_in_list(['horizontal', 'vertical'],
+                                 orientation=orientation)
+
+    LineCollection.__init__(self,
+                            segments,
+                            linewidths=linewidth,
+                            colors=color,
+                            antialiaseds=antialiased,
+                            linestyles=linestyle,
+                            **kwargs)
+
+    self._linelength = linelength
+    self._lineoffset = lineoffset
+```",
+matplotlib-25-v0_llama-2,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. The issue arises because the `positions` parameter in the `__init__` method is sorted in-place when it's a numpy array, but not when it's a list. This is due to the line `positions.sort()` which modifies the input if it's a list or a numpy array that supports sorting in-place.
+2. However, the expected behavior is to leave the input unsorted, whether it's a list or a numpy array.
+3. To achieve the expected behavior, we need to ensure that the input `positions` is not modified in-place.
+
+### Fixed solution:
+```python
+def __init__(self,
+             positions,     # Cannot be None.
+             orientation=None,
+             lineoffset=0,
+             linelength=1,
+             linewidth=None,
+             color=None,
+             linestyle='solid',
+             antialiased=None,
+             **kwargs
+             ):
+    """"""
+    Parameters
+    ----------
+    positions : 1D array-like object
+        Each value is an event.
+
+    orientation : {None, 'horizontal', 'vertical'}, optional
+        The orientation of the **collection** (the event bars are along
+        the direction orthogonal to *orientation*). Defaults to 'horizontal' if not
+        specified or None.
+
+    lineoffset : scalar, optional, default: 0
+        The offset of the center of the markers from the origin, in the
+        direction orthogonal to *orientation*.
+
+    linelength : scalar, optional, default: 1
+        The total height of the marker (i.e. the marker stretches from
+        ``lineoffset - linelength/2`` to ``lineoffset + linelength/2``).
+
+    linewidth : scalar or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    color : color, sequence of colors or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    linestyle : str or tuple, optional, default: 'solid'
+        Valid strings are ['solid', 'dashed', 'dashdot', 'dotted',
+        '-', '--', '-.', ':']. Dash tuples should be of the form::
+
+            (offset, onoffseq),
+
+        where *onoffseq* is an even length tuple of on and off ink
+        in points.
+
+    antialiased : {None, 1, 2}, optional
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    **kwargs : optional
+        Other keyword arguments are line collection properties.  See
+        :class:`~matplotlib.collections.LineCollection` for a list of
+        the valid properties.
+
+    Examples
+    --------
+
+   .. plot:: gallery/lines_bars_and_markers/eventcollection_demo.py
+    """"""
+
+    segment = (lineoffset + linelength / 2.,
+               lineoffset - linelength / 2.)
+    if positions is None or len(positions) == 0:
+        segments = []
+    elif hasattr(positions, 'ndim') and positions.ndim > 1:
+        raise ValueError('positions cannot be an array with more than '
+                         'one dimension.')
+    else:
+        # Create a sorted copy of positions to avoid modifying the input
+        sorted_positions = sorted(positions)
+        if (orientation is None or orientation.lower() == 'none' or
+            orientation.lower() == 'horizontal'):
+            segments = [[(coord1, coord2) for coord2 in segment] for
+                        coord1 in sorted_positions]
+            self._is_horizontal = True
+        elif orientation.lower() == 'vertical':
+            segments = [[(coord2, coord1) for coord2 in segment] for
+                        coord1 in sorted_positions]
+            self._is_horizontal = False
+        else:
+            cbook._check_in_list(['horizontal', 'vertical'],
+                                 orientation=orientation)
+
+    LineCollection.__init__(self,
+                            segments,
+                            linewidths=linewidth,
+                            colors=color,
+                            antialiaseds=antialiased,
+                            linestyles=linestyle,
+                            **kwargs)
+
+    self._linelength = linelength
+    self._lineoffset = lineoffset
+```
+
+### Explanation of changes:
+* Instead of sorting the `positions` in-place using `positions.sort()`, we create a sorted copy of `positions` using `sorted_positions = sorted(positions)`.
+* We then use `sorted_positions` to create the `segments` list, ensuring that the input `positions` remains unmodified.
+
+### Tests and example uses:
+You can test the corrected `__init__` method by running the provided test function `test_EventCollection_nosort`. The test should now pass, indicating that the input `positions` is not modified in-place. Additionally, you can try creating an `EventCollection` object with a list or numpy array of positions and verify that the positions are not sorted in-place.",
+matplotlib-25-v0_llama-3,UNKNOWN,UNKNOWN,"```python
+def __init__(self,
+             positions,     # Cannot be None.
+             orientation=None,
+             lineoffset=0,
+             linelength=1,
+             linewidth=None,
+             color=None,
+             linestyle='solid',
+             antialiased=None,
+             **kwargs
+             ):
+    """"""
+    Parameters
+    ----------
+    positions : 1D array-like object
+        Each value is an event.
+
+    orientation : {None, 'horizontal', 'vertical'}, optional
+        The orientation of the **collection** (the event bars are along
+        the direction orthogonal to *orientation*). Defaults to 'horizontal' if not
+        specified or None.
+
+    lineoffset : scalar, optional, default: 0
+        The offset of the center of the markers from the origin, in the
+        direction orthogonal to *orientation*.
+
+    linelength : scalar, optional, default: 1
+        The total height of the marker (i.e. the marker stretches from
+        ``lineoffset - linelength/2`` to ``lineoffset + linelength/2``).
+
+    linewidth : scalar or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    color : color, sequence of colors or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    linestyle : str or tuple, optional, default: 'solid'
+        Valid strings are ['solid', 'dashed', 'dashdot', 'dotted',
+        '-', '--', '-.', ':']. Dash tuples should be of the form::
+
+            (offset, onoffseq),
+
+        where *onoffseq* is an even length tuple of on and off ink
+        in points.
+
+    antialiased : {None, 1, 2}, optional
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    **kwargs : optional
+        Other keyword arguments are line collection properties.  See
+        :class:`~matplotlib.collections.LineCollection` for a list of
+        the valid properties.
+
+    Examples
+    --------
+
+   .. plot:: gallery/lines_bars_and_markers/eventcollection_demo.py
+    """"""
+
+    segment = (lineoffset + linelength / 2.,
+               lineoffset - linelength / 2.)
+    if positions is None or len(positions) == 0:
+        segments = []
+    elif hasattr(positions, 'ndim') and positions.ndim > 1:
+        raise ValueError('positions cannot be an array with more than '
+                         'one dimension.')
+    else:
+        # Make a copy of positions to avoid modifying the input in place
+        positions = np.array(positions)
+        
+    if (orientation is None or orientation.lower() == 'none' or
+          orientation.lower() == 'horizontal'):
+        positions = np.sort(positions)
+        segments = [[(coord1, coord2) for coord2 in segment] for
+                    coord1 in positions]
+        self._is_horizontal = True
+    elif orientation.lower() == 'vertical':
+        positions = np.sort(positions)
+        segments = [[(coord2, coord1) for coord2 in segment] for
+                    coord1 in positions]
+        self._is_horizontal = False
+    else:
+        cbook._check_in_list(['horizontal', 'vertical'],
+                             orientation=orientation)
+
+    LineCollection.__init__(self,
+                            segments,
+                            linewidths=linewidth,
+                            colors=color,
+                            antialiaseds=antialiased,
+                            linestyles=linestyle,
+                            **kwargs)
+
+    self._linelength = linelength
+    self._lineoffset = lineoffset
+
+```",
+matplotlib-25-v0_llama-4,UNKNOWN,UNKNOWN,"```python
+def __init__(self,
+             positions,     # Cannot be None.
+             orientation=None,
+             lineoffset=0,
+             linelength=1,
+             linewidth=None,
+             color=None,
+             linestyle='solid',
+             antialiased=None,
+             **kwargs
+             ):
+    """"""
+    Parameters
+    ----------
+    positions : 1D array-like object
+        Each value is an event.
+
+    orientation : {None, 'horizontal', 'vertical'}, optional
+        The orientation of the **collection** (the event bars are along
+        the direction orthogonal to *orientation*). Defaults to 'horizontal' if not
+        specified or None.
+
+    lineoffset : scalar, optional, default: 0
+        The offset of the center of the markers from the origin, in the
+        direction orthogonal to *orientation*.
+
+    linelength : scalar, optional, default: 1
+        The total height of the marker (i.e. the marker stretches from
+        ``lineoffset - linelength/2`` to ``lineoffset + linelength/2``).
+
+    linewidth : scalar or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    color : color, sequence of colors or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    linestyle : str or tuple, optional, default: 'solid'
+        Valid strings are ['solid', 'dashed', 'dashdot', 'dotted',
+        '-', '--', '-.', ':']. Dash tuples should be of the form::
+
+            (offset, onoffseq),
+
+        where *onoffseq* is an even length tuple of on and off ink
+        in points.
+
+    antialiased : {None, 1, 2}, optional
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    **kwargs : optional
+        Other keyword arguments are line collection properties.  See
+        :class:`~matplotlib.collections.LineCollection` for a list of
+        the valid properties.
+
+    Examples
+    --------
+
+   .. plot:: gallery/lines_bars_and_markers/eventcollection_demo.py
+    """"""
+
+    segment = (lineoffset + linelength / 2.,
+               lineoffset - linelength / 2.)
+    if positions is None or len(positions) == 0:
+        segments = []
+    elif hasattr(positions, 'ndim') and positions.ndim > 1:
+        raise ValueError('positions cannot be an array with more than '
+                         'one dimension.')
+    else:
+        # Make a copy of the input to avoid modifying it in place
+        positions = np.asarray(positions)
+        
+        if (orientation is None or orientation.lower() == 'none' or
+            orientation.lower() == 'horizontal'):
+            sorted_positions = np.sort(positions)
+            segments = [[(coord1, coord2) for coord2 in segment] for
+                        coord1 in sorted_positions]
+            self._is_horizontal = True
+        elif orientation.lower() == 'vertical':
+            sorted_positions = np.sort(positions)
+            segments = [[(coord2, coord1) for coord2 in segment] for
+                        coord1 in sorted_positions]
+            self._is_horizontal = False
+        else:
+            cbook._check_in_list(['horizontal', 'vertical'],
+                                 orientation=orientation)
+
+    LineCollection.__init__(self,
+                            segments,
+                            linewidths=linewidth,
+                            colors=color,
+                            antialiaseds=antialiased,
+                            linestyles=linestyle,
+                            **kwargs)
+
+    self._linelength = linelength
+    self._lineoffset = lineoffset
+```",
+matplotlib-25-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+def __init__(self,
+             positions,     # Cannot be None.
+             orientation=None,
+             lineoffset=0,
+             linelength=1,
+             linewidth=None,
+             color=None,
+             linestyle='solid',
+             antialiased=None,
+             **kwargs
+             ):
+    """"""
+    Parameters
+    ----------
+    positions : 1D array-like object
+        Each value is an event.
+
+    orientation : {None, 'horizontal', 'vertical'}, optional
+        The orientation of the **collection** (the event bars are along
+        the orthogonal direction). Defaults to 'horizontal' if not
+        specified or None.
+
+    lineoffset : scalar, optional, default: 0
+        The offset of the center of the markers from the origin, in the
+        direction orthogonal to *orientation*.
+
+    linelength : scalar, optional, default: 1
+        The total height of the marker (i.e. the marker stretches from
+        ``lineoffset - linelength/2`` to ``lineoffset + linelength/2``).
+
+    linewidth : scalar or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    color : color, sequence of colors or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    linestyle : str or tuple, optional, default: 'solid'
+        Valid strings are ['solid', 'dashed', 'dashdot', 'dotted',
+        '-', '--', '-.', ':']. Dash tuples should be of the form::
+
+            (offset, onoffseq),
+
+        where *onoffseq* is an even length tuple of on and off ink
+        in points.
+
+    antialiased : {None, 1, 2}, optional
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    **kwargs : optional
+        Other keyword arguments are line collection properties.  See
+        :class:`~matplotlib.collections.LineCollection` for a list of
+        the valid properties.
+
+    Examples
+    --------
+   .. plot:: gallery/lines_bars_and_markers/eventcollection_demo.py
+    """"""
+
+    segment = (lineoffset + linelength / 2.,
+               lineoffset - linelength / 2.)
+    if positions is None or len(positions) == 0:
+        segments = []
+    elif hasattr(positions, 'ndim') and positions.ndim > 1:
+        raise ValueError('positions cannot be an array with more than '
+                         'one dimension.')
+    else:
+        # Create a sorted copy of positions without modifying the original
+        sorted_positions = sorted(positions)
+        if (orientation is None or orientation.lower() == 'none' or
+            orientation.lower() == 'horizontal'):
+            segments = [[(coord1, coord2) for coord2 in segment] for
+                        coord1 in sorted_positions]
+            self._is_horizontal = True
+        elif orientation.lower() == 'vertical':
+            segments = [[(coord2, coord1) for coord2 in segment] for
+                        coord1 in sorted_positions]
+            self._is_horizontal = False
+        else:
+            cbook._check_in_list(['horizontal', 'vertical'],
+                                 orientation=orientation)
+
+    LineCollection.__init__(self,
+                            segments,
+                            linewidths=linewidth,
+                            colors=color,
+                            antialiaseds=antialiased,
+                            linestyles=linestyle,
+                            **kwargs)
+
+    self._linelength = linelength
+    self._lineoffset = lineoffset
+```",
+matplotlib-25-v0_llama-6,UNKNOWN,UNKNOWN,"```python
+def __init__(self,
+             positions,     # Cannot be None.
+             orientation=None,
+             lineoffset=0,
+             linelength=1,
+             linewidth=None,
+             color=None,
+             linestyle='solid',
+             antialiased=None,
+             **kwargs
+             ):
+    """"""
+    Parameters
+    ----------
+    positions : 1D array-like object
+        Each value is an event.
+
+    orientation : {None, 'horizontal', 'vertical'}, optional
+        The orientation of the **collection** (the event bars are along
+        the direction orthogonal to *orientation*). Defaults to 'horizontal' if not
+        specified or None.
+
+    lineoffset : scalar, optional, default: 0
+        The offset of the center of the markers from the origin, in the
+        direction orthogonal to *orientation*.
+
+    linelength : scalar, optional, default: 1
+        The total height of the marker (i.e. the marker stretches from
+        ``lineoffset - linelength/2`` to ``lineoffset + linelength/2``).
+
+    linewidth : scalar or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    color : color, sequence of colors or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    linestyle : str or tuple, optional, default: 'solid'
+        Valid strings are ['solid', 'dashed', 'dashdot', 'dotted',
+        '-', '--', '-.', ':']. Dash tuples should be of the form::
+
+            (offset, onoffseq),
+
+        where *onoffseq* is an even length tuple of on and off ink
+        in points.
+
+    antialiased : {None, 1, 2}, optional
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    **kwargs : optional
+        Other keyword arguments are line collection properties.  See
+        :class:`~matplotlib.collections.LineCollection` for a list of
+        the valid properties.
+
+    Examples
+    --------
+
+   .. plot:: gallery/lines_bars_and_markers/eventcollection_demo.py
+    """"""
+
+    segment = (lineoffset + linelength / 2.,
+               lineoffset - linelength / 2.)
+    if positions is None or len(positions) == 0:
+        segments = []
+    elif hasattr(positions, 'ndim') and positions.ndim > 1:
+        raise ValueError('positions cannot be an array with more than '
+                         'one dimension.')
+    else:
+        # Create a copy of positions if it is a numpy array or a list
+        positions_copy = np.asarray(positions)
+        if (orientation is None or orientation.lower() == 'none' or
+            orientation.lower() == 'horizontal'):
+            positions_copy.sort()
+            segments = [[(coord1, coord2) for coord2 in segment] for
+                        coord1 in positions_copy]
+            self._is_horizontal = True
+        elif orientation.lower() == 'vertical':
+            positions_copy.sort()
+            segments = [[(coord2, coord1) for coord2 in segment] for
+                        coord1 in positions_copy]
+            self._is_horizontal = False
+        else:
+            cbook._check_in_list(['horizontal', 'vertical'],
+                                 orientation=orientation)
+
+    LineCollection.__init__(self,
+                            segments,
+                            linewidths=linewidth,
+                            colors=color,
+                            antialiaseds=antialiased,
+                            linestyles=linestyle,
+                            **kwargs)
+
+    self._linelength = linelength
+    self._lineoffset = lineoffset
+
+```",
+matplotlib-25-v0_llama-7,UNKNOWN,UNKNOWN,"```python
+def __init__(self,
+             positions,     # Cannot be None.
+             orientation=None,
+             lineoffset=0,
+             linelength=1,
+             linewidth=None,
+             color=None,
+             linestyle='solid',
+             antialiased=None,
+             **kwargs
+             ):
+    """"""
+    Parameters
+    ----------
+    positions : 1D array-like object
+        Each value is an event.
+
+    orientation : {None, 'horizontal', 'vertical'}, optional
+        The orientation of the **collection** (the event bars are along
+        the direction orthogonal to *orientation*). Defaults to 'horizontal' if not
+        specified or None.
+
+    lineoffset : scalar, optional, default: 0
+        The offset of the center of the markers from the origin, in the
+        direction orthogonal to *orientation*.
+
+    linelength : scalar, optional, default: 1
+        The total height of the marker (i.e. the marker stretches from
+        ``lineoffset - linelength/2`` to ``lineoffset + linelength/2``).
+
+    linewidth : scalar or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    color : color, sequence of colors or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    linestyle : str or tuple, optional, default: 'solid'
+        Valid strings are ['solid', 'dashed', 'dashdot', 'dotted',
+        '-', '--', '-.', ':']. Dash tuples should be of the form::
+
+            (offset, onoffseq),
+
+        where *onoffseq* is an even length tuple of on and off ink
+        in points.
+
+    antialiased : {None, 1, 2}, optional
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    **kwargs : optional
+        Other keyword arguments are line collection properties.  See
+        :class:`~matplotlib.collections.LineCollection` for a list of
+        the valid properties.
+
+    Examples
+    --------
+
+   .. plot:: gallery/lines_bars_and_markers/eventcollection_demo.py
+    """"""
+
+    segment = (lineoffset + linelength / 2.,
+               lineoffset - linelength / 2.)
+    if positions is None or len(positions) == 0:
+        segments = []
+    elif hasattr(positions, 'ndim') and positions.ndim > 1:
+        raise ValueError('positions cannot be an array with more than '
+                         'one dimension.')
+    else:
+        # Create a copy of the positions to avoid sorting in-place
+        positions_copy = np.asarray(positions)
+        if (orientation is None or orientation.lower() == 'none' or
+            orientation.lower() == 'horizontal'):
+            sorted_positions = np.sort(positions_copy)
+            segments = [[(coord1, coord2) for coord2 in segment] for
+                        coord1 in sorted_positions]
+            self._is_horizontal = True
+        elif orientation.lower() == 'vertical':
+            sorted_positions = np.sort(positions_copy)
+            segments = [[(coord2, coord1) for coord2 in segment] for
+                        coord1 in sorted_positions]
+            self._is_horizontal = False
+        else:
+            cbook._check_in_list(['horizontal', 'vertical'],
+                                 orientation=orientation)
+
+    LineCollection.__init__(self,
+                            segments,
+                            linewidths=linewidth,
+                            colors=color,
+                            antialiaseds=antialiased,
+                            linestyles=linestyle,
+                            **kwargs)
+
+    self._linelength = linelength
+    self._lineoffset = lineoffset
+```",
+matplotlib-25-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+def __init__(self,
+             positions,     # Cannot be None.
+             orientation=None,
+             lineoffset=0,
+             linelength=1,
+             linewidth=None,
+             color=None,
+             linestyle='solid',
+             antialiased=None,
+             **kwargs
+             ):
+    """"""
+    Parameters
+    ----------
+    positions : 1D array-like object
+        Each value is an event.
+
+    orientation : {None, 'horizontal', 'vertical'}, optional
+        The orientation of the **collection** (the event bars are along
+        the orthogonal direction). Defaults to 'horizontal' if not
+        specified or None.
+
+    lineoffset : scalar, optional, default: 0
+        The offset of the center of the markers from the origin, in the
+        direction orthogonal to *orientation*.
+
+    linelength : scalar, optional, default: 1
+        The total height of the marker (i.e. the marker stretches from
+        ``lineoffset - linelength/2`` to ``lineoffset + linelength/2``).
+
+    linewidth : scalar or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    color : color, sequence of colors or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    linestyle : str or tuple, optional, default: 'solid'
+        Valid strings are ['solid', 'dashed', 'dashdot', 'dotted',
+        '-', '--', '-.', ':']. Dash tuples should be of the form::
+
+            (offset, onoffseq),
+
+        where *onoffseq* is an even length tuple of on and off ink
+        in points.
+
+    antialiased : {None, 1, 2}, optional
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    **kwargs : optional
+        Other keyword arguments are line collection properties.  See
+        :class:`~matplotlib.collections.LineCollection` for a list of
+        the valid properties.
+
+    Examples
+    --------
+
+   .. plot:: gallery/lines_bars_and_markers/eventcollection_demo.py
+    """"""
+
+    segment = (lineoffset + linelength / 2.,
+               lineoffset - linelength / 2.)
+    if positions is None or len(positions) == 0:
+        segments = []
+    elif hasattr(positions, 'ndim') and positions.ndim > 1:
+        raise ValueError('positions cannot be an array with more than '
+                         'one dimension.')
+    else:
+        # Make a copy of the positions to avoid modifying the original array
+        positions_copy = np.array(positions) if not isinstance(positions, np.ndarray) else positions.copy()
+        
+        if (orientation is None or orientation.lower() == 'none' or
+            orientation.lower() == 'horizontal'):
+            positions_copy.sort()
+            segments = [[(coord1, coord2) for coord2 in segment] for
+                        coord1 in positions_copy]
+            self._is_horizontal = True
+        elif orientation.lower() == 'vertical':
+            positions_copy.sort()
+            segments = [[(coord2, coord1) for coord2 in segment] for
+                        coord1 in positions_copy]
+            self._is_horizontal = False
+        else:
+            cbook._check_in_list(['horizontal', 'vertical'],
+                                 orientation=orientation)
+
+    LineCollection.__init__(self,
+                            segments,
+                            linewidths=linewidth,
+                            colors=color,
+                            antialiaseds=antialiased,
+                            linestyles=linestyle,
+                            **kwargs)
+
+    self._linelength = linelength
+    self._lineoffset = lineoffset
+```",
+matplotlib-25-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+def __init__(self,
+             positions,     # Cannot be None.
+             orientation=None,
+             lineoffset=0,
+             linelength=1,
+             linewidth=None,
+             color=None,
+             linestyle='solid',
+             antialiased=None,
+             **kwargs
+             ):
+    """"""
+    Parameters
+    ----------
+    positions : 1D array-like object
+        Each value is an event.
+
+    orientation : {None, 'horizontal', 'vertical'}, optional
+        The orientation of the **collection** (the event bars are along
+        the orthogonal direction). Defaults to 'horizontal' if not
+        specified or None.
+
+    lineoffset : scalar, optional, default: 0
+        The offset of the center of the markers from the origin, in the
+        direction orthogonal to *orientation*.
+
+    linelength : scalar, optional, default: 1
+        The total height of the marker (i.e. the marker stretches from
+        ``lineoffset - linelength/2`` to ``lineoffset + linelength/2``).
+
+    linewidth : scalar or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    color : color, sequence of colors or None, optional, default: None
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    linestyle : str or tuple, optional, default: 'solid'
+        Valid strings are ['solid', 'dashed', 'dashdot', 'dotted',
+        '-', '--', '-.', ':']. Dash tuples should be of the form::
+
+            (offset, onoffseq),
+
+        where *onoffseq* is an even length tuple of on and off ink
+        in points.
+
+    antialiased : {None, 1, 2}, optional
+        If it is None, defaults to its rcParams setting, in sequence form.
+
+    **kwargs : optional
+        Other keyword arguments are line collection properties.  See
+        :class:`~matplotlib.collections.LineCollection` for a list of
+        the valid properties.
+
+    Examples
+    --------
+
+   .. plot:: gallery/lines_bars_and_markers/eventcollection_demo.py
+    """"""
+
+    segment = (lineoffset + linelength / 2.,
+               lineoffset - linelength / 2.)
+    if positions is None or len(positions) == 0:
+        segments = []
+    elif hasattr(positions, 'ndim') and positions.ndim > 1:
+        raise ValueError('positions cannot be an array with more than '
+                         'one dimension.')
+    else:
+        # Make a copy of positions to avoid modifying the original list or array
+        positions_copy = np.array(positions)
+        
+        if (orientation is None or orientation.lower() == 'none' or
+            orientation.lower() == 'horizontal'):
+            positions_copy.sort()
+            segments = [[(coord1, coord2) for coord2 in segment] for
+                        coord1 in positions_copy]
+            self._is_horizontal = True
+        elif orientation.lower() == 'vertical':
+            positions_copy.sort()
+            segments = [[(coord2, coord1) for coord2 in segment] for
+                        coord1 in positions_copy]
+            self._is_horizontal = False
+        else:
+            cbook._check_in_list(['horizontal', 'vertical'],
+                                 orientation=orientation)
+
+    LineCollection.__init__(self,
+                            segments,
+                            linewidths=linewidth,
+                            colors=color,
+                            antialiaseds=antialiased,
+                            linestyles=linestyle,
+                            **kwargs)
+
+    self._linelength = linelength
+    self._lineoffset = lineoffset
+
+```",

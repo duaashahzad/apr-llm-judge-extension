@@ -1,0 +1,1857 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+matplotlib-2-v0_llama-0,UNKNOWN,UNKNOWN,"```python
+@_preprocess_data(replace_names=[""x"", ""y"", ""s"", ""linewidths"",
+                                 ""edgecolors"", ""c"", ""facecolor"",
+                                 ""facecolors"", ""color""],
+                  label_namer=""y"")
+@cbook._delete_parameter(""3.2"", ""verts"")
+def scatter(self, x, y, s=None, c=None, marker=None, cmap=None, norm=None,
+            vmin=None, vmax=None, alpha=None, linewidths=None,
+            verts=None, edgecolors=None, *, plotnonfinite=False,
+            **kwargs):
+    """"""
+    A scatter plot of *y* vs. *x* with varying marker size and/or color.
+
+    Parameters
+    ----------
+    x, y : float or array-like, shape (n, )
+        The data positions.
+
+    s : float or array-like, shape (n, ), optional
+        The marker size in points**2.
+        Default is ``rcParams['lines.markersize'] ** 2``.
+
+    c : array-like or list of colors or color, optional
+        The marker colors. Possible values:
+
+        - A scalar or sequence of n numbers to be mapped to colors using
+          *cmap* and *norm*.
+        - A 2-D array in which the rows are RGB or RGBA.
+        - A sequence of colors of length n.
+        - A single color format string.
+
+        Note that *c* should not be a single numeric RGB or RGBA sequence
+        because that is indistinguishable from an array of values to be
+        colormapped. If you want to specify the same RGB or RGBA value for
+        all points, use a 2-D array with a single row.  Otherwise, value-
+        matching will have precedence in case of a size matching with *x*
+        and *y*.
+
+        If you wish to specify a single color for all points
+        prefer the *color* keyword argument.
+
+        Defaults to `None`. In that case the marker color is determined
+        by the value of *color*, *facecolor* or *facecolors*. In case
+        those are not specified or `None`, the marker color is determined
+        by the next color of the ``Axes``' current ""shape and fill"" color
+        cycle. This cycle defaults to :rc:`axes.prop_cycle`.
+
+    marker : `~.markers.MarkerStyle`, default: :rc:`scatter.marker`
+        The marker style. *marker* can be either an instance of the class
+        or the text shorthand for a particular marker.
+        See :mod:`matplotlib.markers` for more information about marker
+        styles.
+
+    cmap : str or `~matplotlib.colors.Colormap`, default: :rc:`image.cmap`
+        A `.Colormap` instance or registered colormap name. *cmap* is only
+        used if *c* is an array of floats.
+
+    norm : `~matplotlib.colors.Normalize`, default: None
+        If *c* is an array of floats, *norm* is used to scale the color
+        data, *c*, in the range 0 to 1, in order to map into the colormap
+        *cmap*.
+        If *None*, use the default `.colors.Normalize`.
+
+    vmin, vmax : float, default: None
+        *vmin* and *vmax* are used in conjunction with the default norm to
+        map the color array *c* to the colormap *cmap*. If None, the
+        respective min and max of the color array is used.
+        It is deprecated to use *vmin*/*vmax* when *norm* is given.
+
+    alpha : float, default: None
+        The alpha blending value, between 0 (transparent) and 1 (opaque).
+
+    linewidths : float or array-like, default: :rc:`lines.linewidth`
+        The linewidth of the marker edges. Note: The default *edgecolors*
+        is 'face'. You may want to change this as well.
+
+    edgecolors : {'face', 'none', *None*} or color or sequence of color, \
+ult: :rc:`scatter.edgecolors`
+        The edge color of the marker. Possible values:
+
+        - 'face': The edge color will always be the same as the face color.
+        - 'none': No patch boundary will be drawn.
+        - A color or sequence of colors.
+
+        For non-filled markers, the *edgecolors* kwarg is ignored and
+        forced to 'face' internally.
+
+    plotnonfinite : bool, default: False
+        Set to plot points with nonfinite *c*, in conjunction with
+        `~matplotlib.colors.Colormap.set_bad`.
+
+    Returns
+    -------
+    `~matplotlib.collections.PathCollection`
+
+    Other Parameters
+    ----------------
+    **kwargs : `~matplotlib.collections.Collection` properties
+
+    See Also
+    --------
+    plot : To plot scatter plots when markers are identical in size and
+        color.
+
+    Notes
+    -----
+    * The `.plot` function will be faster for scatterplots where markers
+      don't vary in size or color.
+
+    * Any or all of *x*, *y*, *s*, and *c* may be masked arrays, in which
+      case all masks will be combined and only unmasked points will be
+      plotted.
+
+    * Fundamentally, scatter works with 1-D arrays; *x*, *y*, *s*, and *c*
+      may be input as N-D arrays, but within scatter they will be
+      flattened. The exception is *c*, which will be flattened only if its
+      size matches the size of *x* and *y*.
+
+    """"""
+    # Process **kwargs to handle aliases, conflicts with explicit kwargs:
+
+    self._process_unit_info(xdata=x, ydata=y, kwargs=kwargs)
+    x = self.convert_xunits(x)
+    y = self.convert_yunits(y)
+
+    # np.ma.ravel yields an ndarray, not a masked array,
+    # unless its argument is a masked array.
+    x = np.ma.ravel(x)
+    y = np.ma.ravel(y)
+    if x.size!= y.size:
+        raise ValueError(""x and y must be the same size"")
+
+    if s is None:
+        s = (20 if rcParams['_internal.classic_mode'] else
+             rcParams['lines.markersize'] ** 2.0)
+    s = np.ma.ravel(s)
+    if len(s) not in (1, x.size):
+        raise ValueError(""s must be a scalar, or the same size as x and y"")
+
+    c, colors, edgecolors = \
+        self._parse_scatter_color_args(
+            c, edgecolors, kwargs, x.size,
+            get_next_color_func=self._get_patches_for_fill.get_next_color)
+
+    if plotnonfinite and colors is None:
+        c = np.ma.masked_invalid(c)
+        x, y, s, edgecolors, linewidths = \
+            cbook._combine_masks(x, y, s, edgecolors, linewidths)
+    else:
+        x, y, s, c, colors, edgecolors, linewidths = \
+            cbook._combine_masks(
+                x, y, s, c, colors, edgecolors, linewidths)
+
+    scales = s   # Renamed for readability below.
+
+    # load default marker from rcParams
+    if marker is None:
+        marker = rcParams['scatter.marker']
+
+    if isinstance(marker, mmarkers.MarkerStyle):
+        marker_obj = marker
+    else:
+        marker_obj = mmarkers.MarkerStyle(marker)
+
+    path = marker_obj.get_path().transformed(
+        marker_obj.get_transform())
+    if not marker_obj.is_filled():
+        edgecolors = 'face'
+        if linewidths is None:
+            linewidths = rcParams['lines.linewidth']
+        elif np.iterable(linewidths):
+            linewidths = [
+                lw if lw is not None else rcParams['lines.linewidth']
+                for lw in linewidths]
+
+    offsets = np.ma.column_stack([x, y])
+
+    if isinstance(marker, mmarkers.MarkerStyle) and marker.fillstyle == 'none':
+        facecolors = 'none'
+    else:
+        facecolors = colors
+
+    collection = mcoll.PathCollection(
+            (path,), scales,
+            facecolors=facecolors,
+            edgecolors=edgecolors,
+            linewidths=linewidths,
+            offsets=offsets,
+            transOffset=kwargs.pop('transform', self.transData),
+            alpha=alpha
+            )
+    collection.set_transform(mtransforms.IdentityTransform())
+    collection.update(kwargs)
+
+    if colors is None:
+        collection.set_array(c)
+        collection.set_cmap(cmap)
+        collection.set_norm(norm)
+        collection._scale_norm(norm, vmin, vmax)
+
+    # Classic mode only:
+    # ensure there are margins to allow for the
+    # finite size of the symbols.  In v2.x, margins
+    # are present by default, so we disable this
+    # scatter-specific override.
+    if rcParams['_internal.classic_mode']:
+        if self._xmargin < 0.05 and x.size > 0:
+            self.set_xmargin(0.05)
+        if self._ymargin < 0.05 and x.size > 0:
+            self.set_ymargin(0.05)
+
+    self.add_collection(collection)
+    self._request_autoscale_view()
+
+    return collection
+```",
+matplotlib-2-v0_llama-1,UNKNOWN,UNKNOWN,"```python
+@_preprocess_data(replace_names=[""x"", ""y"", ""s"", ""linewidths"",
+                                 ""edgecolors"", ""c"", ""facecolor"",
+                                 ""facecolors"", ""color""],
+                  label_namer=""y"")
+@cbook._delete_parameter(""3.2"", ""verts"")
+def scatter(self, x, y, s=None, c=None, marker=None, cmap=None, norm=None,
+            vmin=None, vmax=None, alpha=None, linewidths=None,
+            verts=None, edgecolors=None, *, plotnonfinite=False,
+            **kwargs):
+    """"""
+    A scatter plot of *y* vs. *x* with varying marker size and/or color.
+
+    Parameters
+    ----------
+    x, y : float or array-like, shape (n, )
+        The data positions.
+
+    s : float or array-like, shape (n, ), optional
+        The marker size in points**2.
+        Default is ``rcParams['lines.markersize'] ** 2``.
+
+    c : array-like or list of colors or color, optional
+        The marker colors. Possible values:
+
+        - A scalar or sequence of n numbers to be mapped to colors using
+          *cmap* and *norm*.
+        - A 2-D array in which the rows are RGB or RGBA.
+        - A sequence of colors of length n.
+        - A single color format string.
+
+        Note that *c* should not be a single numeric RGB or RGBA sequence
+        because that is indistinguishable from an array of values to be
+        colormapped. If you want to specify the same RGB or RGBA value for
+        all points, use a 2-D array with a single row.  Otherwise, value-
+        matching will have precedence in case of a size matching with *x*
+        and *y*.
+
+        If you wish to specify a single color for all points
+        prefer the *color* keyword argument.
+
+        Defaults to `None`. In that case the marker color is determined
+        by the value of *color*, *facecolor* or *facecolors*. In case
+        those are not specified or `None`, the marker color is determined
+        by the next color of the ``Axes``' current ""shape and fill"" color
+        cycle. This cycle defaults to :rc:`axes.prop_cycle`.
+
+    marker : `~.markers.MarkerStyle`, default: :rc:`scatter.marker`
+        The marker style. *marker* can be either an instance of the class
+        or the text shorthand for a particular marker.
+        See :mod:`matplotlib.markers` for more information about marker
+        styles.
+
+    cmap : str or `~matplotlib.colors.Colormap`, default: :rc:`image.cmap`
+        A `.Colormap` instance or registered colormap name. *cmap* is only
+        used if *c* is an array of floats.
+
+    norm : `~matplotlib.colors.Normalize`, default: None
+        If *c* is an array of floats, *norm* is used to scale the color
+        data, *c*, in the range 0 to 1, in order to map into the colormap
+        *cmap*.
+        If *None*, use the default `.colors.Normalize`.
+
+    vmin, vmax : float, default: None
+        *vmin* and *vmax* are used in conjunction with the default norm to
+        map the color array *c* to the colormap *cmap*. If None, the
+        respective min and max of the color array is used.
+        It is deprecated to use *vmin*/*vmax* when *norm* is given.
+
+    alpha : float, default: None
+        The alpha blending value, between 0 (transparent) and 1 (opaque).
+
+    linewidths : float or array-like, default: :rc:`lines.linewidth`
+        The linewidth of the marker edges. Note: The default *edgecolors*
+        is 'face'. You may want to change this as well.
+
+    edgecolors : {'face', 'none', *None*} or color or sequence of color, \
+ult: :rc:`scatter.edgecolors`
+        The edge color of the marker. Possible values:
+
+        - 'face': The edge color will always be the same as the face color.
+        - 'none': No patch boundary will be drawn.
+        - A color or sequence of colors.
+
+        For non-filled markers, the *edgecolors* kwarg is ignored and
+        forced to 'face' internally.
+
+    plotnonfinite : bool, default: False
+        Set to plot points with nonfinite *c*, in conjunction with
+        `~matplotlib.colors.Colormap.set_bad`.
+
+    Returns
+    -------
+    `~matplotlib.collections.PathCollection`
+
+    Other Parameters
+    ----------------
+    **kwargs : `~matplotlib.collections.Collection` properties
+
+    See Also
+    --------
+    plot : To plot scatter plots when markers are identical in size and
+        color.
+
+    Notes
+    -----
+    * The `.plot` function will be faster for scatterplots where markers
+      don't vary in size or color.
+
+    * Any or all of *x*, *y*, *s*, and *c* may be masked arrays, in which
+      case all masks will be combined and only unmasked points will be
+      plotted.
+
+    * Fundamentally, scatter works with 1-D arrays; *x*, *y*, *s*, and *c*
+      may be input as N-D arrays, but within scatter they will be
+      flattened. The exception is *c*, which will be flattened only if its
+      size matches the size of *x* and *y*.
+
+    """"""
+    # Process **kwargs to handle aliases, conflicts with explicit kwargs:
+
+    self._process_unit_info(xdata=x, ydata=y, kwargs=kwargs)
+    x = self.convert_xunits(x)
+    y = self.convert_yunits(y)
+
+    # np.ma.ravel yields an ndarray, not a masked array,
+    # unless its argument is a masked array.
+    x = np.ma.ravel(x)
+    y = np.ma.ravel(y)
+    if x.size!= y.size:
+        raise ValueError(""x and y must be the same size"")
+
+    if s is None:
+        s = (20 if rcParams['_internal.classic_mode'] else
+             rcParams['lines.markersize'] ** 2.0)
+    s = np.ma.ravel(s)
+    if len(s) not in (1, x.size):
+        raise ValueError(""s must be a scalar, or the same size as x and y"")
+
+    c, colors, edgecolors = \
+        self._parse_scatter_color_args(
+            c, edgecolors, kwargs, x.size,
+            get_next_color_func=self._get_patches_for_fill.get_next_color)
+
+    if plotnonfinite and colors is None:
+        c = np.ma.masked_invalid(c)
+        x, y, s, edgecolors, linewidths = \
+            cbook._combine_masks(x, y, s, edgecolors, linewidths)
+    else:
+        x, y, s, c, colors, edgecolors, linewidths = \
+            cbook._combine_masks(
+                x, y, s, c, colors, edgecolors, linewidths)
+
+    scales = s   # Renamed for readability below.
+
+    # load default marker from rcParams
+    if marker is None:
+        marker = rcParams['scatter.marker']
+
+    if isinstance(marker, mmarkers.MarkerStyle):
+        marker_obj = marker
+    else:
+        marker_obj = mmarkers.MarkerStyle(marker)
+
+    path = marker_obj.get_path().transformed(
+        marker_obj.get_transform())
+    
+    # Fixing the bug here
+    if marker_obj.get_fillstyle() == 'none':
+        edgecolors = 'face'
+        if linewidths is None:
+            linewidths = rcParams['lines.linewidth']
+        elif np.iterable(linewidths):
+            linewidths = [
+                lw if lw is not None else rcParams['lines.linewidth']
+                for lw in linewidths]
+
+    offsets = np.ma.column_stack([x, y])
+
+    collection = mcoll.PathCollection(
+            (path,), scales,
+            facecolors='none', # Setting facecolor to 'none'
+            edgecolors=edgecolors,
+            linewidths=linewidths,
+            offsets=offsets,
+            transOffset=kwargs.pop('transform', self.transData),
+            alpha=alpha
+            )
+    collection.set_transform(mtransforms.IdentityTransform())
+    collection.update(kwargs)
+
+    if colors is None:
+        collection.set_array(c)
+        collection.set_cmap(cmap)
+        collection.set_norm(norm)
+        collection._scale_norm(norm, vmin, vmax)
+
+    # Classic mode only:
+    # ensure there are margins to allow for the
+    # finite size of the symbols.  In v2.x, margins
+    # are present by default, so we disable this
+    # scatter-specific override.
+    if rcParams['_internal.classic_mode']:
+        if self._xmargin < 0.05 and x.size > 0:
+            self.set_xmargin(0.05)
+        if self._ymargin < 0.05 and x.size > 0:
+            self.set_ymargin(0.05)
+
+    self.add_collection(collection)
+    self._request_autoscale_view()
+
+    return collection
+```",
+matplotlib-2-v0_llama-2,UNKNOWN,UNKNOWN,"```python
+@_preprocess_data(replace_names=[""x"", ""y"", ""s"", ""linewidths"",
+                                 ""edgecolors"", ""c"", ""facecolor"",
+                                 ""facecolors"", ""color""],
+                  label_namer=""y"")
+@cbook._delete_parameter(""3.2"", ""verts"")
+def scatter(self, x, y, s=None, c=None, marker=None, cmap=None, norm=None,
+            vmin=None, vmax=None, alpha=None, linewidths=None,
+            verts=None, edgecolors=None, *, plotnonfinite=False,
+            **kwargs):
+    """"""
+    A scatter plot of *y* vs. *x* with varying marker size and/or color.
+
+    Parameters
+    ----------
+    x, y : float or array-like, shape (n, )
+        The data positions.
+
+    s : float or array-like, shape (n, ), optional
+        The marker size in points**2.
+        Default is ``rcParams['lines.markersize'] ** 2``.
+
+    c : array-like or list of colors or color, optional
+        The marker colors. Possible values:
+
+        - A scalar or sequence of n numbers to be mapped to colors using
+          *cmap* and *norm*.
+        - A 2-D array in which the rows are RGB or RGBA.
+        - A sequence of colors of length n.
+        - A single color format string.
+
+        Note that *c* should not be a single numeric RGB or RGBA sequence
+        because that is indistinguishable from an array of values to be
+        colormapped. If you want to specify the same RGB or RGBA value for
+        all points, use a 2-D array with a single row.  Otherwise, value-
+        matching will have precedence in case of a size matching with *x*
+        and *y*.
+
+        If you wish to specify a single color for all points
+        prefer the *color* keyword argument.
+
+        Defaults to `None`. In that case the marker color is determined
+        by the value of *color*, *facecolor* or *facecolors*. In case
+        those are not specified or `None`, the marker color is determined
+        by the next color of the ``Axes``' current ""shape and fill"" color
+        cycle. This cycle defaults to :rc:`axes.prop_cycle`.
+
+    marker : `~.markers.MarkerStyle`, default: :rc:`scatter.marker`
+        The marker style. *marker* can be either an instance of the class
+        or the text shorthand for a particular marker.
+        See :mod:`matplotlib.markers` for more information about marker
+        styles.
+
+    cmap : str or `~matplotlib.colors.Colormap`, default: :rc:`image.cmap`
+        A `.Colormap` instance or registered colormap name. *cmap* is only
+        used if *c* is an array of floats.
+
+    norm : `~matplotlib.colors.Normalize`, default: None
+        If *c* is an array of floats, *norm* is used to scale the color
+        data, *c*, in the range 0 to 1, in order to map into the colormap
+        *cmap*.
+        If *None*, use the default `.colors.Normalize`.
+
+    vmin, vmax : float, default: None
+        *vmin* and *vmax* are used in conjunction with the default norm to
+        map the color array *c* to the colormap *cmap*. If None, the
+        respective min and max of the color array is used.
+        It is deprecated to use *vmin*/*vmax* when *norm* is given.
+
+    alpha : float, default: None
+        The alpha blending value, between 0 (transparent) and 1 (opaque).
+
+    linewidths : float or array-like, default: :rc:`lines.linewidth`
+        The linewidth of the marker edges. Note: The default *edgecolors*
+        is 'face'. You may want to change this as well.
+
+    edgecolors : {'face', 'none', *None*} or color or sequence of color, \
+ult: :rc:`scatter.edgecolors`
+        The edge color of the marker. Possible values:
+
+        - 'face': The edge color will always be the same as the face color.
+        - 'none': No patch boundary will be drawn.
+        - A color or sequence of colors.
+
+        For non-filled markers, the *edgecolors* kwarg is ignored and
+        forced to 'face' internally.
+
+    plotnonfinite : bool, default: False
+        Set to plot points with nonfinite *c*, in conjunction with
+        `~matplotlib.colors.Colormap.set_bad`.
+
+    Returns
+    -------
+    `~matplotlib.collections.PathCollection`
+
+    Other Parameters
+    ----------------
+    **kwargs : `~matplotlib.collections.Collection` properties
+
+    See Also
+    --------
+    plot : To plot scatter plots when markers are identical in size and
+        color.
+
+    Notes
+    -----
+    * The `.plot` function will be faster for scatterplots where markers
+      don't vary in size or color.
+
+    * Any or all of *x*, *y*, *s*, and *c* may be masked arrays, in which
+      case all masks will be combined and only unmasked points will be
+      plotted.
+
+    * Fundamentally, scatter works with 1-D arrays; *x*, *y*, *s*, and *c*
+      may be input as N-D arrays, but within scatter they will be
+      flattened. The exception is *c*, which will be flattened only if its
+      size matches the size of *x* and *y*.
+
+    """"""
+    # Process **kwargs to handle aliases, conflicts with explicit kwargs:
+
+    self._process_unit_info(xdata=x, ydata=y, kwargs=kwargs)
+    x = self.convert_xunits(x)
+    y = self.convert_yunits(y)
+
+    # np.ma.ravel yields an ndarray, not a masked array,
+    # unless its argument is a masked array.
+    x = np.ma.ravel(x)
+    y = np.ma.ravel(y)
+    if x.size!= y.size:
+        raise ValueError(""x and y must be the same size"")
+
+    if s is None:
+        s = (20 if rcParams['_internal.classic_mode'] else
+             rcParams['lines.markersize'] ** 2.0)
+    s = np.ma.ravel(s)
+    if len(s) not in (1, x.size):
+        raise ValueError(""s must be a scalar, or the same size as x and y"")
+
+    c, colors, edgecolors = \
+        self._parse_scatter_color_args(
+            c, edgecolors, kwargs, x.size,
+            get_next_color_func=self._get_patches_for_fill.get_next_color)
+
+    if plotnonfinite and colors is None:
+        c = np.ma.masked_invalid(c)
+        x, y, s, edgecolors, linewidths = \
+            cbook._combine_masks(x, y, s, edgecolors, linewidths)
+    else:
+        x, y, s, c, colors, edgecolors, linewidths = \
+            cbook._combine_masks(
+                x, y, s, c, colors, edgecolors, linewidths)
+
+    scales = s   # Renamed for readability below.
+
+    # load default marker from rcParams
+    if marker is None:
+        marker = rcParams['scatter.marker']
+
+    if isinstance(marker, mmarkers.MarkerStyle):
+        marker_obj = marker
+    else:
+        marker_obj = mmarkers.MarkerStyle(marker)
+
+    path = marker_obj.get_path().transformed(
+        marker_obj.get_transform())
+    if not marker_obj.is_filled():
+        edgecolors = 'face'
+        if linewidths is None:
+            linewidths = rcParams['lines.linewidth']
+        elif np.iterable(linewidths):
+            linewidths = [
+                lw if lw is not None else rcParams['lines.linewidth']
+                for lw in linewidths]
+
+    offsets = np.ma.column_stack([x, y])
+
+    collection = mcoll.PathCollection(
+            (path,), scales,
+            facecolors='none',  # Set facecolor to 'none'
+            edgecolors=edgecolors,
+            linewidths=linewidths,
+            offsets=offsets,
+            transOffset=kwargs.pop('transform', self.transData),
+            alpha=alpha
+            )
+    collection.set_transform(mtransforms.IdentityTransform())
+    collection.update(kwargs)
+
+    if colors is None:
+        collection.set_array(c)
+        collection.set_cmap(cmap)
+        collection.set_norm(norm)
+        collection._scale_norm(norm, vmin, vmax)
+
+    # Classic mode only:
+    # ensure there are margins to allow for the
+    # finite size of the symbols.  In v2.x, margins
+    # are present by default, so we disable this
+    # scatter-specific override.
+    if rcParams['_internal.classic_mode']:
+        if self._xmargin < 0.05 and x.size > 0:
+            self.set_xmargin(0.05)
+        if self._ymargin < 0.05 and x.size > 0:
+            self.set_ymargin(0.05)
+
+    self.add_collection(collection)
+    self._request_autoscale_view()
+
+    return collection
+```",
+matplotlib-2-v0_llama-3,UNKNOWN,UNKNOWN,"```python
+@_preprocess_data(replace_names=[""x"", ""y"", ""s"", ""linewidths"",
+                                 ""edgecolors"", ""c"", ""facecolor"",
+                                 ""facecolors"", ""color""],
+                  label_namer=""y"")
+@cbook._delete_parameter(""3.2"", ""verts"")
+def scatter(self, x, y, s=None, c=None, marker=None, cmap=None, norm=None,
+            vmin=None, vmax=None, alpha=None, linewidths=None,
+            verts=None, edgecolors=None, *, plotnonfinite=False,
+            **kwargs):
+    """"""
+    A scatter plot of *y* vs. *x* with varying marker size and/or color.
+
+    Parameters
+    ----------
+    x, y : float or array-like, shape (n, )
+        The data positions.
+
+    s : float or array-like, shape (n, ), optional
+        The marker size in points**2.
+        Default is ``rcParams['lines.markersize'] ** 2``.
+
+    c : array-like or list of colors or color, optional
+        The marker colors. Possible values:
+
+        - A scalar or sequence of n numbers to be mapped to colors using
+          *cmap* and *norm*.
+        - A 2-D array in which the rows are RGB or RGBA.
+        - A sequence of colors of length n.
+        - A single color format string.
+
+        Note that *c* should not be a single numeric RGB or RGBA sequence
+        because that is indistinguishable from an array of values to be
+        colormapped. If you want to specify the same RGB or RGBA value for
+        all points, use a 2-D array with a single row.  Otherwise, value-
+        matching will have precedence in case of a size matching with *x*
+        and *y*.
+
+        If you wish to specify a single color for all points
+        prefer the *color* keyword argument.
+
+        Defaults to `None`. In that case the marker color is determined
+        by the value of *color*, *facecolor* or *facecolors*. In case
+        those are not specified or `None`, the marker color is determined
+        by the next color of the ``Axes``' current ""shape and fill"" color
+        cycle. This cycle defaults to :rc:`axes.prop_cycle`.
+
+    marker : `~.markers.MarkerStyle`, default: :rc:`scatter.marker`
+        The marker style. *marker* can be either an instance of the class
+        or the text shorthand for a particular marker.
+        See :mod:`matplotlib.markers` for more information about marker
+        styles.
+
+    cmap : str or `~matplotlib.colors.Colormap`, default: :rc:`image.cmap`
+        A `.Colormap` instance or registered colormap name. *cmap* is only
+        used if *c* is an array of floats.
+
+    norm : `~matplotlib.colors.Normalize`, default: None
+        If *c* is an array of floats, *norm* is used to scale the color
+        data, *c*, in the range 0 to 1, in order to map into the colormap
+        *cmap*.
+        If *None*, use the default `.colors.Normalize`.
+
+    vmin, vmax : float, default: None
+        *vmin* and *vmax* are used in conjunction with the default norm to
+        map the color array *c* to the colormap *cmap*. If None, the
+        respective min and max of the color array is used.
+        It is deprecated to use *vmin*/*vmax* when *norm* is given.
+
+    alpha : float, default: None
+        The alpha blending value, between 0 (transparent) and 1 (opaque).
+
+    linewidths : float or array-like, default: :rc:`lines.linewidth`
+        The linewidth of the marker edges. Note: The default *edgecolors*
+        is 'face'. You may want to change this as well.
+
+    edgecolors : {'face', 'none', *None*} or color or sequence of color, \
+ult: :rc:`scatter.edgecolors`
+        The edge color of the marker. Possible values:
+
+        - 'face': The edge color will always be the same as the face color.
+        - 'none': No patch boundary will be drawn.
+        - A color or sequence of colors.
+
+        For non-filled markers, the *edgecolors* kwarg is ignored and
+        forced to 'face' internally.
+
+    plotnonfinite : bool, default: False
+        Set to plot points with nonfinite *c*, in conjunction with
+        `~matplotlib.colors.Colormap.set_bad`.
+
+    Returns
+    -------
+    `~matplotlib.collections.PathCollection`
+
+    Other Parameters
+    ----------------
+    **kwargs : `~matplotlib.collections.Collection` properties
+
+    See Also
+    --------
+    plot : To plot scatter plots when markers are identical in size and
+        color.
+
+    Notes
+    -----
+    * The `.plot` function will be faster for scatterplots where markers
+      don't vary in size or color.
+
+    * Any or all of *x*, *y*, *s*, and *c* may be masked arrays, in which
+      case all masks will be combined and only unmasked points will be
+      plotted.
+
+    * Fundamentally, scatter works with 1-D arrays; *x*, *y*, *s*, and *c*
+      may be input as N-D arrays, but within scatter they will be
+      flattened. The exception is *c*, which will be flattened only if its
+      size matches the size of *x* and *y*.
+
+    """"""
+    # Process **kwargs to handle aliases, conflicts with explicit kwargs:
+
+    self._process_unit_info(xdata=x, ydata=y, kwargs=kwargs)
+    x = self.convert_xunits(x)
+    y = self.convert_yunits(y)
+
+    # np.ma.ravel yields an ndarray, not a masked array,
+    # unless its argument is a masked array.
+    x = np.ma.ravel(x)
+    y = np.ma.ravel(y)
+    if x.size!= y.size:
+        raise ValueError(""x and y must be the same size"")
+
+    if s is None:
+        s = (20 if rcParams['_internal.classic_mode'] else
+             rcParams['lines.markersize'] ** 2.0)
+    s = np.ma.ravel(s)
+    if len(s) not in (1, x.size):
+        raise ValueError(""s must be a scalar, or the same size as x and y"")
+
+    c, colors, edgecolors = \
+        self._parse_scatter_color_args(
+            c, edgecolors, kwargs, x.size,
+            get_next_color_func=self._get_patches_for_fill.get_next_color)
+
+    if plotnonfinite and colors is None:
+        c = np.ma.masked_invalid(c)
+        x, y, s, edgecolors, linewidths = \
+            cbook._combine_masks(x, y, s, edgecolors, linewidths)
+    else:
+        x, y, s, c, colors, edgecolors, linewidths = \
+            cbook._combine_masks(
+                x, y, s, c, colors, edgecolors, linewidths)
+
+    scales = s   # Renamed for readability below.
+
+    # load default marker from rcParams
+    if marker is None:
+        marker = rcParams['scatter.marker']
+
+    if isinstance(marker, mmarkers.MarkerStyle):
+        marker_obj = marker
+    else:
+        marker_obj = mmarkers.MarkerStyle(marker)
+
+    path = marker_obj.get_path().transformed(
+        marker_obj.get_transform())
+    if not marker_obj.is_filled():
+        edgecolors = 'face'
+        if linewidths is None:
+            linewidths = rcParams['lines.linewidth']
+        elif np.iterable(linewidths):
+            linewidths = [
+                lw if lw is not None else rcParams['lines.linewidth']
+                for lw in linewidths]
+
+    offsets = np.ma.column_stack([x, y])
+
+    if not marker_obj.is_filled():
+        facecolors = 'none'
+    else:
+        facecolors = colors
+
+    collection = mcoll.PathCollection(
+            (path,), scales,
+            facecolors=facecolors,
+            edgecolors=edgecolors,
+            linewidths=linewidths,
+            offsets=offsets,
+            transOffset=kwargs.pop('transform', self.transData),
+            alpha=alpha
+            )
+    collection.set_transform(mtransforms.IdentityTransform())
+    collection.update(kwargs)
+
+    if colors is None:
+        collection.set_array(c)
+        collection.set_cmap(cmap)
+        collection.set_norm(norm)
+        collection._scale_norm(norm, vmin, vmax)
+
+    # Classic mode only:
+    # ensure there are margins to allow for the
+    # finite size of the symbols.  In v2.x, margins
+    # are present by default, so we disable this
+    # scatter-specific override.
+    if rcParams['_internal.classic_mode']:
+        if self._xmargin < 0.05 and x.size > 0:
+            self.set_xmargin(0.05)
+        if self._ymargin < 0.05 and x.size > 0:
+            self.set_ymargin(0.05)
+
+    self.add_collection(collection)
+    self._request_autoscale_view()
+
+    return collection
+```",
+matplotlib-2-v0_llama-4,UNKNOWN,UNKNOWN,"```python
+@_preprocess_data(replace_names=[""x"", ""y"", ""s"", ""linewidths"",
+                                 ""edgecolors"", ""c"", ""facecolor"",
+                                 ""facecolors"", ""color""],
+                  label_namer=""y"")
+@cbook._delete_parameter(""3.2"", ""verts"")
+def scatter(self, x, y, s=None, c=None, marker=None, cmap=None, norm=None,
+            vmin=None, vmax=None, alpha=None, linewidths=None,
+            verts=None, edgecolors=None, *, plotnonfinite=False,
+            **kwargs):
+    """"""
+    A scatter plot of *y* vs. *x* with varying marker size and/or color.
+
+    Parameters
+    ----------
+    x, y : float or array-like, shape (n, )
+        The data positions.
+
+    s : float or array-like, shape (n, ), optional
+        The marker size in points**2.
+        Default is ``rcParams['lines.markersize'] ** 2``.
+
+    c : array-like or list of colors or color, optional
+        The marker colors. Possible values:
+
+        - A scalar or sequence of n numbers to be mapped to colors using
+          *cmap* and *norm*.
+        - A 2-D array in which the rows are RGB or RGBA.
+        - A sequence of colors of length n.
+        - A single color format string.
+
+        Note that *c* should not be a single numeric RGB or RGBA sequence
+        because that is indistinguishable from an array of values to be
+        colormapped. If you want to specify the same RGB or RGBA value for
+        all points, use a 2-D array with a single row.  Otherwise, value-
+        matching will have precedence in case of a size matching with *x*
+        and *y*.
+
+        If you wish to specify a single color for all points
+        prefer the *color* keyword argument.
+
+        Defaults to `None`. In that case the marker color is determined
+        by the value of *color*, *facecolor* or *facecolors*. In case
+        those are not specified or `None`, the marker color is determined
+        by the next color of the ``Axes``' current ""shape and fill"" color
+        cycle. This cycle defaults to :rc:`axes.prop_cycle`.
+
+    marker : `~.markers.MarkerStyle`, default: :rc:`scatter.marker`
+        The marker style. *marker* can be either an instance of the class
+        or the text shorthand for a particular marker.
+        See :mod:`matplotlib.markers` for more information about marker
+        styles.
+
+    cmap : str or `~matplotlib.colors.Colormap`, default: :rc:`image.cmap`
+        A `.Colormap` instance or registered colormap name. *cmap* is only
+        used if *c* is an array of floats.
+
+    norm : `~matplotlib.colors.Normalize`, default: None
+        If *c* is an array of floats, *norm* is used to scale the color
+        data, *c*, in the range 0 to 1, in order to map into the colormap
+        *cmap*.
+        If *None*, use the default `.colors.Normalize`.
+
+    vmin, vmax : float, default: None
+        *vmin* and *vmax* are used in conjunction with the default norm to
+        map the color array *c* to the colormap *cmap*. If None, the
+        respective min and max of the color array is used.
+        It is deprecated to use *vmin*/*vmax* when *norm* is given.
+
+    alpha : float, default: None
+        The alpha blending value, between 0 (transparent) and 1 (opaque).
+
+    linewidths : float or array-like, default: :rc:`lines.linewidth`
+        The linewidth of the marker edges. Note: The default *edgecolors*
+        is 'face'. You may want to change this as well.
+
+    edgecolors : {'face', 'none', *None*} or color or sequence of color, \
+ult: :rc:`scatter.edgecolors`
+        The edge color of the marker. Possible values:
+
+        - 'face': The edge color will always be the same as the face color.
+        - 'none': No patch boundary will be drawn.
+        - A color or sequence of colors.
+
+        For non-filled markers, the *edgecolors* kwarg is ignored and
+        forced to 'face' internally.
+
+    plotnonfinite : bool, default: False
+        Set to plot points with nonfinite *c*, in conjunction with
+        `~matplotlib.colors.Colormap.set_bad`.
+
+    Returns
+    -------
+    `~matplotlib.collections.PathCollection`
+
+    Other Parameters
+    ----------------
+    **kwargs : `~matplotlib.collections.Collection` properties
+
+    See Also
+    --------
+    plot : To plot scatter plots when markers are identical in size and
+        color.
+
+    Notes
+    -----
+    * The `.plot` function will be faster for scatterplots where markers
+      don't vary in size or color.
+
+    * Any or all of *x*, *y*, *s*, and *c* may be masked arrays, in which
+      case all masks will be combined and only unmasked points will be
+      plotted.
+
+    * Fundamentally, scatter works with 1-D arrays; *x*, *y*, *s*, and *c*
+      may be input as N-D arrays, but within scatter they will be
+      flattened. The exception is *c*, which will be flattened only if its
+      size matches the size of *x* and *y*.
+
+    """"""
+    # Process **kwargs to handle aliases, conflicts with explicit kwargs:
+
+    self._process_unit_info(xdata=x, ydata=y, kwargs=kwargs)
+    x = self.convert_xunits(x)
+    y = self.convert_yunits(y)
+
+    # np.ma.ravel yields an ndarray, not a masked array,
+    # unless its argument is a masked array.
+    x = np.ma.ravel(x)
+    y = np.ma.ravel(y)
+    if x.size!= y.size:
+        raise ValueError(""x and y must be the same size"")
+
+    if s is None:
+        s = (20 if rcParams['_internal.classic_mode'] else
+             rcParams['lines.markersize'] ** 2.0)
+    s = np.ma.ravel(s)
+    if len(s) not in (1, x.size):
+        raise ValueError(""s must be a scalar, or the same size as x and y"")
+
+    c, colors, edgecolors = \
+        self._parse_scatter_color_args(
+            c, edgecolors, kwargs, x.size,
+            get_next_color_func=self._get_patches_for_fill.get_next_color)
+
+    if plotnonfinite and colors is None:
+        c = np.ma.masked_invalid(c)
+        x, y, s, edgecolors, linewidths = \
+            cbook._combine_masks(x, y, s, edgecolors, linewidths)
+    else:
+        x, y, s, c, colors, edgecolors, linewidths = \
+            cbook._combine_masks(
+                x, y, s, c, colors, edgecolors, linewidths)
+
+    scales = s   # Renamed for readability below.
+
+    # load default marker from rcParams
+    if marker is None:
+        marker = rcParams['scatter.marker']
+
+    if isinstance(marker, mmarkers.MarkerStyle):
+        marker_obj = marker
+    else:
+        marker_obj = mmarkers.MarkerStyle(marker)
+
+    path = marker_obj.get_path().transformed(
+        marker_obj.get_transform())
+    if not marker_obj.is_filled():
+        edgecolors = 'face'
+        if linewidths is None:
+            linewidths = rcParams['lines.linewidth']
+        elif np.iterable(linewidths):
+            linewidths = [
+                lw if lw is not None else rcParams['lines.linewidth']
+                for lw in linewidths]
+
+    offsets = np.ma.column_stack([x, y])
+
+    # Only set facecolors if the marker is filled
+    if marker_obj.is_filled():
+        facecolors = colors
+    else:
+        facecolors = 'none'
+
+    collection = mcoll.PathCollection(
+            (path,), scales,
+            facecolors=facecolors,
+            edgecolors=edgecolors,
+            linewidths=linewidths,
+            offsets=offsets,
+            transOffset=kwargs.pop('transform', self.transData),
+            alpha=alpha
+            )
+    collection.set_transform(mtransforms.IdentityTransform())
+    collection.update(kwargs)
+
+    if colors is None:
+        collection.set_array(c)
+        collection.set_cmap(cmap)
+        collection.set_norm(norm)
+        collection._scale_norm(norm, vmin, vmax)
+
+    # Classic mode only:
+    # ensure there are margins to allow for the
+    # finite size of the symbols.  In v2.x, margins
+    # are present by default, so we disable this
+    # scatter-specific override.
+    if rcParams['_internal.classic_mode']:
+        if self._xmargin < 0.05 and x.size > 0:
+            self.set_xmargin(0.05)
+        if self._ymargin < 0.05 and x.size > 0:
+            self.set_ymargin(0.05)
+
+    self.add_collection(collection)
+    self._request_autoscale_view()
+
+    return collection
+```",
+matplotlib-2-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+@_preprocess_data(replace_names=[""x"", ""y"", ""s"", ""linewidths"",
+                                 ""edgecolors"", ""c"", ""facecolor"",
+                                 ""facecolors"", ""color""],
+                  label_namer=""y"")
+@cbook._delete_parameter(""3.2"", ""verts"")
+def scatter(self, x, y, s=None, c=None, marker=None, cmap=None, norm=None,
+            vmin=None, vmax=None, alpha=None, linewidths=None,
+            verts=None, edgecolors=None, *, plotnonfinite=False,
+            **kwargs):
+    """"""
+    A scatter plot of *y* vs. *x* with varying marker size and/or color.
+
+    Parameters
+    ----------
+    x, y : float or array-like, shape (n, )
+        The data positions.
+
+    s : float or array-like, shape (n, ), optional
+        The marker size in points**2.
+        Default is ``rcParams['lines.markersize'] ** 2``.
+
+    c : array-like or list of colors or color, optional
+        The marker colors. Possible values:
+
+        - A scalar or sequence of n numbers to be mapped to colors using
+          *cmap* and *norm*.
+        - A 2-D array in which the rows are RGB or RGBA.
+        - A sequence of colors of length n.
+        - A single color format string.
+
+        Note that *c* should not be a single numeric RGB or RGBA sequence
+        because that is indistinguishable from an array of values to be
+        colormapped. If you want to specify the same RGB or RGBA value for
+        all points, use a 2-D array with a single row.  Otherwise, value-
+        matching will have precedence in case of a size matching with *x*
+        and *y*.
+
+        If you wish to specify a single color for all points
+        prefer the *color* keyword argument.
+
+        Defaults to `None`. In that case the marker color is determined
+        by the value of *color*, *facecolor* or *facecolors*. In case
+        those are not specified or `None`, the marker color is determined
+        by the next color of the ``Axes``' current ""shape and fill"" color
+        cycle. This cycle defaults to :rc:`axes.prop_cycle`.
+
+    marker : `~.markers.MarkerStyle`, default: :rc:`scatter.marker`
+        The marker style. *marker* can be either an instance of the class
+        or the text shorthand for a particular marker.
+        See :mod:`matplotlib.markers` for more information about marker
+        styles.
+
+    cmap : str or `~matplotlib.colors.Colormap`, default: :rc:`image.cmap`
+        A `.Colormap` instance or registered colormap name. *cmap* is only
+        used if *c* is an array of floats.
+
+    norm : `~matplotlib.colors.Normalize`, default: None
+        If *c* is an array of floats, *norm* is used to scale the color
+        data, *c*, in the range 0 to 1, in order to map into the colormap
+        *cmap*.
+        If *None*, use the default `.colors.Normalize`.
+
+    vmin, vmax : float, default: None
+        *vmin* and *vmax* are used in conjunction with the default norm to
+        map the color array *c* to the colormap *cmap*. If None, the
+        respective min and max of the color array is used.
+        It is deprecated to use *vmin*/*vmax* when *norm* is given.
+
+    alpha : float, default: None
+        The alpha blending value, between 0 (transparent) and 1 (opaque).
+
+    linewidths : float or array-like, default: :rc:`lines.linewidth`
+        The linewidth of the marker edges. Note: The default *edgecolors*
+        is 'face'. You may want to change this as well.
+
+    edgecolors : {'face', 'none', *None*} or color or sequence of color, \
+ult: :rc:`scatter.edgecolors`
+        The edge color of the marker. Possible values:
+
+        - 'face': The edge color will always be the same as the face color.
+        - 'none': No patch boundary will be drawn.
+        - A color or sequence of colors.
+
+        For non-filled markers, the *edgecolors* kwarg is ignored and
+        forced to 'face' internally.
+
+    plotnonfinite : bool, default: False
+        Set to plot points with nonfinite *c*, in conjunction with
+        `~matplotlib.colors.Colormap.set_bad`.
+
+    Returns
+    -------
+    `~matplotlib.collections.PathCollection`
+
+    Other Parameters
+    ----------------
+    **kwargs : `~matplotlib.collections.Collection` properties
+
+    See Also
+    --------
+    plot : To plot scatter plots when markers are identical in size and
+        color.
+
+    Notes
+    -----
+    * The `.plot` function will be faster for scatterplots where markers
+      don't vary in size or color.
+
+    * Any or all of *x*, *y*, *s*, and *c* may be masked arrays, in which
+      case all masks will be combined and only unmasked points will be
+      plotted.
+
+    * Fundamentally, scatter works with 1-D arrays; *x*, *y*, *s*, and *c*
+      may be input as N-D arrays, but within scatter they will be
+      flattened. The exception is *c*, which will be flattened only if its
+      size matches the size of *x* and *y*.
+
+    """"""
+    # Process **kwargs to handle aliases, conflicts with explicit kwargs:
+
+    self._process_unit_info(xdata=x, ydata=y, kwargs=kwargs)
+    x = self.convert_xunits(x)
+    y = self.convert_yunits(y)
+
+    # np.ma.ravel yields an ndarray, not a masked array,
+    # unless its argument is a masked array.
+    x = np.ma.ravel(x)
+    y = np.ma.ravel(y)
+    if x.size!= y.size:
+        raise ValueError(""x and y must be the same size"")
+
+    if s is None:
+        s = (20 if rcParams['_internal.classic_mode'] else
+             rcParams['lines.markersize'] ** 2.0)
+    s = np.ma.ravel(s)
+    if len(s) not in (1, x.size):
+        raise ValueError(""s must be a scalar, or the same size as x and y"")
+
+    c, colors, edgecolors = \
+        self._parse_scatter_color_args(
+            c, edgecolors, kwargs, x.size,
+            get_next_color_func=self._get_patches_for_fill.get_next_color)
+
+    if plotnonfinite and colors is None:
+        c = np.ma.masked_invalid(c)
+        x, y, s, edgecolors, linewidths = \
+            cbook._combine_masks(x, y, s, edgecolors, linewidths)
+    else:
+        x, y, s, c, colors, edgecolors, linewidths = \
+            cbook._combine_masks(
+                x, y, s, c, colors, edgecolors, linewidths)
+
+    scales = s   # Renamed for readability below.
+
+    # load default marker from rcParams
+    if marker is None:
+        marker = rcParams['scatter.marker']
+
+    if isinstance(marker, mmarkers.MarkerStyle):
+        marker_obj = marker
+    else:
+        marker_obj = mmarkers.MarkerStyle(marker)
+
+    path = marker_obj.get_path().transformed(
+        marker_obj.get_transform())
+    if not marker_obj.is_filled():
+        edgecolors = 'face'
+        if linewidths is None:
+            linewidths = rcParams['lines.linewidth']
+        elif np.iterable(linewidths):
+            linewidths = [
+                lw if lw is not None else rcParams['lines.linewidth']
+                for lw in linewidths]
+
+    offsets = np.ma.column_stack([x, y])
+
+    # set facecolor to 'none' when marker is not filled
+    if not marker_obj.is_filled():
+        facecolors = 'none'
+    elif colors is not None:
+        facecolors = colors
+    else:
+        facecolors = None
+
+    collection = mcoll.PathCollection(
+            (path,), scales,
+            facecolors=facecolors,
+            edgecolors=edgecolors,
+            linewidths=linewidths,
+            offsets=offsets,
+            transOffset=kwargs.pop('transform', self.transData),
+            alpha=alpha
+            )
+    collection.set_transform(mtransforms.IdentityTransform())
+    collection.update(kwargs)
+
+    if colors is None:
+        collection.set_array(c)
+        collection.set_cmap(cmap)
+        collection.set_norm(norm)
+        collection._scale_norm(norm, vmin, vmax)
+
+    # Classic mode only:
+    # ensure there are margins to allow for the
+    # finite size of the symbols.  In v2.x, margins
+    # are present by default, so we disable this
+    # scatter-specific override.
+    if rcParams['_internal.classic_mode']:
+        if self._xmargin < 0.05 and x.size > 0:
+            self.set_xmargin(0.05)
+        if self._ymargin < 0.05 and x.size > 0:
+            self.set_ymargin(0.05)
+
+    self.add_collection(collection)
+    self._request_autoscale_view()
+
+    return collection
+```",
+matplotlib-2-v0_llama-6,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Identify the issue**: The problem here is that when `fillstyle='none'` is used with a custom marker in `ax.scatter()`, the markers are not appearing as hollow.
+2. **Locate the source of the issue in the code**: In the provided code, `mmarkers.MarkerStyle('o', fillstyle='none')` is used. However, the `fillstyle` parameter does not seem to affect the marker's fill style directly, as seen in the failing test.
+3. **Understand the expected behavior**: When `fillstyle='none'` is specified, we expect the marker to be hollow (i.e., it should have no fill color).
+4. **Find the discrepancy**: The discrepancy lies in how `facecolors` and `edgecolors` are handled when `fillstyle='none'`. Currently, even when `fillstyle='none'`, `facecolors` is still being assigned a color, resulting in filled markers.
+5. **Propose a fix**: To achieve hollow markers, we need to set `facecolors` to `'none'` when `fillstyle='none'` is specified. This ensures that the markers have no fill color, thus appearing hollow.
+
+### Fixed solution:
+```python
+@_preprocess_data(replace_names=[""x"", ""y"", ""s"", ""linewidths"",
+                                 ""edgecolors"", ""c"", ""facecolor"",
+                                 ""facecolors"", ""color""],
+                  label_namer=""y"")
+@cbook._delete_parameter(""3.2"", ""verts"")
+def scatter(self, x, y, s=None, c=None, marker=None, cmap=None, norm=None,
+            vmin=None, vmax=None, alpha=None, linewidths=None,
+            verts=None, edgecolors=None, *, plotnonfinite=False,
+            **kwargs):
+    #... (rest of the function remains the same until the line where facecolors is assigned)
+
+    if isinstance(marker, mmarkers.MarkerStyle):
+        marker_obj = marker
+    else:
+        marker_obj = mmarkers.MarkerStyle(marker)
+
+    path = marker_obj.get_path().transformed(
+        marker_obj.get_transform())
+    if not marker_obj.is_filled():
+        edgecolors = 'face'
+        if linewidths is None:
+            linewidths = rcParams['lines.linewidth']
+        elif np.iterable(linewidths):
+            linewidths = [
+                lw if lw is not None else rcParams['lines.linewidth']
+                for lw in linewidths]
+
+    offsets = np.ma.column_stack([x, y])
+
+    # Check if fillstyle is 'none' and adjust facecolors accordingly
+    if marker_obj.get_fillstyle() == 'none':
+        facecolors = 'none'
+    else:
+        facecolors = colors
+
+    collection = mcoll.PathCollection(
+            (path,), scales,
+            facecolors=facecolors,  # Assign facecolors here
+            edgecolors=edgecolors,
+            linewidths=linewidths,
+            offsets=offsets,
+            transOffset=kwargs.pop('transform', self.transData),
+            alpha=alpha
+            )
+    #... (rest of the function remains the same)
+```
+### Explanation of changes:
+* **Added a check for `fillstyle='none'`**: Before assigning `facecolors`, we check if the marker's `fillstyle` is `'none'`. If it is, we set `facecolors` to `'none'` to ensure the markers appear hollow.
+* **Assigned `facecolors` based on the check**: If `fillstyle` is not `'none'`, `facecolors` is assigned the value of `colors` as before.
+
+### Tests and example uses:
+To test this fix, you can use the provided test function `test_scatter_unfilled`. Additionally, you can create your own tests with different markers and fill styles to ensure the fix works as expected. For example:
+```python
+import matplotlib.pyplot as plt
+import matplotlib.markers as mmarkers
+import numpy as np
+
+# Create a scatter plot with hollow markers
+x, y = np.random.rand(10), np.random.rand(10)
+marker = mmarkers.MarkerStyle('o', fillstyle='none')
+plt.scatter(x, y, marker=marker)
+plt.show()
+```",
+matplotlib-2-v0_llama-7,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the issue**: The test `test_scatter_unfilled` fails because the `get_facecolors()` method of the `PathCollection` object returned by `plt.scatter()` does not return an empty array as expected. This indicates that the scatter plot is being filled, even though the marker style is set to be unfilled.
+
+2. **Analyzing the `scatter` function**: In the `scatter` function, when the marker is unfilled (i.e., `marker_obj.is_filled()` returns `False`), the edge color is set to `'face'`. However, this does not prevent the marker from being filled.
+
+3. **Identifying the potential error location**: The potential error location is where the `PathCollection` object is created. Specifically, the `facecolors` parameter is set to `colors`, which is an array of colors. This suggests that the markers are being filled with these colors.
+
+4. **Determining the cause of the bug**: The cause of the bug is that the `facecolors` parameter of the `PathCollection` object is not being set to an empty array when the marker style is unfilled. This is why the markers are being filled, even though the marker style is set to be unfilled.
+
+5. **Strategy for fixing the bug**: To fix the bug, we need to set the `facecolors` parameter of the `PathCollection` object to an empty array when the marker style is unfilled.
+
+### Fixed solution:
+```python
+@_preprocess_data(replace_names=[""x"", ""y"", ""s"", ""linewidths"",
+                                 ""edgecolors"", ""c"", ""facecolor"",
+                                 ""facecolors"", ""color""],
+                  label_namer=""y"")
+@cbook._delete_parameter(""3.2"", ""verts"")
+def scatter(self, x, y, s=None, c=None, marker=None, cmap=None, norm=None,
+            vmin=None, vmax=None, alpha=None, linewidths=None,
+            verts=None, edgecolors=None, *, plotnonfinite=False,
+            **kwargs):
+    #... (rest of the code remains the same)
+
+    if not marker_obj.is_filled():
+        edgecolors = 'face'
+        if linewidths is None:
+            linewidths = rcParams['lines.linewidth']
+        elif np.iterable(linewidths):
+            linewidths = [
+                lw if lw is not None else rcParams['lines.linewidth']
+                for lw in linewidths]
+        facecolors = np.empty((0, 4))  # Set facecolors to an empty array
+
+    offsets = np.ma.column_stack([x, y])
+
+    collection = mcoll.PathCollection(
+            (path,), scales,
+            facecolors=facecolors,  # Use the facecolors variable
+            edgecolors=edgecolors,
+            linewidths=linewidths,
+            offsets=offsets,
+            transOffset=kwargs.pop('transform', self.transData),
+            alpha=alpha
+            )
+    #... (rest of the code remains the same)
+```
+
+### Explanation of changes:
+* We added a line to set `facecolors` to an empty array when the marker style is unfilled.
+* We changed the `facecolors` parameter of the `PathCollection` object to use the `facecolors` variable.
+
+### Tests and example uses:
+You can test the fixed solution by running the `test_scatter_unfilled` test again. The test should now pass, indicating that the bug has been fixed. You can also try using the `scatter` function with different marker styles and colors to verify that it works as expected.",
+matplotlib-2-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+@_preprocess_data(replace_names=[""x"", ""y"", ""s"", ""linewidths"",
+                                 ""edgecolors"", ""c"", ""facecolor"",
+                                 ""facecolors"", ""color""],
+                  label_namer=""y"")
+@cbook._delete_parameter(""3.2"", ""verts"")
+def scatter(self, x, y, s=None, c=None, marker=None, cmap=None, norm=None,
+            vmin=None, vmax=None, alpha=None, linewidths=None,
+            verts=None, edgecolors=None, *, plotnonfinite=False,
+            **kwargs):
+    """"""
+    A scatter plot of *y* vs. *x* with varying marker size and/or color.
+
+    Parameters
+    ----------
+    x, y : float or array-like, shape (n, )
+        The data positions.
+
+    s : float or array-like, shape (n, ), optional
+        The marker size in points**2.
+        Default is ``rcParams['lines.markersize'] ** 2``.
+
+    c : array-like or list of colors or color, optional
+        The marker colors. Possible values:
+
+        - A scalar or sequence of n numbers to be mapped to colors using
+          *cmap* and *norm*.
+        - A 2-D array in which the rows are RGB or RGBA.
+        - A sequence of colors of length n.
+        - A single color format string.
+
+        Note that *c* should not be a single numeric RGB or RGBA sequence
+        because that is indistinguishable from an array of values to be
+        colormapped. If you want to specify the same RGB or RGBA value for
+        all points, use a 2-D array with a single row.  Otherwise, value-
+        matching will have precedence in case of a size matching with *x*
+        and *y*.
+
+        If you wish to specify a single color for all points
+        prefer the *color* keyword argument.
+
+        Defaults to `None`. In that case the marker color is determined
+        by the value of *color*, *facecolor* or *facecolors*. In case
+        those are not specified or `None`, the marker color is determined
+        by the next color of the ``Axes``' current ""shape and fill"" color
+        cycle. This cycle defaults to :rc:`axes.prop_cycle`.
+
+    marker : `~.markers.MarkerStyle`, default: :rc:`scatter.marker`
+        The marker style. *marker* can be either an instance of the class
+        or the text shorthand for a particular marker.
+        See :mod:`matplotlib.markers` for more information about marker
+        styles.
+
+    cmap : str or `~matplotlib.colors.Colormap`, default: :rc:`image.cmap`
+        A `.Colormap` instance or registered colormap name. *cmap* is only
+        used if *c* is an array of floats.
+
+    norm : `~matplotlib.colors.Normalize`, default: None
+        If *c* is an array of floats, *norm* is used to scale the color
+        data, *c*, in the range 0 to 1, in order to map into the colormap
+        *cmap*.
+        If *None*, use the default `.colors.Normalize`.
+
+    vmin, vmax : float, default: None
+        *vmin* and *vmax* are used in conjunction with the default norm to
+        map the color array *c* to the colormap *cmap*. If None, the
+        respective min and max of the color array is used.
+        It is deprecated to use *vmin*/*vmax* when *norm* is given.
+
+    alpha : float, default: None
+        The alpha blending value, between 0 (transparent) and 1 (opaque).
+
+    linewidths : float or array-like, default: :rc:`lines.linewidth`
+        The linewidth of the marker edges. Note: The default *edgecolors*
+        is 'face'. You may want to change this as well.
+
+    edgecolors : {'face', 'none', *None*} or color or sequence of color, \
+ult: :rc:`scatter.edgecolors`
+        The edge color of the marker. Possible values:
+
+        - 'face': The edge color will always be the same as the face color.
+        - 'none': No patch boundary will be drawn.
+        - A color or sequence of colors.
+
+        For non-filled markers, the *edgecolors* kwarg is ignored and
+        forced to 'face' internally.
+
+    plotnonfinite : bool, default: False
+        Set to plot points with nonfinite *c*, in conjunction with
+        `~matplotlib.colors.Colormap.set_bad`.
+
+    Returns
+    -------
+    `~matplotlib.collections.PathCollection`
+
+    Other Parameters
+    ----------------
+    **kwargs : `~matplotlib.collections.Collection` properties
+
+    See Also
+    --------
+    plot : To plot scatter plots when markers are identical in size and
+        color.
+
+    Notes
+    -----
+    * The `.plot` function will be faster for scatterplots where markers
+      don't vary in size or color.
+
+    * Any or all of *x*, *y*, *s*, and *c* may be masked arrays, in which
+      case all masks will be combined and only unmasked points will be
+      plotted.
+
+    * Fundamentally, scatter works with 1-D arrays; *x*, *y*, *s*, and *c*
+      may be input as N-D arrays, but within scatter they will be
+      flattened. The exception is *c*, which will be flattened only if its
+      size matches the size of *x* and *y*.
+
+    """"""
+    # Process **kwargs to handle aliases, conflicts with explicit kwargs:
+
+    self._process_unit_info(xdata=x, ydata=y, kwargs=kwargs)
+    x = self.convert_xunits(x)
+    y = self.convert_yunits(y)
+
+    # np.ma.ravel yields an ndarray, not a masked array,
+    # unless its argument is a masked array.
+    x = np.ma.ravel(x)
+    y = np.ma.ravel(y)
+    if x.size!= y.size:
+        raise ValueError(""x and y must be the same size"")
+
+    if s is None:
+        s = (20 if rcParams['_internal.classic_mode'] else
+             rcParams['lines.markersize'] ** 2.0)
+    s = np.ma.ravel(s)
+    if len(s) not in (1, x.size):
+        raise ValueError(""s must be a scalar, or the same size as x and y"")
+
+    c, colors, edgecolors = \
+        self._parse_scatter_color_args(
+            c, edgecolors, kwargs, x.size,
+            get_next_color_func=self._get_patches_for_fill.get_next_color)
+
+    if plotnonfinite and colors is None:
+        c = np.ma.masked_invalid(c)
+        x, y, s, edgecolors, linewidths = \
+            cbook._combine_masks(x, y, s, edgecolors, linewidths)
+    else:
+        x, y, s, c, colors, edgecolors, linewidths = \
+            cbook._combine_masks(
+                x, y, s, c, colors, edgecolors, linewidths)
+
+    scales = s   # Renamed for readability below.
+
+    # load default marker from rcParams
+    if marker is None:
+        marker = rcParams['scatter.marker']
+
+    if isinstance(marker, mmarkers.MarkerStyle):
+        marker_obj = marker
+    else:
+        marker_obj = mmarkers.MarkerStyle(marker)
+
+    path = marker_obj.get_path().transformed(
+        marker_obj.get_transform())
+    if not marker_obj.is_filled():
+        edgecolors = 'face'
+        if linewidths is None:
+            linewidths = rcParams['lines.linewidth']
+        elif np.iterable(linewidths):
+            linewidths = [
+                lw if lw is not None else rcParams['lines.linewidth']
+                for lw in linewidths]
+
+    offsets = np.ma.column_stack([x, y])
+
+    if marker_obj.fillstyle == 'none':
+        collection = mcoll.PathCollection(
+                (path,), scales,
+                facecolors='none',
+                edgecolors=colors,
+                linewidths=linewidths,
+                offsets=offsets,
+                transOffset=kwargs.pop('transform', self.transData),
+                alpha=alpha
+                )
+    else:
+        collection = mcoll.PathCollection(
+                (path,), scales,
+                facecolors=colors,
+                edgecolors=edgecolors,
+                linewidths=linewidths,
+                offsets=offsets,
+                transOffset=kwargs.pop('transform', self.transData),
+                alpha=alpha
+                )
+    collection.set_transform(mtransforms.IdentityTransform())
+    collection.update(kwargs)
+
+    if colors is None:
+        collection.set_array(c)
+        collection.set_cmap(cmap)
+        collection.set_norm(norm)
+        collection._scale_norm(norm, vmin, vmax)
+
+    # Classic mode only:
+    # ensure there are margins to allow for the
+    # finite size of the symbols.  In v2.x, margins
+    # are present by default, so we disable this
+    # scatter-specific override.
+    if rcParams['_internal.classic_mode']:
+        if self._xmargin < 0.05 and x.size > 0:
+            self.set_xmargin(0.05)
+        if self._ymargin < 0.05 and x.size > 0:
+            self.set_ymargin(0.05)
+
+    self.add_collection(collection)
+    self._request_autoscale_view()
+
+    return collection
+```",
+matplotlib-2-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+@_preprocess_data(replace_names=[""x"", ""y"", ""s"", ""linewidths"",
+                                 ""edgecolors"", ""c"", ""facecolor"",
+                                 ""facecolors"", ""color""],
+                  label_namer=""y"")
+@cbook._delete_parameter(""3.2"", ""verts"")
+def scatter(self, x, y, s=None, c=None, marker=None, cmap=None, norm=None,
+            vmin=None, vmax=None, alpha=None, linewidths=None,
+            verts=None, edgecolors=None, *, plotnonfinite=False,
+            **kwargs):
+    """"""
+    A scatter plot of *y* vs. *x* with varying marker size and/or color.
+
+    Parameters
+    ----------
+    x, y : float or array-like, shape (n, )
+        The data positions.
+
+    s : float or array-like, shape (n, ), optional
+        The marker size in points**2.
+        Default is ``rcParams['lines.markersize'] ** 2``.
+
+    c : array-like or list of colors or color, optional
+        The marker colors. Possible values:
+
+        - A scalar or sequence of n numbers to be mapped to colors using
+          *cmap* and *norm*.
+        - A 2-D array in which the rows are RGB or RGBA.
+        - A sequence of colors of length n.
+        - A single color format string.
+
+        Note that *c* should not be a single numeric RGB or RGBA sequence
+        because that is indistinguishable from an array of values to be
+        colormapped. If you want to specify the same RGB or RGBA value for
+        all points, use a 2-D array with a single row.  Otherwise, value-
+        matching will have precedence in case of a size matching with *x*
+        and *y*.
+
+        If you wish to specify a single color for all points
+        prefer the *color* keyword argument.
+
+        Defaults to `None`. In that case the marker color is determined
+        by the value of *color*, *facecolor* or *facecolors*. In case
+        those are not specified or `None`, the marker color is determined
+        by the next color of the ``Axes``' current ""shape and fill"" color
+        cycle. This cycle defaults to :rc:`axes.prop_cycle`.
+
+    marker : `~.markers.MarkerStyle`, default: :rc:`scatter.marker`
+        The marker style. *marker* can be either an instance of the class
+        or the text shorthand for a particular marker.
+        See :mod:`matplotlib.markers` for more information about marker
+        styles.
+
+    cmap : str or `~matplotlib.colors.Colormap`, default: :rc:`image.cmap`
+        A `.Colormap` instance or registered colormap name. *cmap* is only
+        used if *c* is an array of floats.
+
+    norm : `~matplotlib.colors.Normalize`, default: None
+        If *c* is an array of floats, *norm* is used to scale the color
+        data, *c*, in the range 0 to 1, in order to map into the colormap
+        *cmap*.
+        If *None*, use the default `.colors.Normalize`.
+
+    vmin, vmax : float, default: None
+        *vmin* and *vmax* are used in conjunction with the default norm to
+        map the color array *c* to the colormap *cmap*. If None, the
+        respective min and max of the color array is used.
+        It is deprecated to use *vmin*/*vmax* when *norm* is given.
+
+    alpha : float, default: None
+        The alpha blending value, between 0 (transparent) and 1 (opaque).
+
+    linewidths : float or array-like, default: :rc:`lines.linewidth`
+        The linewidth of the marker edges. Note: The default *edgecolors*
+        is 'face'. You may want to change this as well.
+
+    edgecolors : {'face', 'none', *None*} or color or sequence of color, \
+ult: :rc:`scatter.edgecolors`
+        The edge color of the marker. Possible values:
+
+        - 'face': The edge color will always be the same as the face color.
+        - 'none': No patch boundary will be drawn.
+        - A color or sequence of colors.
+
+        For non-filled markers, the *edgecolors* kwarg is ignored and
+        forced to 'face' internally.
+
+    plotnonfinite : bool, default: False
+        Set to plot points with nonfinite *c*, in conjunction with
+        `~matplotlib.colors.Colormap.set_bad`.
+
+    Returns
+    -------
+    `~matplotlib.collections.PathCollection`
+
+    Other Parameters
+    ----------------
+    **kwargs : `~matplotlib.collections.Collection` properties
+
+    See Also
+    --------
+    plot : To plot scatter plots when markers are identical in size and
+        color.
+
+    Notes
+    -----
+    * The `.plot` function will be faster for scatterplots where markers
+      don't vary in size or color.
+
+    * Any or all of *x*, *y*, *s*, and *c* may be masked arrays, in which
+      case all masks will be combined and only unmasked points will be
+      plotted.
+
+    * Fundamentally, scatter works with 1-D arrays; *x*, *y*, *s*, and *c*
+      may be input as N-D arrays, but within scatter they will be
+      flattened. The exception is *c*, which will be flattened only if its
+      size matches the size of *x* and *y*.
+
+    """"""
+    # Process **kwargs to handle aliases, conflicts with explicit kwargs:
+
+    self._process_unit_info(xdata=x, ydata=y, kwargs=kwargs)
+    x = self.convert_xunits(x)
+    y = self.convert_yunits(y)
+
+    # np.ma.ravel yields an ndarray, not a masked array,
+    # unless its argument is a masked array.
+    x = np.ma.ravel(x)
+    y = np.ma.ravel(y)
+    if x.size!= y.size:
+        raise ValueError(""x and y must be the same size"")
+
+    if s is None:
+        s = (20 if rcParams['_internal.classic_mode'] else
+             rcParams['lines.markersize'] ** 2.0)
+    s = np.ma.ravel(s)
+    if len(s) not in (1, x.size):
+        raise ValueError(""s must be a scalar, or the same size as x and y"")
+
+    c, colors, edgecolors = \
+        self._parse_scatter_color_args(
+            c, edgecolors, kwargs, x.size,
+            get_next_color_func=self._get_patches_for_fill.get_next_color)
+
+    if plotnonfinite and colors is None:
+        c = np.ma.masked_invalid(c)
+        x, y, s, edgecolors, linewidths = \
+            cbook._combine_masks(x, y, s, edgecolors, linewidths)
+    else:
+        x, y, s, c, colors, edgecolors, linewidths = \
+            cbook._combine_masks(
+                x, y, s, c, colors, edgecolors, linewidths)
+
+    scales = s   # Renamed for readability below.
+
+    # load default marker from rcParams
+    if marker is None:
+        marker = rcParams['scatter.marker']
+
+    if isinstance(marker, mmarkers.MarkerStyle):
+        marker_obj = marker
+    else:
+        marker_obj = mmarkers.MarkerStyle(marker)
+
+    path = marker_obj.get_path().transformed(
+        marker_obj.get_transform())
+    if not marker_obj.is_filled():
+        edgecolors = 'face'
+        if linewidths is None:
+            linewidths = rcParams['lines.linewidth']
+        elif np.iterable(linewidths):
+            linewidths = [
+                lw if lw is not None else rcParams['lines.linewidth']
+                for lw in linewidths]
+
+    if isinstance(marker_obj.fillstyle, str) and marker_obj.fillstyle == 'none':
+        facecolors = 'none'
+    else:
+        facecolors = colors
+
+    offsets = np.ma.column_stack([x, y])
+
+    collection = mcoll.PathCollection(
+            (path,), scales,
+            facecolors=facecolors,
+            edgecolors=edgecolors,
+            linewidths=linewidths,
+            offsets=offsets,
+            transOffset=kwargs.pop('transform', self.transData),
+            alpha=alpha
+            )
+    collection.set_transform(mtransforms.IdentityTransform())
+    collection.update(kwargs)
+
+    if colors is None:
+        collection.set_array(c)
+        collection.set_cmap(cmap)
+        collection.set_norm(norm)
+        collection._scale_norm(norm, vmin, vmax)
+
+    # Classic mode only:
+    # ensure there are margins to allow for the
+    # finite size of the symbols.  In v2.x, margins
+    # are present by default, so we disable this
+    # scatter-specific override.
+    if rcParams['_internal.classic_mode']:
+        if self._xmargin < 0.05 and x.size > 0:
+            self.set_xmargin(0.05)
+        if self._ymargin < 0.05 and x.size > 0:
+            self.set_ymargin(0.05)
+
+    self.add_collection(collection)
+    self._request_autoscale_view()
+
+    return collection
+```",

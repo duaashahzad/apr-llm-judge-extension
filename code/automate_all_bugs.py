@@ -4,7 +4,7 @@ import subprocess
 import sys
 
 # ---- Adjust these if needed ----
-PROJECTS = ["pandas"]   # later change to ["PySnooper", "keras"]
+PROJECTS = ["matplotlib"]   # later change to ["PySnooper", "keras"]
 LIMIT_PATCHES_PER_CONFIG = None  # e.g. 5 for testing, or None for all
 RUN_JUDGE = True
 

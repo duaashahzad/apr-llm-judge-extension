@@ -1,0 +1,479 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+matplotlib-10-v0_llama-0,UNKNOWN,UNKNOWN,"```python
+def set_tick_params(self, which='major', reset=False, **kw):
+    """"""
+    Set appearance parameters for ticks, ticklabels, and gridlines.
+
+    For documentation of keyword arguments, see
+    :meth:`matplotlib.axes.Axes.tick_params`.
+    """"""
+    cbook._check_in_list(['major', 'minor', 'both'], which=which)
+    kwtrans = self._translate_tick_kw(kw)
+
+    # the kwargs are stored in self._major/minor_tick_kw so that any
+    # future new ticks will automatically get them
+    if reset:
+        if which in ['major', 'both']:
+            self._major_tick_kw.clear()
+            self._major_tick_kw.update(kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.clear()
+            self._minor_tick_kw.update(kwtrans)
+        self.reset_ticks()
+    else:
+        if which in ['major', 'both']:
+            self._major_tick_kw.update(kwtrans)
+            for tick in self.majorTicks:
+                tick._apply_params(**kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.update(kwtrans)
+            for tick in self.minorTicks:
+                tick._apply_params(**kwtrans)
+        # special-case label color to also apply to the offset text
+        if 'labelcolor' in kwtrans:
+            self.offsetText.set_color(kwtrans['labelcolor'])
+        # Set the offset text to be invisible when 'label1On' or 'label2On' is False
+        if 'label1On' in kw and not kw['label1On']:
+            self.offsetText.set_visible(False)
+        if 'label2On' in kw and not kw['label2On']:
+            self.offsetText.set_visible(False)
+
+    self.stale = True
+```",
+matplotlib-10-v0_llama-1,UNKNOWN,UNKNOWN,"```python
+def set_tick_params(self, which='major', reset=False, **kw):
+    """"""
+    Set appearance parameters for ticks, ticklabels, and gridlines.
+
+    For documentation of keyword arguments, see
+    :meth:`matplotlib.axes.Axes.tick_params`.
+    """"""
+    cbook._check_in_list(['major', 'minor', 'both'], which=which)
+    kwtrans = self._translate_tick_kw(kw)
+
+    # the kwargs are stored in self._major/minor_tick_kw so that any
+    # future new ticks will automatically get them
+    if reset:
+        if which in ['major', 'both']:
+            self._major_tick_kw.clear()
+            self._major_tick_kw.update(kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.clear()
+            self._minor_tick_kw.update(kwtrans)
+        self.reset_ticks()
+    else:
+        if which in ['major', 'both']:
+            self._major_tick_kw.update(kwtrans)
+            for tick in self.majorTicks:
+                tick._apply_params(**kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.update(kwtrans)
+            for tick in self.minorTicks:
+                tick._apply_params(**kwtrans)
+        # special-case label color to also apply to the offset text
+        if 'labelcolor' in kwtrans:
+            self.offsetText.set_color(kwtrans['labelcolor'])
+        # Set the offset text visibility based on the label visibility
+        if 'label1On' in kwtrans and not kwtrans['label1On']:
+            self.offsetText.set_visible(False)
+        if 'label2On' in kwtrans and not kwtrans['label2On']:
+            self.offsetText.set_visible(False)
+
+    self.stale = True
+```",
+matplotlib-10-v0_llama-2,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. The function `set_tick_params` does not handle the case where `label1On` or `label2On` is set to `False`. This results in the offset text still being visible even when the corresponding tick labels are not.
+2. The `offsetText` is not being updated correctly when `label1On` or `label2On` is set to `False`.
+3. To fix this issue, we need to update the `offsetText` visibility based on the value of `label1On` and `label2On`.
+
+### Fixed solution:
+```python
+def set_tick_params(self, which='major', reset=False, **kw):
+    """"""
+    Set appearance parameters for ticks, ticklabels, and gridlines.
+
+    For documentation of keyword arguments, see
+    :meth:`matplotlib.axes.Axes.tick_params`.
+    """"""
+    cbook._check_in_list(['major', 'minor', 'both'], which=which)
+    kwtrans = self._translate_tick_kw(kw)
+
+    # the kwargs are stored in self._major/minor_tick_kw so that any
+    # future new ticks will automatically get them
+    if reset:
+        if which in ['major', 'both']:
+            self._major_tick_kw.clear()
+            self._major_tick_kw.update(kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.clear()
+            self._minor_tick_kw.update(kwtrans)
+        self.reset_ticks()
+    else:
+        if which in ['major', 'both']:
+            self._major_tick_kw.update(kwtrans)
+            for tick in self.majorTicks:
+                tick._apply_params(**kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.update(kwtrans)
+            for tick in self.minorTicks:
+                tick._apply_params(**kwtrans)
+        # special-case label color to also apply to the offset text
+        if 'labelcolor' in kwtrans:
+            self.offsetText.set_color(kwtrans['labelcolor'])
+        
+        # Update offsetText visibility based on label1On and label2On
+        if 'label1On' in kwtrans and not kwtrans['label1On']:
+            self.offsetText.set_visible(False)
+        if 'label2On' in kwtrans and not kwtrans['label2On']:
+            self.offsetText.set_visible(False)
+
+    self.stale = True
+```
+
+### Explanation of changes:
+* We added two conditional statements to update the `offsetText` visibility based on the value of `label1On` and `label2On`.
+* If `label1On` or `label2On` is set to `False`, we set the `offsetText` visibility to `False`.
+
+### Tests and example uses:
+You can test the updated function using the provided test case:
+```python
+def test_offset_text_visible():
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+    ax.plot([1.01e9, 1.02e9, 1.03e9])
+    ax.yaxis.set_tick_params(label1On=False, label2On=True)
+    assert ax.yaxis.get_offset_text().get_visible()
+    ax.yaxis.set_tick_params(label2On=False)
+    assert not ax.yaxis.get_offset_text().get_visible()
+```",
+matplotlib-10-v0_llama-3,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Understanding the Issue:** The problem states that when using ""L"" configuration for `ImageGrid` `label_mode`, the offset text on axes still appears for all axes even though the tick labels themselves are not present. This suggests that the current implementation of `set_tick_params` method does not correctly handle the visibility of offset text when tick labels are turned off.
+2. **Identifying the Cause:** Looking at the provided code for the `set_tick_params` method, it updates the tick parameters and applies them to the ticks. However, when it comes to the offset text, it only sets the color of the offset text if 'labelcolor' is in `kwtrans`, but it does not handle the visibility of the offset text based on the `label[1/2]On` parameters.
+3. **Strategy for Fixing the Bug:** To fix the bug, we need to modify the `set_tick_params` method so that it also controls the visibility of the offset text based on the `label[1/2]On` parameters. This involves setting the offset text to be invisible if the corresponding tick labels are turned off.
+
+### Fixed solution:
+```python
+def set_tick_params(self, which='major', reset=False, **kw):
+    """"""
+    Set appearance parameters for ticks, ticklabels, and gridlines.
+
+    For documentation of keyword arguments, see
+    :meth:`matplotlib.axes.Axes.tick_params`.
+    """"""
+    cbook._check_in_list(['major', 'minor', 'both'], which=which)
+    kwtrans = self._translate_tick_kw(kw)
+
+    # the kwargs are stored in self._major/minor_tick_kw so that any
+    # future new ticks will automatically get them
+    if reset:
+        if which in ['major', 'both']:
+            self._major_tick_kw.clear()
+            self._major_tick_kw.update(kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.clear()
+            self._minor_tick_kw.update(kwtrans)
+        self.reset_ticks()
+    else:
+        if which in ['major', 'both']:
+            self._major_tick_kw.update(kwtrans)
+            for tick in self.majorTicks:
+                tick._apply_params(**kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.update(kwtrans)
+            for tick in self.minorTicks:
+                tick._apply_params(**kwtrans)
+        # special-case label color to also apply to the offset text
+        if 'labelcolor' in kwtrans:
+            self.offsetText.set_color(kwtrans['labelcolor'])
+        
+        # Fix for the bug: Control the visibility of the offset text
+        if 'label1On' in kwtrans or 'label2On' in kwtrans:
+            if not (kwtrans.get('label1On', True) or kwtrans.get('label2On', True)):
+                self.offsetText.set_visible(False)
+            else:
+                self.offsetText.set_visible(True)
+
+    self.stale = True
+```
+
+### Explanation of changes:
+*   **Added Conditional Statement:** Added a conditional statement to check if 'label1On' or 'label2On' is in `kwtrans`. If either of them is present and their value is `False`, it sets the offset text to be invisible.
+*   **Set Offset Text Visibility:** If both 'label1On' and 'label2On' are `False`, the offset text is set to be invisible using `self.offsetText.set_visible(False)`. Otherwise, it is set to be visible using `self.offsetText.set_visible(True)`.
+
+### Tests and example uses:
+To test the corrected function, you can use the provided test function `test_offset_text_visible`. Additionally, you can create your own test cases to verify that the offset text visibility is correctly controlled when using the ""L"" configuration for `ImageGrid` `label_mode`. For example:
+```python
+def test_offset_text_visible():
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+    ax.plot([1.01e9, 1.02e9, 1.03e9])
+    ax.yaxis.set_tick_params(label1On=False, label2On=True)
+    assert ax.yaxis.get_offset_text().get_visible()
+    ax.yaxis.set_tick_params(label2On=False)
+    assert not ax.yaxis.get_offset_text().get_visible()
+```",
+matplotlib-10-v0_llama-4,UNKNOWN,UNKNOWN,"### Step-by-step analysis of the problem:
+1. **Identify the goal**: The goal of the `set_tick_params` function is to set appearance parameters for ticks, ticklabels, and gridlines.
+2. **Understand the context**: The function is part of a class and is used to customize the tick parameters of axes in a plot.
+3. **Find the bug**: The issue arises when using the ""L"" configuration for the `ImageGrid` `label_mode`. In this case, the offset text on axes still appears even though the tick labels themselves are not present.
+4. **Determine the cause**: The cause of the bug is that the `set_tick_params` function does not properly handle the case when `label1On` or `label2On` is set to `False`. Specifically, it does not update the visibility of the offset text accordingly.
+
+### Fixed solution:
+```python
+def set_tick_params(self, which='major', reset=False, **kw):
+    """"""
+    Set appearance parameters for ticks, ticklabels, and gridlines.
+
+    For documentation of keyword arguments, see
+    :meth:`matplotlib.axes.Axes.tick_params`.
+    """"""
+    cbook._check_in_list(['major', 'minor', 'both'], which=which)
+    kwtrans = self._translate_tick_kw(kw)
+
+    # the kwargs are stored in self._major/minor_tick_kw so that any
+    # future new ticks will automatically get them
+    if reset:
+        if which in ['major', 'both']:
+            self._major_tick_kw.clear()
+            self._major_tick_kw.update(kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.clear()
+            self._minor_tick_kw.update(kwtrans)
+        self.reset_ticks()
+    else:
+        if which in ['major', 'both']:
+            self._major_tick_kw.update(kwtrans)
+            for tick in self.majorTicks:
+                tick._apply_params(**kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.update(kwtrans)
+            for tick in self.minorTicks:
+                tick._apply_params(**kwtrans)
+        # special-case label color to also apply to the offset text
+        if 'labelcolor' in kwtrans:
+            self.offsetText.set_color(kwtrans['labelcolor'])
+        # Update the visibility of the offset text
+        if 'label1On' in kw or 'label2On' in kw:
+            if not (kw.get('label1On', True) or kw.get('label2On', True)):
+                self.offsetText.set_visible(False)
+            else:
+                self.offsetText.set_visible(True)
+
+    self.stale = True
+```
+
+### Explanation of changes:
+* Added a check to see if `label1On` or `label2On` is present in the `kw` dictionary.
+* If either of these is present and set to `False`, the offset text is hidden by setting its visibility to `False`.
+* If either of these is present and set to `True`, the offset text is shown by setting its visibility to `True`.
+
+### Tests and example uses:
+To test the fixed solution, you can use the provided test function `test_offset_text_visible`. Additionally, you can create your own test cases to verify that the offset text is properly hidden or shown based on the `label1On` and `label2On` parameters.",
+matplotlib-10-v0_llama-5,UNKNOWN,UNKNOWN,"```python
+def set_tick_params(self, which='major', reset=False, **kw):
+    """"""
+    Set appearance parameters for ticks, ticklabels, and gridlines.
+
+    For documentation of keyword arguments, see
+    :meth:`matplotlib.axes.Axes.tick_params`.
+    """"""
+    cbook._check_in_list(['major', 'minor', 'both'], which=which)
+    kwtrans = self._translate_tick_kw(kw)
+
+    # the kwargs are stored in self._major/minor_tick_kw so that any
+    # future new ticks will automatically get them
+    if reset:
+        if which in ['major', 'both']:
+            self._major_tick_kw.clear()
+            self._major_tick_kw.update(kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.clear()
+            self._minor_tick_kw.update(kwtrans)
+        self.reset_ticks()
+    else:
+        if which in ['major', 'both']:
+            self._major_tick_kw.update(kwtrans)
+            for tick in self.majorTicks:
+                tick._apply_params(**kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.update(kwtrans)
+            for tick in self.minorTicks:
+                tick._apply_params(**kwtrans)
+        # special-case label color to also apply to the offset text
+        if 'labelcolor' in kwtrans:
+            self.offsetText.set_color(kwtrans['labelcolor'])
+        # Hide offset text when ticklabels are hidden
+        if 'label1On' in kw or 'label2On' in kw:
+            if not (kw.get('label1On', True) or kw.get('label2On', True)):
+                self.offsetText.set_visible(False)
+            else:
+                self.offsetText.set_visible(True)
+
+    self.stale = True
+```",
+matplotlib-10-v0_llama-6,UNKNOWN,UNKNOWN,"```python
+def set_tick_params(self, which='major', reset=False, **kw):
+    """"""
+    Set appearance parameters for ticks, ticklabels, and gridlines.
+
+    For documentation of keyword arguments, see
+    :meth:`matplotlib.axes.Axes.tick_params`.
+    """"""
+    cbook._check_in_list(['major', 'minor', 'both'], which=which)
+    kwtrans = self._translate_tick_kw(kw)
+
+    # the kwargs are stored in self._major/minor_tick_kw so that any
+    # future new ticks will automatically get them
+    if reset:
+        if which in ['major', 'both']:
+            self._major_tick_kw.clear()
+            self._major_tick_kw.update(kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.clear()
+            self._minor_tick_kw.update(kwtrans)
+        self.reset_ticks()
+    else:
+        if which in ['major', 'both']:
+            self._major_tick_kw.update(kwtrans)
+            for tick in self.majorTicks:
+                tick._apply_params(**kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.update(kwtrans)
+            for tick in self.minorTicks:
+                tick._apply_params(**kwtrans)
+        # special-case label color to also apply to the offset text
+        if 'labelcolor' in kwtrans:
+            self.offsetText.set_color(kwtrans['labelcolor'])
+        # Check if label1On or label2On is False
+        if 'label1On' in kw and not kw['label1On']:
+            self.offsetText.set_visible(False)
+        if 'label2On' in kw and not kw['label2On']:
+            self.offsetText.set_visible(False)
+
+    self.stale = True
+```",
+matplotlib-10-v0_llama-7,UNKNOWN,UNKNOWN,"```python
+def set_tick_params(self, which='major', reset=False, **kw):
+    """"""
+    Set appearance parameters for ticks, ticklabels, and gridlines.
+
+    For documentation of keyword arguments, see
+    :meth:`matplotlib.axes.Axes.tick_params`.
+    """"""
+    cbook._check_in_list(['major', 'minor', 'both'], which=which)
+    kwtrans = self._translate_tick_kw(kw)
+
+    # the kwargs are stored in self._major/minor_tick_kw so that any
+    # future new ticks will automatically get them
+    if reset:
+        if which in ['major', 'both']:
+            self._major_tick_kw.clear()
+            self._major_tick_kw.update(kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.clear()
+            self._minor_tick_kw.update(kwtrans)
+        self.reset_ticks()
+    else:
+        if which in ['major', 'both']:
+            self._major_tick_kw.update(kwtrans)
+            for tick in self.majorTicks:
+                tick._apply_params(**kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.update(kwtrans)
+            for tick in self.minorTicks:
+                tick._apply_params(**kwtrans)
+        # special-case label color to also apply to the offset text
+        if 'labelcolor' in kwtrans:
+            self.offsetText.set_color(kwtrans['labelcolor'])
+        # Fix: set offset text visibility
+        if 'label1On' in kw and not kw['label1On']:
+            self.offsetText.set_visible(False)
+        if 'label2On' in kw and not kw['label2On']:
+            self.offsetText.set_visible(False)
+
+    self.stale = True
+```",
+matplotlib-10-v0_llama-8,UNKNOWN,UNKNOWN,"```python
+def set_tick_params(self, which='major', reset=False, **kw):
+    """"""
+    Set appearance parameters for ticks, ticklabels, and gridlines.
+
+    For documentation of keyword arguments, see
+    :meth:`matplotlib.axes.Axes.tick_params`.
+    """"""
+    cbook._check_in_list(['major', 'minor', 'both'], which=which)
+    kwtrans = self._translate_tick_kw(kw)
+
+    # the kwargs are stored in self._major/minor_tick_kw so that any
+    # future new ticks will automatically get them
+    if reset:
+        if which in ['major', 'both']:
+            self._major_tick_kw.clear()
+            self._major_tick_kw.update(kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.clear()
+            self._minor_tick_kw.update(kwtrans)
+        self.reset_ticks()
+    else:
+        if which in ['major', 'both']:
+            self._major_tick_kw.update(kwtrans)
+            for tick in self.majorTicks:
+                tick._apply_params(**kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.update(kwtrans)
+            for tick in self.minorTicks:
+                tick._apply_params(**kwtrans)
+        # special-case label color to also apply to the offset text
+        if 'labelcolor' in kwtrans:
+            self.offsetText.set_color(kwtrans['labelcolor'])
+        # set offset text visibility based on tick label visibility
+        if 'label1On' in kw or 'label2On' in kw:
+            if not (kw.get('label1On', True) or kw.get('label2On', True)):
+                self.offsetText.set_visible(False)
+            else:
+                self.offsetText.set_visible(True)
+
+    self.stale = True
+```",
+matplotlib-10-v0_llama-9,UNKNOWN,UNKNOWN,"```python
+def set_tick_params(self, which='major', reset=False, **kw):
+    """"""
+    Set appearance parameters for ticks, ticklabels, and gridlines.
+
+    For documentation of keyword arguments, see
+    :meth:`matplotlib.axes.Axes.tick_params`.
+    """"""
+    cbook._check_in_list(['major', 'minor', 'both'], which=which)
+    kwtrans = self._translate_tick_kw(kw)
+
+    # the kwargs are stored in self._major/minor_tick_kw so that any
+    # future new ticks will automatically get them
+    if reset:
+        if which in ['major', 'both']:
+            self._major_tick_kw.clear()
+            self._major_tick_kw.update(kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.clear()
+            self._minor_tick_kw.update(kwtrans)
+        self.reset_ticks()
+    else:
+        if which in ['major', 'both']:
+            self._major_tick_kw.update(kwtrans)
+            for tick in self.majorTicks:
+                tick._apply_params(**kwtrans)
+        if which in ['minor', 'both']:
+            self._minor_tick_kw.update(kwtrans)
+            for tick in self.minorTicks:
+                tick._apply_params(**kwtrans)
+        # special-case label color to also apply to the offset text
+        if 'labelcolor' in kwtrans:
+            self.offsetText.set_color(kwtrans['labelcolor'])
+        # Fix: set offset text visibility based on tick label visibility
+        if 'label1On' in kw or 'label2On' in kw:
+            if 'label1On' in kw and not kw['label1On']:
+                self.offsetText.set_visible(False)
+            elif 'label2On' in kw and not kw['label2On']:
+                self.offsetText.set_visible(False)
+
+    self.stale = True
+```",

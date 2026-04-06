@@ -1,0 +1,740 @@
+bug_id,bug_description,buggy_code,patch_diff,tests_pass
+tornado-4-vall_gpt-0,UNKNOWN,UNKNOWN,"```python
+async def get(self, path: str, include_body: bool = True) -> None:
+    self.path = self.parse_url_path(path)
+    del path  
+    absolute_path = self.get_absolute_path(self.root, self.path)
+    self.absolute_path = self.validate_absolute_path(self.root, absolute_path)
+    if self.absolute_path is None:
+        return
+
+    self.modified = self.get_modified_time()
+    self.set_headers()
+
+    if self.should_return_304():
+        self.set_status(304)
+        return
+
+    request_range = None
+    range_header = self.request.headers.get(""Range"")
+    if range_header:
+        request_range = httputil._parse_request_range(range_header)
+
+    size = self.get_content_size()
+    if request_range:
+        start, end = request_range
+        if (start is not None and start >= size) or end == 0:
+            self.set_status(416)  
+            self.set_header(""Content-Type"", ""text/plain"")
+            self.set_header(""Content-Range"", ""bytes */%s"" % (size,))
+            return
+        if start is not None and start < 0:
+            start += size
+            if start < 0:  # Prevent seeking to a negative position
+                start = size
+        if end is not None and end > size:
+            end = size
+        if size != (end or size) - (start or 0):
+            self.set_status(206)  
+            self.set_header(
+                ""Content-Range"", httputil._get_content_range(start, end, size)
+            )
+    else:
+        start = end = None
+
+    if start is not None and end is not None:
+        content_length = end - start
+    elif end is not None:
+        content_length = end
+    elif start is not None:
+        content_length = size - start
+    else:
+        content_length = size
+    self.set_header(""Content-Length"", content_length)
+
+    if include_body:
+        content = self.get_content(self.absolute_path, start, end)
+        if isinstance(content, bytes):
+            content = [content]
+        for chunk in content:
+            try:
+                self.write(chunk)
+                await self.flush()
+            except iostream.StreamClosedError:
+                return
+    else:
+        assert self.request.method == ""HEAD""
+```",
+tornado-4-vall_gpt-1,UNKNOWN,UNKNOWN,"```python
+async def get(self, path: str, include_body: bool = True) -> None:
+    # Set up our path instance variables.
+    self.path = self.parse_url_path(path)
+    del path  # make sure we don't refer to path instead of self.path again
+    absolute_path = self.get_absolute_path(self.root, self.path)
+    self.absolute_path = self.validate_absolute_path(self.root, absolute_path)
+    if self.absolute_path is None:
+        return
+
+    self.modified = self.get_modified_time()
+    self.set_headers()
+
+    if self.should_return_304():
+        self.set_status(304)
+        return
+
+    request_range = None
+    range_header = self.request.headers.get(""Range"")
+    if range_header:
+        request_range = httputil._parse_request_range(range_header)
+
+    size = self.get_content_size()
+    if request_range:
+        start, end = request_range
+        if (start is not None and start >= size) or end == 0:
+            self.set_status(416)  # Range Not Satisfiable
+            self.set_header(""Content-Type"", ""text/plain"")
+            self.set_header(""Content-Range"", ""bytes */%s"" % (size,))
+            return
+        if start is not None and start < 0:
+            start += size
+        if end is not None and end > size:
+            end = size
+        if start is not None and end is not None and start > end:  # Fix for negative range
+            self.set_status(416)
+            self.set_header(""Content-Range"", ""bytes */%s"" % (size,))
+            return
+        
+        if size != (end or size) - (start or 0):
+            self.set_status(206)  # Partial Content
+            self.set_header(
+                ""Content-Range"", httputil._get_content_range(start, end, size)
+            )
+    else:
+        start = end = None
+
+    if start is not None and end is not None:
+        content_length = end - start
+    elif end is not None:
+        content_length = end
+    elif start is not None:
+        content_length = size - start
+    else:
+        content_length = size
+    self.set_header(""Content-Length"", content_length)
+
+    if include_body:
+        content = self.get_content(self.absolute_path, start, end)
+        if isinstance(content, bytes):
+            content = [content]
+        for chunk in content:
+            try:
+                self.write(chunk)
+                await self.flush()
+            except iostream.StreamClosedError:
+                return
+    else:
+        assert self.request.method == ""HEAD""
+```",
+tornado-4-vall_gpt-2,UNKNOWN,UNKNOWN,"```python
+async def get(self, path: str, include_body: bool = True) -> None:
+    # Set up our path instance variables.
+    self.path = self.parse_url_path(path)
+    del path  # make sure we don't refer to path instead of self.path again
+    absolute_path = self.get_absolute_path(self.root, self.path)
+    self.absolute_path = self.validate_absolute_path(self.root, absolute_path)
+    if self.absolute_path is None:
+        return
+
+    self.modified = self.get_modified_time()
+    self.set_headers()
+
+    if self.should_return_304():
+        self.set_status(304)
+        return
+
+    request_range = None
+    range_header = self.request.headers.get(""Range"")
+    if range_header:
+        # As per RFC 2616 14.16, if an invalid Range header is specified,
+        # the request will be treated as if the header didn't exist.
+        request_range = httputil._parse_request_range(range_header)
+
+    size = self.get_content_size()
+    if request_range:
+        start, end = request_range
+        if (start is not None and start >= size) or end == 0:
+            self.set_status(416)  # Range Not Satisfiable
+            self.set_header(""Content-Type"", ""text/plain"")
+            self.set_header(""Content-Range"", ""bytes */%s"" % (size,))
+            return
+        if start is not None and start < 0:
+            start += size
+            if start < 0:
+                start = size  # Set start to size if still negative after adjustment
+        if end is not None and end > size:
+            end = size
+        # Note: only return HTTP 206 if less than the entire range has been
+        # requested.
+        if size != (end or size) - (start or 0):
+            self.set_status(206)  # Partial Content
+            self.set_header(
+                ""Content-Range"", httputil._get_content_range(start, end, size)
+            )
+    else:
+        start = end = None
+
+    if start is not None and end is not None:
+        content_length = end - start
+    elif end is not None:
+        content_length = end
+    elif start is not None:
+        content_length = size - start
+    else:
+        content_length = size
+    self.set_header(""Content-Length"", content_length)
+
+    if include_body:
+        content = self.get_content(self.absolute_path, start, end)
+        if isinstance(content, bytes):
+            content = [content]
+        for chunk in content:
+            try:
+                self.write(chunk)
+                await self.flush()
+            except iostream.StreamClosedError:
+                return
+    else:
+        assert self.request.method == ""HEAD""
+```",
+tornado-4-vall_gpt-3,UNKNOWN,UNKNOWN,"```python
+async def get(self, path: str, include_body: bool = True) -> None:
+    # Set up our path instance variables.
+    self.path = self.parse_url_path(path)
+    del path  # make sure we don't refer to path instead of self.path again
+    absolute_path = self.get_absolute_path(self.root, self.path)
+    self.absolute_path = self.validate_absolute_path(self.root, absolute_path)
+    if self.absolute_path is None:
+        return
+
+    self.modified = self.get_modified_time()
+    self.set_headers()
+
+    if self.should_return_304():
+        self.set_status(304)
+        return
+
+    request_range = None
+    range_header = self.request.headers.get(""Range"")
+    if range_header:
+        request_range = httputil._parse_request_range(range_header)
+
+    size = self.get_content_size()
+    if request_range:
+        start, end = request_range
+        if (start is not None and start >= size) or end == 0:
+            # As per RFC 2616 14.35.1, a range is not satisfiable only: if
+            # the first requested byte is equal to or greater than the
+            # content, or when a suffix with length 0 is specified
+            self.set_status(416)  # Range Not Satisfiable
+            self.set_header(""Content-Type"", ""text/plain"")
+            self.set_header(""Content-Range"", ""bytes */%s"" % (size,))
+            return
+        if start is not None:
+            if start < 0:
+                start += size
+            if start < 0:
+                start = size  # adjust start to size if it goes negative
+        if end is not None and end > size:
+            end = size
+        # Note: only return HTTP 206 if less than the entire range has been
+        # requested. Not only is this semantically correct, but Chrome
+        # refuses to play audio if it gets an HTTP 206 in response to
+        # ``Range: bytes=0-``.
+        if size != (end or size) - (start or 0):
+            self.set_status(206)  # Partial Content
+            self.set_header(
+                ""Content-Range"", httputil._get_content_range(start, end, size)
+            )
+    else:
+        start = end = None
+
+    if start is not None and end is not None:
+        content_length = end - start
+    elif end is not None:
+        content_length = end
+    elif start is not None:
+        content_length = size - start
+    else:
+        content_length = size
+    self.set_header(""Content-Length"", content_length)
+
+    if include_body:
+        content = self.get_content(self.absolute_path, start, end)
+        if isinstance(content, bytes):
+            content = [content]
+        for chunk in content:
+            try:
+                self.write(chunk)
+                await self.flush()
+            except iostream.StreamClosedError:
+                return
+    else:
+        assert self.request.method == ""HEAD""
+```",
+tornado-4-vall_gpt-4,UNKNOWN,UNKNOWN,"```python
+async def get(self, path: str, include_body: bool = True) -> None:
+    self.path = self.parse_url_path(path)
+    del path  
+    absolute_path = self.get_absolute_path(self.root, self.path)
+    self.absolute_path = self.validate_absolute_path(self.root, absolute_path)
+    if self.absolute_path is None:
+        return
+
+    self.modified = self.get_modified_time()
+    self.set_headers()
+
+    if self.should_return_304():
+        self.set_status(304)
+        return
+
+    request_range = None
+    range_header = self.request.headers.get(""Range"")
+    if range_header:
+        request_range = httputil._parse_request_range(range_header)
+
+    size = self.get_content_size()
+    if request_range:
+        start, end = request_range
+        if (start is not None and start >= size) or end == 0:
+            self.set_status(416)  
+            self.set_header(""Content-Type"", ""text/plain"")
+            self.set_header(""Content-Range"", ""bytes */%s"" % (size,))
+            return
+        if start is not None and start < 0:
+            start += size
+        if end is not None and end > size:
+            end = size
+        if start is not None and end is not None and start > end:
+            self.set_status(416)  # Range Not Satisfiable
+            self.set_header(""Content-Type"", ""text/plain"")
+            self.set_header(""Content-Range"", ""bytes */%s"" % (size,))
+            return
+        if size != (end or size) - (start or 0):
+            self.set_status(206)  
+            self.set_header(
+                ""Content-Range"", httputil._get_content_range(start, end, size)
+            )
+    else:
+        start = end = None
+
+    if start is not None and end is not None:
+        content_length = end - start
+    elif end is not None:
+        content_length = end
+    elif start is not None:
+        content_length = size - start
+    else:
+        content_length = size
+    self.set_header(""Content-Length"", content_length)
+
+    if include_body:
+        content = self.get_content(self.absolute_path, start, end)
+        if isinstance(content, bytes):
+            content = [content]
+        for chunk in content:
+            try:
+                self.write(chunk)
+                await self.flush()
+            except iostream.StreamClosedError:
+                return
+    else:
+        assert self.request.method == ""HEAD""
+```",
+tornado-4-vall_gpt-5,UNKNOWN,UNKNOWN,"```python
+async def get(self, path: str, include_body: bool = True) -> None:
+    # Set up our path instance variables.
+    self.path = self.parse_url_path(path)
+    del path  # make sure we don't refer to path instead of self.path again
+    absolute_path = self.get_absolute_path(self.root, self.path)
+    self.absolute_path = self.validate_absolute_path(self.root, absolute_path)
+    if self.absolute_path is None:
+        return
+
+    self.modified = self.get_modified_time()
+    self.set_headers()
+
+    if self.should_return_304():
+        self.set_status(304)
+        return
+
+    request_range = None
+    range_header = self.request.headers.get(""Range"")
+    if range_header:
+        request_range = httputil._parse_request_range(range_header)
+
+    size = self.get_content_size()
+    if request_range:
+        start, end = request_range
+        if (start is not None and start >= size) or end == 0:
+            self.set_status(416)  # Range Not Satisfiable
+            self.set_header(""Content-Type"", ""text/plain"")
+            self.set_header(""Content-Range"", ""bytes */%s"" % (size,))
+            return
+        if start is not None and start < 0:
+            start += size
+        # Ensure that start does not exceed size
+        if start is not None and start > size:
+            start = size
+        if end is not None and end > size:
+            end = size
+        # Check for an inversely unsatisfiable range
+        if start is not None and end is not None and start > end:
+            self.set_status(416)  # Range Not Satisfiable
+            self.set_header(""Content-Type"", ""text/plain"")
+            self.set_header(""Content-Range"", ""bytes */%s"" % (size,))
+            return
+        # Only return HTTP 206 if less than the entire range has been requested.
+        if size != (end or size) - (start or 0):
+            self.set_status(206)  # Partial Content
+            self.set_header(
+                ""Content-Range"", httputil._get_content_range(start, end, size)
+            )
+    else:
+        start = end = None
+
+    if start is not None and end is not None:
+        content_length = end - start
+    elif end is not None:
+        content_length = end
+    elif start is not None:
+        content_length = size - start
+    else:
+        content_length = size
+    self.set_header(""Content-Length"", content_length)
+
+    if include_body:
+        content = self.get_content(self.absolute_path, start, end)
+        if isinstance(content, bytes):
+            content = [content]
+        for chunk in content:
+            try:
+                self.write(chunk)
+                await self.flush()
+            except iostream.StreamClosedError:
+                return
+    else:
+        assert self.request.method == ""HEAD""
+```",
+tornado-4-vall_gpt-6,UNKNOWN,UNKNOWN,"```python
+async def get(self, path: str, include_body: bool = True) -> None:
+    # Set up our path instance variables.
+    self.path = self.parse_url_path(path)
+    del path  # make sure we don't refer to path instead of self.path again
+    absolute_path = self.get_absolute_path(self.root, self.path)
+    self.absolute_path = self.validate_absolute_path(self.root, absolute_path)
+    if self.absolute_path is None:
+        return
+
+    self.modified = self.get_modified_time()
+    self.set_headers()
+
+    if self.should_return_304():
+        self.set_status(304)
+        return
+
+    request_range = None
+    range_header = self.request.headers.get(""Range"")
+    if range_header:
+        # As per RFC 2616 14.16, if an invalid Range header is specified,
+        # the request will be treated as if the header didn't exist.
+        request_range = httputil._parse_request_range(range_header)
+
+    size = self.get_content_size()
+    if request_range:
+        start, end = request_range
+        if (start is not None and start >= size) or end == 0:
+            # As per RFC 2616 14.35.1, a range is not satisfiable only: if
+            # the first requested byte is equal to or greater than the
+            # content, or when a suffix with length 0 is specified
+            self.set_status(416)  # Range Not Satisfiable
+            self.set_header(""Content-Type"", ""text/plain"")
+            self.set_header(""Content-Range"", ""bytes */%s"" % (size,))
+            return
+        if start is not None and start < 0:
+            start += size
+        if end is not None and end > size:
+            # Clients sometimes blindly use a large range to limit their
+            # download size; cap the endpoint at the actual file size.
+            end = size
+        # Adjust start if it's greater than size
+        if start is not None and start > size:
+            start = size
+        # Note: only return HTTP 206 if less than the entire range has been
+        # requested. Not only is this semantically correct, but Chrome
+        # refuses to play audio if it gets an HTTP 206 in response to
+        # ``Range: bytes=0-``.
+        if size != (end or size) - (start or 0):
+            self.set_status(206)  # Partial Content
+            self.set_header(
+                ""Content-Range"", httputil._get_content_range(start, end, size)
+            )
+    else:
+        start = end = None
+
+    if start is not None and end is not None:
+        content_length = end - start
+    elif end is not None:
+        content_length = end
+    elif start is not None:
+        content_length = size - start
+    else:
+        content_length = size
+    self.set_header(""Content-Length"", content_length)
+
+    if include_body:
+        content = self.get_content(self.absolute_path, start, end)
+        if isinstance(content, bytes):
+            content = [content]
+        for chunk in content:
+            try:
+                self.write(chunk)
+                await self.flush()
+            except iostream.StreamClosedError:
+                return
+    else:
+        assert self.request.method == ""HEAD""
+```",
+tornado-4-vall_gpt-7,UNKNOWN,UNKNOWN,"```python
+async def get(self, path: str, include_body: bool = True) -> None:
+    # Set up our path instance variables.
+    self.path = self.parse_url_path(path)
+    del path  # make sure we don't refer to path instead of self.path again
+    absolute_path = self.get_absolute_path(self.root, self.path)
+    self.absolute_path = self.validate_absolute_path(self.root, absolute_path)
+    if self.absolute_path is None:
+        return
+
+    self.modified = self.get_modified_time()
+    self.set_headers()
+
+    if self.should_return_304():
+        self.set_status(304)
+        return
+
+    request_range = None
+    range_header = self.request.headers.get(""Range"")
+    if range_header:
+        # As per RFC 2616 14.16, if an invalid Range header is specified,
+        # the request will be treated as if the header didn't exist.
+        request_range = httputil._parse_request_range(range_header)
+
+    size = self.get_content_size()
+    if request_range:
+        start, end = request_range
+        if (start is not None and start >= size) or end == 0:
+            # As per RFC 2616 14.35.1, a range is not satisfiable only: if
+            # the first requested byte is equal to or greater than the
+            # content, or when a suffix with length 0 is specified
+            self.set_status(416)  # Range Not Satisfiable
+            self.set_header(""Content-Type"", ""text/plain"")
+            self.set_header(""Content-Range"", ""bytes */%s"" % (size,))
+            return
+        if start is not None and start < 0:
+            start += size
+            if start < 0:
+                start = size  # Adjust to size if start is negative after adjustment
+        if end is not None and end > size:
+            # Clients sometimes blindly use a large range to limit their
+            # download size; cap the endpoint at the actual file size.
+            end = size
+        # Note: only return HTTP 206 if less than the entire range has been
+        # requested. Not only is this semantically correct, but Chrome
+        # refuses to play audio if it gets an HTTP 206 in response to
+        # ``Range: bytes=0-``.
+        if size != (end or size) - (start or 0):
+            self.set_status(206)  # Partial Content
+            self.set_header(
+                ""Content-Range"", httputil._get_content_range(start, end, size)
+            )
+    else:
+        start = end = None
+
+    if start is not None and end is not None:
+        content_length = end - start
+    elif end is not None:
+        content_length = end
+    elif start is not None:
+        content_length = size - start
+    else:
+        content_length = size
+    self.set_header(""Content-Length"", content_length)
+
+    if include_body:
+        content = self.get_content(self.absolute_path, start, end)
+        if isinstance(content, bytes):
+            content = [content]
+        for chunk in content:
+            try:
+                self.write(chunk)
+                await self.flush()
+            except iostream.StreamClosedError:
+                return
+    else:
+        assert self.request.method == ""HEAD""
+```",
+tornado-4-vall_gpt-8,UNKNOWN,UNKNOWN,"```python
+async def get(self, path: str, include_body: bool = True) -> None:
+    # Set up our path instance variables.
+    self.path = self.parse_url_path(path)
+    del path  # make sure we don't refer to path instead of self.path again
+    absolute_path = self.get_absolute_path(self.root, self.path)
+    self.absolute_path = self.validate_absolute_path(self.root, absolute_path)
+    if self.absolute_path is None:
+        return
+
+    self.modified = self.get_modified_time()
+    self.set_headers()
+
+    if self.should_return_304():
+        self.set_status(304)
+        return
+
+    request_range = None
+    range_header = self.request.headers.get(""Range"")
+    if range_header:
+        # As per RFC 2616 14.16, if an invalid Range header is specified,
+        # the request will be treated as if the header didn't exist.
+        request_range = httputil._parse_request_range(range_header)
+
+    size = self.get_content_size()
+    if request_range:
+        start, end = request_range
+        if (start is not None and start >= size) or end == 0:
+            # As per RFC 2616 14.35.1, a range is not satisfiable only: if
+            # the first requested byte is equal to or greater than the
+            # content, or when a suffix with length 0 is specified
+            self.set_status(416)  # Range Not Satisfiable
+            self.set_header(""Content-Type"", ""text/plain"")
+            self.set_header(""Content-Range"", ""bytes */%s"" % (size,))
+            return
+        if start is not None and start < 0:
+            start += size
+            if start < 0:  # Adjust if it goes below zero
+                start = size  # Cap to size
+        if end is not None and end > size:
+            # Clients sometimes blindly use a large range to limit their
+            # download size; cap the endpoint at the actual file size.
+            end = size
+        # Note: only return HTTP 206 if less than the entire range has been
+        # requested. Not only is this semantically correct, but Chrome
+        # refuses to play audio if it gets an HTTP 206 in response to
+        # ``Range: bytes=0-``.
+        if size != (end or size) - (start or 0):
+            self.set_status(206)  # Partial Content
+            self.set_header(
+                ""Content-Range"", httputil._get_content_range(start, end, size)
+            )
+    else:
+        start = end = None
+
+    if start is not None and end is not None:
+        content_length = end - start
+    elif end is not None:
+        content_length = end
+    elif start is not None:
+        content_length = size - start
+    else:
+        content_length = size
+    self.set_header(""Content-Length"", content_length)
+
+    if include_body:
+        content = self.get_content(self.absolute_path, start, end)
+        if isinstance(content, bytes):
+            content = [content]
+        for chunk in content:
+            try:
+                self.write(chunk)
+                await self.flush()
+            except iostream.StreamClosedError:
+                return
+    else:
+        assert self.request.method == ""HEAD""
+```",
+tornado-4-vall_gpt-9,UNKNOWN,UNKNOWN,"```python
+async def get(self, path: str, include_body: bool = True) -> None:
+    # Set up our path instance variables.
+    self.path = self.parse_url_path(path)
+    del path  # make sure we don't refer to path instead of self.path again
+    absolute_path = self.get_absolute_path(self.root, self.path)
+    self.absolute_path = self.validate_absolute_path(self.root, absolute_path)
+    if self.absolute_path is None:
+        return
+
+    self.modified = self.get_modified_time()
+    self.set_headers()
+
+    if self.should_return_304():
+        self.set_status(304)
+        return
+
+    request_range = None
+    range_header = self.request.headers.get(""Range"")
+    if range_header:
+        # As per RFC 2616 14.16, if an invalid Range header is specified,
+        # the request will be treated as if the header didn't exist.
+        request_range = httputil._parse_request_range(range_header)
+
+    size = self.get_content_size()
+    if request_range:
+        start, end = request_range
+        if (start is not None and start >= size) or end == 0:
+            # As per RFC 2616 14.35.1, a range is not satisfiable only: if
+            # the first requested byte is equal to or greater than the
+            # content, or when a suffix with length 0 is specified
+            self.set_status(416)  # Range Not Satisfiable
+            self.set_header(""Content-Type"", ""text/plain"")
+            self.set_header(""Content-Range"", ""bytes */%s"" % (size,))
+            return
+        if start is not None and start < 0:
+            start += size
+            if size < start:  # Handle case where size is less than new start
+                start = size
+        if end is not None and end > size:
+            # Clients sometimes blindly use a large range to limit their
+            # download size; cap the endpoint at the actual file size.
+            end = size
+        # Note: only return HTTP 206 if less than the entire range has been
+        # requested. Not only is this semantically correct, but Chrome
+        # refuses to play audio if it gets an HTTP 206 in response to
+        # ``Range: bytes=0-``.
+        if size != (end or size) - (start or 0):
+            self.set_status(206)  # Partial Content
+            self.set_header(
+                ""Content-Range"", httputil._get_content_range(start, end, size)
+            )
+    else:
+        start = end = None
+
+    if start is not None and end is not None:
+        content_length = end - start
+    elif end is not None:
+        content_length = end
+    elif start is not None:
+        content_length = size - start
+    else:
+        content_length = size
+    self.set_header(""Content-Length"", content_length)
+
+    if include_body:
+        content = self.get_content(self.absolute_path, start, end)
+        if isinstance(content, bytes):
+            content = [content]
+        for chunk in content:
+            try:
+                self.write(chunk)
+                await self.flush()
+            except iostream.StreamClosedError:
+                return
+    else:
+        assert self.request.method == ""HEAD""
+```",
